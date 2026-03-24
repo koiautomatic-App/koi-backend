@@ -35,7 +35,8 @@ const StoreSchema = new mongoose.Schema({
     consumerKey: String,
     consumerSecret: String,
     userId: String,
-    platform: { type: String, default: 'woocommerce' }
+    platform: { type: String, default: 'woocommerce' },
+    createdAt: { type: Date, default: Date.now }
 });
 const Store = mongoose.model('Store', StoreSchema);
 
@@ -69,40 +70,47 @@ app.post('/webhook/:platform', async (req, res) => {
 
 // --- RUTAS DE AUTORIZACIÓN AUTOMÁTICA (WCOAUTH) ---
 
-// 1. Iniciar la conexión (El usuario pone su URL)
+// 1. Iniciar la conexión (Forzando HTTPS para evitar el error de SSL de Woo)
 app.get('/auth/woo/connect', (req, res) => {
     const { store_url } = req.query; 
     if (!store_url) return res.status(400).send("Falta la URL de la tienda");
 
-    const protocol = req.protocol;
-    const host = req.get('host');
-    const callback_url = `${protocol}://${host}/auth/woo/callback`;
+    // Limpiamos la URL de la tienda por si viene con / al final
+    const cleanStoreUrl = store_url.replace(/\/$/, "");
     
-    const auth_url = `${store_url}/wc-auth/v1/authorize?` + 
+    // FORZAMOS HTTPS para el callback: WooCommerce lo exige
+    const host = req.get('host');
+    const callback_url = `https://${host}/auth/woo/callback`; 
+    
+    const auth_url = `${cleanStoreUrl}/wc-auth/v1/authorize?` + 
         `app_name=KOI-Factura&` +
         `scope=read_write&` +
-        `user_id=sono_user_01&` + // ID temporal para probar con @sono.handmade
+        `user_id=sono_user_01&` + 
         `return_url=https://sonohandmade.com&` + 
         `callback_url=${callback_url}`;
 
-    console.log(`🔗 Redirigiendo a la tienda para autorizar: ${store_url}`);
+    console.log(`🔗 Redirigiendo con SSL forzado a: ${callback_url}`);
     res.redirect(auth_url);
 });
 
-// 2. El Callback (WooCommerce nos entrega las llaves "por atrás")
+// 2. El Callback (Donde WooCommerce nos entrega las llaves "por atrás")
 app.post('/auth/woo/callback', async (req, res) => {
     const keys = req.body; 
-    console.log("🔑 Recibidas llaves automáticas!");
+    console.log("🔑 Recibidas llaves automáticas para:", keys.user_id);
 
     try {
-        const newStore = new Store({
-            storeUrl: req.query.store_url, // Viene en la URL del callback
+        // Buscamos si ya existe la tienda para actualizarla o crearla
+        const storeData = {
+            storeUrl: req.query.store_url || 'N/A',
             consumerKey: keys.consumer_key,
             consumerSecret: keys.consumer_secret,
             userId: keys.user_id
-        });
+        };
+
+        const newStore = new Store(storeData);
         await newStore.save();
-        console.log(`✅ Tienda ${keys.user_id} conectada y llaves guardadas.`);
+        
+        console.log(`✅ Tienda ${keys.user_id} conectada y llaves guardadas en Atlas.`);
         res.status(200).json({ status: "success" });
     } catch (error) {
         console.error('❌ Error guardando llaves:', error);
@@ -110,7 +118,7 @@ app.post('/auth/woo/callback', async (req, res) => {
     }
 });
 
-// --- INICIO DEL SERVIDOR (Siempre al final) ---
+// --- INICIO DEL SERVIDOR (SIEMPRE AL FINAL) ---
 app.listen(PORT, () => {
     console.log(`🚀 KOI corriendo en puerto ${PORT}`);
 });

@@ -15,37 +15,42 @@ mongoose.connect(process.env.MONGO_URI)
   .then(() => console.log('🐟 KOI: Conexión exitosa con MongoDB Atlas'))
   .catch(err => console.error('❌ Error de conexión:', err));
 
-// --- MODELO DE DATOS (ESQUEMA DE ORDEN) ---
-// Aquí definimos qué datos de la venta queremos recordar para siempre
+// --- MODELOS DE DATOS ---
+
+// 1. Modelo de Ventas (Orders)
 const OrderSchema = new mongoose.Schema({
-    platform: { type: String, required: true }, // tiendanube, mercadolibre, etc.
+    platform: { type: String, required: true },
     externalId: { type: String, required: true },
     customerName: String,
     customerEmail: String,
     amount: Number,
-    status: { type: String, default: 'pending_invoice' }, // Estado: pendiente de factura
+    status: { type: String, default: 'pending_invoice' },
     createdAt: { type: Date, default: Date.now }
 });
-
 const Order = mongoose.model('Order', OrderSchema);
 
-// --- RUTAS ---
+// 2. Modelo de Tiendas (Para guardar las llaves de los clientes)
+const StoreSchema = new mongoose.Schema({
+    storeUrl: String,
+    consumerKey: String,
+    consumerSecret: String,
+    userId: String,
+    platform: { type: String, default: 'woocommerce' }
+});
+const Store = mongoose.model('Store', StoreSchema);
 
-// 1. Ruta de Bienvenida
+// --- RUTAS DE WEBHOOKS ---
+
 app.get('/', (req, res) => {
     res.send('🚀 KOI-FACTURA: Servidor Activo y Escuchando');
 });
 
-// 2. WEBHOOK UNIVERSAL (El "Oído" de KOI)
 app.post('/webhook/:platform', async (req, res) => {
     const { platform } = req.params;
     const data = req.body;
-
     console.log(`📩 Nueva notificación desde: ${platform.toUpperCase()}`);
 
     try {
-        // Mapeamos los datos que llegan (Adaptador inicial)
-        // Nota: Ajustaremos estos nombres según cada plataforma en el Día 3
         const newOrder = new Order({
             platform: platform,
             externalId: data.id || 'sin_id',
@@ -53,25 +58,59 @@ app.post('/webhook/:platform', async (req, res) => {
             customerEmail: data.email || '',
             amount: data.monto || 0
         });
-
-        // Guardamos en la base de datos
         await newOrder.save();
-        
-        console.log(`✅ Orden ${newOrder.externalId} guardada exitosamente.`);
-        
-        // Respondemos 200 para que la tienda sepa que recibimos el paquete
-        res.status(200).send({
-            message: 'Recibido y Guardado por KOI',
-            orderId: newOrder._id
-        });
-
+        console.log(`✅ Orden ${newOrder.externalId} guardada.`);
+        res.status(200).send({ message: 'Guardado', orderId: newOrder._id });
     } catch (error) {
-        console.error('❌ Error al procesar el webhook:', error);
-        res.status(500).send('Error interno en KOI');
+        console.error('❌ Error webhook:', error);
+        res.status(500).send('Error interno');
     }
 });
 
-// --- INICIO DEL SERVIDOR ---
+// --- RUTAS DE AUTORIZACIÓN AUTOMÁTICA (WCOAUTH) ---
+
+// 1. Iniciar la conexión (El usuario pone su URL)
+app.get('/auth/woo/connect', (req, res) => {
+    const { store_url } = req.query; 
+    if (!store_url) return res.status(400).send("Falta la URL de la tienda");
+
+    const protocol = req.protocol;
+    const host = req.get('host');
+    const callback_url = `${protocol}://${host}/auth/woo/callback`;
+    
+    const auth_url = `${store_url}/wc-auth/v1/authorize?` + 
+        `app_name=KOI-Factura&` +
+        `scope=read_write&` +
+        `user_id=sono_user_01&` + // ID temporal para probar con @sono.handmade
+        `return_url=https://sonohandmade.com&` + 
+        `callback_url=${callback_url}`;
+
+    console.log(`🔗 Redirigiendo a la tienda para autorizar: ${store_url}`);
+    res.redirect(auth_url);
+});
+
+// 2. El Callback (WooCommerce nos entrega las llaves "por atrás")
+app.post('/auth/woo/callback', async (req, res) => {
+    const keys = req.body; 
+    console.log("🔑 Recibidas llaves automáticas!");
+
+    try {
+        const newStore = new Store({
+            storeUrl: req.query.store_url, // Viene en la URL del callback
+            consumerKey: keys.consumer_key,
+            consumerSecret: keys.consumer_secret,
+            userId: keys.user_id
+        });
+        await newStore.save();
+        console.log(`✅ Tienda ${keys.user_id} conectada y llaves guardadas.`);
+        res.status(200).json({ status: "success" });
+    } catch (error) {
+        console.error('❌ Error guardando llaves:', error);
+        res.status(500).send('Error al conectar');
+    }
+});
+
+// --- INICIO DEL SERVIDOR (Siempre al final) ---
 app.listen(PORT, () => {
     console.log(`🚀 KOI corriendo en puerto ${PORT}`);
 });

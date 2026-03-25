@@ -41,31 +41,30 @@ const Store = mongoose.model('Store', StoreSchema);
 
 // --- RUTAS ---
 
-app.get('/', (req, res) => res.send('🚀 KOI-FACTURA: Motor de Inteligencia Activo (Día 4)'));
+app.get('/', (req, res) => res.send('🚀 KOI-FACTURA: Motor Día 4 Activo (Modo Asincrónico)'));
 
-// 1. WEBHOOK RECEPTOR CON VALIDACIÓN DE DNI/ARCA
+// 1. RECEPTOR DE VENTAS (WEBHOOK)
 app.post('/webhook/woocommerce', async (req, res) => {
     const data = req.body;
     const amount = parseFloat(data.total);
     
-    // Extraer y limpiar DNI (solo números)
+    // Limpieza de DNI (solo números)
     let rawDni = data.billing.dni || data.billing.identification || "";
     let cleanDni = rawDni.replace(/\D/g, ""); 
 
     let status = 'pending_invoice';
     let errorLog = '';
 
-    // LÓGICA DE INTELIGENCIA FISCAL
-    const ARCA_LIMIT = 380000; // Límite para Consumidor Final anónimo (ajustable)
+    // Lógica Fiscal ARCA
+    const ARCA_LIMIT = 380000; 
     const isDniValid = cleanDni.length >= 7 && cleanDni.length <= 11;
 
     if (!isDniValid) {
         if (amount < ARCA_LIMIT) {
-            cleanDni = "999"; // Código interno KOI para "Anónimo aceptado"
-            console.log(`⚠️ Venta menor a $${ARCA_LIMIT}. Facturaremos como Anónimo.`);
+            cleanDni = "999"; // Consumidor Final Anónimo
         } else {
             status = 'error_data';
-            errorLog = `Monto alto ($${amount}) requiere DNI válido. Recibido: "${rawDni}"`;
+            errorLog = `Monto alto ($${amount}) requiere DNI. Recibido: "${rawDni}"`;
         }
     }
 
@@ -82,7 +81,7 @@ app.post('/webhook/woocommerce', async (req, res) => {
         });
 
         await newOrder.save();
-        console.log(`✅ Orden ${data.id} procesada. Status: ${status}`);
+        console.log(`✅ Orden ${data.id} guardada con DNI: ${cleanDni}`);
         res.status(200).send('OK');
     } catch (error) {
         console.error('❌ Error al guardar orden:', error);
@@ -90,10 +89,11 @@ app.post('/webhook/woocommerce', async (req, res) => {
     }
 });
 
-// 2. CONEXIÓN OAUTH (Inicia el flujo)
+// 2. INICIO DE CONEXIÓN OAUTH
 app.get('/auth/woo/connect', (req, res) => {
     const { store_url } = req.query; 
-    if (!store_url) return res.status(400).send("Falta URL");
+    if (!store_url) return res.status(400).send("Falta URL de la tienda");
+    
     const cleanUrl = store_url.replace(/\/$/, "");
     const host = req.get('host');
     const callback_url = `https://${host}/auth/woo/callback?store_url=${cleanUrl}`; 
@@ -105,13 +105,17 @@ app.get('/auth/woo/connect', (req, res) => {
     res.redirect(auth_url);
 });
 
-// 3. CALLBACK (Guarda llaves y AUTO-INSTALA WEBHOOK)
+// 3. CALLBACK (ESTRATEGIA ASINCRÓNICA)
 app.post('/auth/woo/callback', async (req, res) => {
     const keys = req.body;
     const storeUrl = req.query.store_url;
 
+    // A. Respondemos a WordPress de inmediato para evitar el timeout (Error de pantalla)
+    res.status(200).json({ status: "success" });
+
+    // B. Proceso de fondo: Guardar e Instalar
     try {
-        // Guardar tienda con URL correcta
+        // Guardar las llaves en la DB
         await Store.findOneAndUpdate(
             { storeUrl: storeUrl }, 
             {
@@ -122,25 +126,27 @@ app.post('/auth/woo/callback', async (req, res) => {
             }, 
             { upsert: true }
         );
+        console.log(`✅ Datos de tienda guardados: ${storeUrl}`);
 
-        // INSTALACIÓN AUTOMÁTICA DEL WEBHOOK
-        // KOI se conecta a la tienda y se "auto-invita" a escuchar pedidos
-        const webhookData = {
+        // Instalación automática del Webhook
+        const webhookUrl = `https://${req.get('host')}/webhook/woocommerce`;
+        
+        await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`, {
             name: 'KOI - Facturación Automática',
             topic: 'order.created',
-            delivery_url: `https://${req.get('host')}/webhook/woocommerce`
-        };
-
-        await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`, webhookData, {
-            auth: { username: keys.consumer_key, password: keys.consumer_secret }
+            delivery_url: webhookUrl,
+            status: 'active'
+        }, {
+            auth: { 
+                username: keys.consumer_key, 
+                password: keys.consumer_secret 
+            }
         });
 
-        console.log(`🔌 Conexión total: Webhook instalado en ${storeUrl}`);
-        res.status(200).json({ status: "success" });
+        console.log(`🔌 Webhook instalado automáticamente en ${storeUrl}`);
 
     } catch (error) {
-        console.error('❌ Error en handshake:', error.response?.data || error.message);
-        res.status(500).send('Error en conexión');
+        console.error('❌ Error en el proceso post-conexión:', error.response?.data || error.message);
     }
 });
 

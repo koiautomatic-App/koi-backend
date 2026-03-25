@@ -1,74 +1,180 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>KOI | Dashboard</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
-    <style>
-        :root { --bg: #fcfaf8; --text: #2d2d2d; --accent: #8e8071; --card: #ffffff; }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 40px 20px; }
-        .container { max-width: 1000px; margin: 0 auto; }
-        header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 50px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
-        h1 { font-weight: 300; letter-spacing: -1px; margin: 0; font-size: 28px; }
-        h1 span { font-weight: 500; color: var(--accent); }
-        .card { background: var(--card); border-radius: 4px; border: 1px solid #eceae7; padding: 30px; }
-        table { width: 100%; border-collapse: collapse; }
-        th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0a0a0; padding: 15px 10px; border-bottom: 1px solid #f0efed; }
-        td { padding: 20px 10px; font-size: 14px; border-bottom: 1px solid #f7f6f4; }
-        .status { font-size: 11px; padding: 4px 12px; border-radius: 100px; background: #f0f0f0; text-transform: uppercase; font-weight: 500; }
-        .pending_invoice { background: #fdf6ec; color: #c28135; }
-        .error_data { background: #fef2f2; color: #991b1b; }
-    </style>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KOI · Facturación</title>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
+  
+  <style>
+    :root {
+      --bg: #080810; --bg-2: #0d0d1a; --surface: #111120; --card: #13131f; --card-2: #17172a;
+      --border: rgba(255,255,255,0.055); --border-2: rgba(255,255,255,0.09);
+      --green: #00e676; --green-dim: #00c853; --green-glow: rgba(0,230,118,0.18);
+      --orange: #e8622a; --orange-2: #f5a623; --red: #ff3d57; --yellow: #ffb300;
+      --text-1: #f0f0fa; --text-2: #8888aa; --text-3: #44445a;
+      --font-ui: 'Plus Jakarta Sans', sans-serif; --font-num: 'Space Grotesk', sans-serif;
+      --r-sm: 8px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px;
+      --sh-card: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--bg); color: var(--text-1); font-family: var(--font-ui); font-size: 13px; min-height: 100vh; }
+    
+    .shell { display: flex; min-height: 100vh; }
+    .sidebar { width: 220px; background: var(--card); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 24px 0; position: sticky; top: 0; height: 100vh; }
+    .sidebar-logo { padding: 0 20px 28px; border-bottom: 1px solid var(--border); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+    .logo-mark { width: 36px; height: 36px; border-radius: 10px; background: linear-gradient(135deg, var(--orange), var(--green)); display: flex; align-items: center; justify-content: center; font-size: 19px; }
+    
+    .main { flex: 1; display: flex; flex-direction: column; }
+    .topbar { display: flex; justify-content: space-between; align-items: center; padding: 15px 24px; background: var(--card); border-bottom: 1px solid var(--border); }
+    
+    .content { padding: 24px; animation: fadeUp .4s ease both; }
+    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+
+    /* Metrics */
+    .metrics-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 20px; }
+    .metric-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-lg); padding: 20px; box-shadow: var(--sh-card); }
+    .mc-label { font-size: 10px; font-weight: 700; color: var(--text-3); text-transform: uppercase; margin-bottom: 8px; }
+    .mc-value { font-family: var(--font-num); font-size: 24px; font-weight: 700; }
+
+    /* Comprobantes Table */
+    .comp-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--r-xl); overflow: hidden; }
+    .comp-head { padding: 18px 20px; border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; }
+    .comp-scroll { max-height: 500px; overflow-y: auto; }
+    .comp-row { display: flex; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border); transition: 0.2s; }
+    .comp-row:hover { background: rgba(255,255,255,0.02); }
+    .cae-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 15px; }
+    .cae-ok { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .cae-pend { background: var(--yellow); }
+    .cae-err { background: var(--red); }
+    .comp-info { flex: 1; }
+    .comp-cliente { font-weight: 600; margin-bottom: 2px; }
+    .comp-meta { font-size: 11px; color: var(--text-3); }
+    .comp-monto { font-family: var(--font-num); font-weight: 700; color: var(--text-1); }
+
+    /* Config Panel */
+    .cfg-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); opacity: 0; pointer-events: none; transition: 0.3s; z-index: 100; }
+    .cfg-overlay.open { opacity: 1; pointer-events: all; }
+    .cfg-panel { position: fixed; top: 0; right: 0; bottom: 0; width: 400px; background: var(--card); transform: translateX(100%); transition: 0.3s; z-index: 101; padding: 30px; border-left: 1px solid var(--border); }
+    .cfg-panel.open { transform: translateX(0); }
+  </style>
 </head>
 <body>
-    <div class="container">
-        <header>
-            <h1>KOI <span>FACTURA</span></h1>
-            <div id="store-url" style="color: #999; font-size: 13px;">sonohandmade.com</div>
-        </header>
 
-        <div class="card">
-            <table>
-                <thead>
-                    <tr>
-                        <th>Cliente</th>
-                        <th>Documento</th>
-                        <th>Importe</th>
-                        <th>Estado</th>
-                    </tr>
-                </thead>
-                <tbody id="orders-list">
-                    </tbody>
-            </table>
+  <div class="shell">
+    <div class="sidebar">
+      <div class="sidebar-logo">
+        <div class="logo-mark">🐟</div>
+        <div>
+          <div class="logo-name">KOI</div>
+          <div class="logo-sub">FACTURACIÓN</div>
         </div>
+      </div>
+      <div class="nav-item active"><span class="material-icons nav-icon">dashboard</span> Dashboard</div>
+      <div class="nav-item" onclick="toggleConfig()"><span class="material-icons nav-icon">settings</span> Configuración</div>
     </div>
 
-    <script>
-        async function loadOrders() {
-            try {
-                const res = await fetch('/api/orders');
-                const orders = await res.json();
-                const list = document.getElementById('orders-list');
-                
-                list.innerHTML = orders.map(order => `
-                    <tr>
-                        <td>
-                            <div style="font-weight:500">${order.customerName}</div>
-                            <div style="font-size:12px; color:#888">${order.customerEmail}</div>
-                        </td>
-                        <td style="font-family: monospace;">${order.customerDoc}</td>
-                        <td style="font-weight:500">$${order.amount.toLocaleString('es-AR')}</td>
-                        <td><span class="status ${order.status}">${order.status.replace('_', ' ')}</span></td>
-                    </tr>
-                `).join('');
-            } catch (err) {
-                console.error("Error cargando órdenes");
-            }
+    <div class="main">
+      <div class="topbar">
+        <div>
+          <div class="topbar-title">Panel de Control</div>
+          <div class="topbar-sub">Sincronizado con sonohandmade.com</div>
+        </div>
+        <div class="topbar-status">
+          <div class="status-dot"></div> Servidor Activo
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="metrics-row">
+          <div class="metric-card mc-today">
+            <div class="mc-label">Ventas Hoy</div>
+            <div class="mc-value" id="val-hoy">$0</div>
+          </div>
+          <div class="metric-card mc-pend">
+            <div class="mc-label">Pendientes</div>
+            <div class="mc-value" id="val-pend">0</div>
+          </div>
+          <div class="metric-card mc-month">
+            <div class="mc-label">Estado</div>
+            <div class="mc-value" style="font-size: 14px; color: var(--green);">OPERATIVO</div>
+          </div>
+        </div>
+
+        <div class="comp-card">
+          <div class="comp-head">
+            <div class="comp-head-title">Últimas Transacciones</div>
+          </div>
+          <div class="comp-scroll" id="orders-container">
+            </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cfg-overlay" onclick="toggleConfig()"></div>
+  <div class="cfg-panel">
+    <h2 style="margin-bottom: 20px;">Configuración</h2>
+    <p style="color: var(--text-3); font-size: 12px;">Próximamente: Conexión directa con credenciales de ARCA.</p>
+    <button onclick="toggleConfig()" style="margin-top: 20px; padding: 10px; cursor: pointer;">Cerrar</button>
+  </div>
+
+  <script>
+    async function loadData() {
+      try {
+        const response = await fetch('/api/orders');
+        const orders = await response.json();
+        
+        const container = document.getElementById('orders-container');
+        
+        if (orders.length === 0) {
+          container.innerHTML = '<div style="padding:40px; text-align:center; color:var(--text-3);">Esperando primera venta...</div>';
+          return;
         }
-        loadOrders();
-        // Recargar cada 30 segundos
-        setInterval(loadOrders, 30000);
-    </script>
+
+        // Calcular totales para las métricas
+        const hoy = new Date().toLocaleDateString();
+        const totalHoy = orders
+          .filter(o => new Date(o.createdAt).toLocaleDateString() === hoy)
+          .reduce((acc, curr) => acc + curr.amount, 0);
+        
+        const pendientes = orders.filter(o => o.status === 'pending_invoice').length;
+
+        document.getElementById('val-hoy').innerText = `$${totalHoy.toLocaleString('es-AR')}`;
+        document.getElementById('val-pend').innerText = pendientes;
+
+        // Renderizar tabla
+        container.innerHTML = orders.map(order => {
+          let dotClass = 'cae-pend';
+          if(order.status === 'success') dotClass = 'cae-ok';
+          if(order.status.includes('error')) dotClass = 'cae-err';
+
+          return `
+            <div class="comp-row">
+              <div class="cae-dot ${dotClass}"></div>
+              <div class="comp-info">
+                <div class="comp-cliente">${order.customerName}</div>
+                <div class="comp-meta">DNI: ${order.customerDoc} • ${new Date(order.createdAt).toLocaleDateString()}</div>
+              </div>
+              <div class="comp-monto">$${order.amount.toLocaleString('es-AR')}</div>
+            </div>
+          `;
+        }).join('');
+
+      } catch (error) {
+        console.error("Error cargando KOI:", error);
+      }
+    }
+
+    function toggleConfig() {
+      document.querySelector('.cfg-panel').classList.toggle('open');
+      document.querySelector('.cfg-overlay').classList.toggle('open');
+    }
+
+    // Carga inicial y refresco cada 30 seg
+    loadData();
+    setInterval(loadData, 30000);
+  </script>
 </body>
 </html>

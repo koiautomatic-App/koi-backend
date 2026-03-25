@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOI | Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500&display=swap" rel="stylesheet">
+    <style>
+        :root { --bg: #fcfaf8; --text: #2d2d2d; --accent: #8e8071; --card: #ffffff; }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text); margin: 0; padding: 40px 20px; }
+        .container { max-width: 1000px; margin: 0 auto; }
+        header { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 50px; border-bottom: 1px solid #eee; padding-bottom: 20px; }
+        h1 { font-weight: 300; letter-spacing: -1px; margin: 0; font-size: 28px; }
+        h1 span { font-weight: 500; color: var(--accent); }
+        .card { background: var(--card); border-radius: 4px; border: 1px solid #eceae7; padding: 30px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #a0a0a0; padding: 15px 10px; border-bottom: 1px solid #f0efed; }
+        td { padding: 20px 10px; font-size: 14px; border-bottom: 1px solid #f7f6f4; }
+        .status { font-size: 11px; padding: 4px 12px; border-radius: 100px; background: #f0f0f0; text-transform: uppercase; font-weight: 500; }
+        .pending_invoice { background: #fdf6ec; color: #c28135; }
+        .error_data { background: #fef2f2; color: #991b1b; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>KOI <span>FACTURA</span></h1>
+            <div id="store-url" style="color: #999; font-size: 13px;">sonohandmade.com</div>
+        </header>
+
+        <div class="card">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>Documento</th>
+                        <th>Importe</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+                <tbody id="orders-list">
+                    </tbody>
+            </table>
+        </div>
+    </div>
+
+    <script>
+        async function loadOrders() {
+            try {
+                const res = await fetch('/api/orders');
+                const orders = await res.json();
+                const list = document.getElementById('orders-list');
+                
+                list.innerHTML = orders.map(order => `
+                    <tr>
+                        <td>
+                            <div style="font-weight:500">${order.customerName}</div>
+                            <div style="font-size:12px; color:#888">${order.customerEmail}</div>
+                        </td>
+                        <td style="font-family: monospace;">${order.customerDoc}</td>
+                        <td style="font-weight:500">$${order.amount.toLocaleString('es-AR')}</td>
+                        <td><span class="status ${order.status}">${order.status.replace('_', ' ')}</span></td>
+                    </tr>
+                `).join('');
+            } catch (err) {
+                console.error("Error cargando órdenes");
+            }
+        }
+        loadOrders();
+        // Recargar cada 30 segundos
+        setInterval(loadOrders, 30000);
+    </script>
+</body>
+</html>

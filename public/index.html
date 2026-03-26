@@ -1096,12 +1096,58 @@
     .toast.info    { border-color:rgba(41,121,255,.3); }
     @keyframes toastIn { from{opacity:0;transform:translateX(8px)} to{opacity:1;transform:translateX(0)} }
 
-    @media (max-width:640px) {
-      .sidebar { display:none; }
-      .metrics-row { grid-template-columns:1fr 1fr; }
-      .bottom-row  { grid-template-columns:1fr; }
+    /* ── HAMBURGER ─────────────────────────────────────── */
+    .mob-hamburger {
+      display:none;
+      width:36px; height:36px; border-radius:var(--r-sm);
+      background:var(--card-2); border:1px solid var(--border);
+      align-items:center; justify-content:center;
+      cursor:pointer; flex-shrink:0; transition:all .15s;
+      flex-direction:column; gap:4px; padding:9px 8px;
     }
-    @media (max-width:420px) { .metrics-row { grid-template-columns:1fr; } }
+    .mob-hamburger:hover { border-color:rgba(232,98,42,.35); }
+    .mob-hamburger span {
+      display:block; width:100%; height:1.5px;
+      background:var(--text-2); border-radius:2px;
+      transition:all .22s;
+    }
+    .mob-hamburger.is-open span:nth-child(1) { transform:translateY(5.5px) rotate(45deg); }
+    .mob-hamburger.is-open span:nth-child(2) { opacity:0; transform:scaleX(0); }
+    .mob-hamburger.is-open span:nth-child(3) { transform:translateY(-5.5px) rotate(-45deg); }
+
+    .mob-overlay {
+      display:none; position:fixed; inset:0;
+      background:rgba(0,0,0,.6); z-index:199;
+      backdrop-filter:blur(2px);
+    }
+    .mob-overlay.visible { display:block; }
+
+    @media (max-width:720px) {
+      .mob-hamburger { display:flex; }
+
+      .sidebar {
+        position:fixed; left:0; top:0; bottom:0;
+        z-index:200; transform:translateX(-100%);
+        transition:transform .28s cubic-bezier(.4,0,.2,1);
+        box-shadow:none;
+      }
+      .sidebar.mob-open {
+        transform:translateX(0);
+        box-shadow:8px 0 40px rgba(0,0,0,.7);
+      }
+
+      .topbar-title { font-size:14px; }
+      .metrics-row  { grid-template-columns:1fr 1fr; }
+      .bottom-row   { grid-template-columns:1fr; }
+      .comp-tabla th:nth-child(4),
+      .comp-tabla td:nth-child(4) { display:none; }
+    }
+    @media (max-width:480px) {
+      .metrics-row { grid-template-columns:1fr; }
+      .comp-tabla th:nth-child(3),
+      .comp-tabla td:nth-child(3) { display:none; }
+      .topbar-period-wrap .topbar-cal-dropdown { right:-60px; width:290px; }
+    }
   </style>
 </head>
 <body>
@@ -1157,6 +1203,9 @@
   <div class="main">
     <div class="topbar">
       <div class="topbar-left">
+        <button class="mob-hamburger" id="mobHamburger" onclick="toggleSidebar()" aria-label="Menú">
+          <span></span><span></span><span></span>
+        </button>
         <div class="topbar-title">KOI · Facturación</div>
       </div>
 
@@ -1726,6 +1775,7 @@
   </div><!-- /cfg-body -->
 </div><!-- /cfg-panel -->
 
+<div class="mob-overlay" id="mobOverlay" onclick="cerrarSidebar()"></div>
 <div id="toasts"></div>
 
 <script>
@@ -2069,6 +2119,33 @@ function _poblarSelectMes() {
     .map(k => `<option value="${k}">${meses[k]}</option>`).join('');
   sel.innerHTML = '<option value="">Todos los meses</option>' + opts;
 }
+
+/* ── MOBILE SIDEBAR ────────────────────────────────── */
+function toggleSidebar() {
+  const sidebar  = document.querySelector('.sidebar');
+  const overlay  = document.getElementById('mobOverlay');
+  const btn      = document.getElementById('mobHamburger');
+  const isOpen   = sidebar.classList.toggle('mob-open');
+  overlay.classList.toggle('visible', isOpen);
+  btn.classList.toggle('is-open', isOpen);
+  document.body.style.overflow = isOpen ? 'hidden' : '';
+}
+
+function cerrarSidebar() {
+  document.querySelector('.sidebar').classList.remove('mob-open');
+  document.getElementById('mobOverlay').classList.remove('visible');
+  document.getElementById('mobHamburger').classList.remove('is-open');
+  document.body.style.overflow = '';
+}
+
+// Close sidebar on nav item click (mobile)
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      if (window.innerWidth <= 720) cerrarSidebar();
+    });
+  });
+});
 
 /* ── SELECTOR DE PERÍODO GLOBAL ─────────────────────── */
 let _dashDesde = null;

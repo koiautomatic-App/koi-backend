@@ -1136,17 +1136,74 @@
         box-shadow:8px 0 40px rgba(0,0,0,.7);
       }
 
-      .topbar-title { font-size:14px; }
-      .metrics-row  { grid-template-columns:1fr 1fr; }
-      .bottom-row   { grid-template-columns:1fr; }
+      /* Topbar compacto */
+      .topbar { padding:10px 14px; }
+      .topbar-title { font-size:13px; }
+
+      /* Content con menos padding */
+      .content { padding:14px 14px 32px; }
+      .sec-label { margin-bottom:8px; }
+
+      /* Mono card más compacta */
+      .mono-card { padding:16px 16px 14px; margin-bottom:14px; }
+      .mono-amount { font-size:24px; }
+      .mono-numbers { margin-bottom:10px; }
+
+      /* Métricas: 2 columnas siempre en tablet */
+      .metrics-row { grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+      .metric-card { padding:13px 12px 11px; }
+      .mc-icon-wrap { width:30px; height:30px; margin-bottom:10px; }
+      .mc-value { font-size:18px !important; }
+      .mc-label { font-size:9px; margin-bottom:4px; }
+
+      /* Chart + ventas en columna */
+      .bottom-row { grid-template-columns:1fr; gap:12px; }
+      .chart-card { padding:16px 14px 12px; }
+      .chart-wrap { height:160px; }
+
+      /* Tabla comprobantes */
       .comp-tabla th:nth-child(4),
       .comp-tabla td:nth-child(4) { display:none; }
+      .comp-tabla th, .comp-tabla td { padding:10px 10px; }
     }
+
     @media (max-width:480px) {
-      .metrics-row { grid-template-columns:1fr; }
+      .content { padding:12px 12px 28px; }
+
+      /* Métricas: 2 columnas también en móvil chico */
+      .metrics-row { grid-template-columns:1fr 1fr; gap:8px; }
+      .metric-card { padding:11px 10px 10px; border-radius:12px; }
+      .mc-icon-wrap { width:26px; height:26px; border-radius:8px; margin-bottom:8px; }
+      .mc-icon-wrap svg { width:14px; height:14px; }
+      .mc-value { font-size:16px !important; letter-spacing:-.3px; }
+      .mc-label { font-size:8px; letter-spacing:1px; }
+      .mc-delta { font-size:10px; }
+
+      /* Mono card */
+      .mono-card { padding:14px 14px 12px; }
+      .mono-amount { font-size:22px; }
+      .mono-limit-val { font-size:12px; }
+
+      /* Topbar: ocultar label AFIP en pantalla chica */
+      #topbarLabel { display:none; }
+      .topbar-status { padding:5px 9px; }
+
+      /* Ocultar columnas extra en tabla */
       .comp-tabla th:nth-child(3),
       .comp-tabla td:nth-child(3) { display:none; }
-      .topbar-period-wrap .topbar-cal-dropdown { right:-60px; width:290px; }
+      .comp-tabla th:nth-child(4),
+      .comp-tabla td:nth-child(4) { display:none; }
+
+      /* Período dropdown más angosto */
+      .topbar-cal-dropdown { right:-20px !important; width:280px !important; }
+
+      /* Plan card */
+      .koi-plan-header { padding:22px 20px; flex-wrap:wrap; gap:12px; }
+      .koi-brand { font-size:30px; }
+      .koi-price { font-size:30px; }
+      .koi-pillars { grid-template-columns:repeat(2,1fr); }
+      .koi-cta-area { padding:20px 20px; }
+      .susc-btn-mp { font-size:14px; padding:13px 18px; }
     }
   </style>
 </head>

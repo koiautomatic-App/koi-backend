@@ -7,7 +7,31 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-
+<script>
+  // Bloqueo de seguridad: Si no hay sesión, rebota al login antes de cargar nada
+  async function checkAuth() {
+    try {
+      const res = await fetch('/api/me');
+      const data = await res.json();
+      
+      if (!data.ok) {
+        // No hay sesión activa, al login
+        window.location.href = '/login';
+      } else {
+        // Sesión OK: Guardamos los datos del usuario en memoria para usarlos luego
+        window.currentUser = data.user;
+        console.log("🐟 KOI: Sesión iniciada como", data.user.email);
+        
+        // Opcional: Si tenés un elemento con id="user-name", lo actualizamos
+        const nameEl = document.getElementById('user-name');
+        if (nameEl) nameEl.innerText = data.user.nombre || 'Usuario';
+      }
+    } catch (err) {
+      window.location.href = '/login';
+    }
+  }
+  checkAuth();
+</script>
   <style>
     :root {
       --bg:           #080810;

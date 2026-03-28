@@ -3243,5 +3243,111 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 });
 </script>
+<script>
+  // ============================================================
+  //  KOI · CONEXIÓN REAL CON EL BACKEND
+  // ============================================================
+
+  async function updateDashboardData() {
+    try {
+      // Llamamos al endpoint que creamos en el servidor
+      const response = await fetch('/api/stats/dashboard');
+      const data = await response.json();
+
+      if (data.ok) {
+        // 1. Actualizar Tarjeta "EMITIDO HOY"
+        const hoyElement = document.querySelector('.mc-today .mc-value');
+        if (hoyElement) {
+          hoyElement.innerText = `$${data.emitidoHoy.toLocaleString('es-AR')}`;
+          hoyElement.classList.remove('loading');
+        }
+
+        // 2. Actualizar Barra de Monotributo y Monto del Mes
+        const montoMes = document.querySelector('.mono-amount');
+        if (montoMes) {
+          montoMes.innerHTML = `$${data.totalFacturadoMes.toLocaleString('es-AR')} <span>/ mes</span>`;
+        }
+
+        // Calcular porcentaje de la barra de progreso
+        const porcentaje = (data.totalFacturadoMes / data.limiteCategoria) * 100;
+        const barFill = document.querySelector('.prog-fill');
+        const pctText = document.querySelector('.prog-pct');
+
+        if (barFill) {
+          barFill.style.width = `${Math.min(porcentaje, 100)}%`;
+          
+          // Cambiar colores según el riesgo de pasarse de categoría
+          if (porcentaje > 80) {
+            barFill.classList.add('warn');
+            pctText?.classList.add('warn');
+          }
+          if (porcentaje > 95) {
+            barFill.classList.add('crit');
+            pctText?.classList.add('crit');
+          }
+        }
+        
+        if (pctText) pctText.innerText = `${porcentaje.toFixed(1)}%`;
+
+        // 3. Actualizar Lista de Ventas Recientes (Comprobantes)
+        const salesContainer = document.querySelector('.comp-scroll');
+        if (salesContainer && data.ventas) {
+          salesContainer.innerHTML = ''; // Limpiar las ficticias
+
+          data.ventas.forEach(venta => {
+            const fecha = new Date(venta.createdAt).toLocaleDateString('es-AR', {
+              day: '2-digit', month: '2-digit'
+            });
+
+            salesContainer.innerHTML += `
+              <div class="comp-row">
+                <div class="cae-dot cae-pend"></div>
+                <div class="comp-info">
+                  <div class="comp-cliente">${venta.customerName || 'Cliente sin nombre'}</div>
+                  <div class="comp-meta">${fecha} · ID: ${venta.externalId}</div>
+                </div>
+                <div class="comp-monto">$${venta.amount.toLocaleString('es-AR')}</div>
+                <div class="comp-actions">
+                  <button class="act-btn" title="Generar Factura">
+                    <span class="material-icons">receipt_long</span>
+                  </button>
+                </div>
+              </div>
+            `;
+          });
+        }
+
+        // 4. Feedback de Sincronización (Si KOI está "succionando" datos)
+        const logoMark = document.querySelector('.logo-mark');
+        if (data.isSyncing) {
+          logoMark.style.animation = 'pulse-sync 2s infinite ease-in-out';
+          console.log("KOI: Succionando datos de WooCommerce en segundo plano...");
+        } else {
+          logoMark.style.animation = '';
+        }
+      }
+    } catch (error) {
+      console.error("❌ Error al conectar con el motor KOI:", error);
+    }
+  }
+
+  // Ejecutar apenas carga la página
+  document.addEventListener('DOMContentLoaded', () => {
+    updateDashboardData();
+    // Refrescar cada 30 segundos automáticamente
+    setInterval(updateDashboardData, 30000);
+  });
+
+  // Estilo extra para el pulso de sincronización
+  const style = document.createElement('style');
+  style.innerHTML = `
+    @keyframes pulse-sync {
+      0% { box-shadow: 0 0 10px rgba(0,230,118,0.3); transform: scale(1); }
+      50% { box-shadow: 0 0 30px rgba(0,230,118,0.7); transform: scale(1.05); }
+      100% { box-shadow: 0 0 10px rgba(0,230,118,0.3); transform: scale(1); }
+    }
+  `;
+  document.head.appendChild(style);
+</script>
 </body>
 </html>

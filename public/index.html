@@ -7,31 +7,7 @@
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
-<script>
-  // Bloqueo de seguridad: Si no hay sesión, rebota al login antes de cargar nada
-  async function checkAuth() {
-    try {
-      const res = await fetch('/api/me');
-      const data = await res.json();
-      
-      if (!data.ok) {
-        // No hay sesión activa, al login
-        window.location.href = '/login';
-      } else {
-        // Sesión OK: Guardamos los datos del usuario en memoria para usarlos luego
-        window.currentUser = data.user;
-        console.log("🐟 KOI: Sesión iniciada como", data.user.email);
-        
-        // Opcional: Si tenés un elemento con id="user-name", lo actualizamos
-        const nameEl = document.getElementById('user-name');
-        if (nameEl) nameEl.innerText = data.user.nombre || 'Usuario';
-      }
-    } catch (err) {
-      window.location.href = '/login';
-    }
-  }
-  checkAuth();
-</script>
+
   <style>
     :root {
       --bg:           #080810;
@@ -651,6 +627,98 @@
 
     @keyframes cfgSpin { to { transform:rotate(360deg); } }
 
+    /* ── VISTA MI NEGOCIO ──────────────────────────────── */
+    .neg-section-label {
+      font-size:9px; font-weight:700; letter-spacing:2.5px;
+      text-transform:uppercase; color:var(--text-3); margin-bottom:12px;
+    }
+
+    /* Integraciones activas */
+    .neg-integration {
+      display:flex; align-items:center; gap:14px;
+      background:var(--card); border:1px solid var(--border);
+      border-radius:var(--r-md); padding:14px 16px;
+      margin-bottom:10px; transition:border-color .15s;
+    }
+    .neg-integration:hover { border-color:rgba(232,98,42,.2); }
+    .neg-integration-logo {
+      width:40px; height:40px; border-radius:10px;
+      display:flex; align-items:center; justify-content:center;
+      flex-shrink:0; font-size:18px;
+    }
+    .neg-integration-info { flex:1; min-width:0; }
+    .neg-integration-name { font-weight:700; font-size:13px; color:var(--text-1); }
+    .neg-integration-url  { font-size:11px; color:var(--text-3); margin-top:2px;
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .neg-integration-status {
+      display:inline-flex; align-items:center; gap:5px;
+      font-size:10px; font-weight:700; padding:3px 10px;
+      border-radius:999px;
+    }
+    .neg-status-ok     { background:var(--green-soft); color:var(--green); border:1px solid rgba(0,230,118,.2); }
+    .neg-status-error  { background:rgba(255,61,87,.08); color:var(--red); border:1px solid rgba(255,61,87,.2); }
+    .neg-status-pending{ background:rgba(255,179,0,.08); color:var(--yellow); border:1px solid rgba(255,179,0,.2); }
+    .neg-disconnect-btn {
+      background:none; border:1px solid rgba(255,61,87,.15);
+      color:var(--text-3); border-radius:var(--r-sm); padding:6px 10px;
+      cursor:pointer; font-size:11px; font-weight:600;
+      font-family:var(--font-ui); transition:all .15s; flex-shrink:0;
+    }
+    .neg-disconnect-btn:hover { border-color:rgba(255,61,87,.4); color:var(--red); }
+
+    .neg-empty {
+      display:flex; flex-direction:column; align-items:center; gap:10px;
+      padding:32px; border:1px dashed rgba(255,255,255,.07);
+      border-radius:var(--r-lg); color:var(--text-3); font-size:13px;
+    }
+
+    /* Grid de plataformas */
+    .neg-plataformas {
+      display:grid; grid-template-columns:repeat(auto-fill, minmax(200px, 1fr));
+      gap:12px;
+    }
+    .neg-card {
+      background:var(--card); border:1px solid var(--border);
+      border-radius:var(--r-lg); padding:18px 16px;
+      cursor:pointer; transition:all .18s;
+      display:flex; flex-direction:column; gap:14px;
+      position:relative; overflow:hidden;
+    }
+    .neg-card::before {
+      content:''; position:absolute; top:0; left:0; right:0; height:2px;
+      background:linear-gradient(90deg,var(--orange),var(--orange-2),var(--green));
+      opacity:0; transition:opacity .18s;
+    }
+    .neg-card:hover {
+      border-color:rgba(232,98,42,.25);
+      transform:translateY(-2px);
+      box-shadow:0 8px 28px rgba(0,0,0,.4);
+    }
+    .neg-card:hover::before { opacity:1; }
+
+    .neg-card-logo {
+      width:44px; height:44px; border-radius:12px;
+      display:flex; align-items:center; justify-content:center;
+    }
+    .neg-card-info { flex:1; }
+    .neg-card-name { font-weight:700; font-size:13px; color:var(--text-1); margin-bottom:3px; }
+    .neg-card-desc { font-size:11px; color:var(--text-3); }
+
+    .neg-card-badge {
+      position:absolute; top:12px; right:12px;
+      font-size:8px; font-weight:700; letter-spacing:1.5px;
+      text-transform:uppercase; padding:3px 8px; border-radius:999px;
+    }
+    .neg-badge-oauth { background:rgba(0,158,227,.12); color:#4ab3e8; border:1px solid rgba(0,158,227,.2); }
+    .neg-badge-token { background:rgba(232,98,42,.1); color:var(--orange-2); border:1px solid rgba(232,98,42,.2); }
+
+    .neg-form { animation:fadeUp .2s ease; }
+
+    @media (max-width:480px) {
+      .neg-plataformas { grid-template-columns:1fr 1fr; }
+      .neg-card { padding:14px 12px; }
+    }
+
     /* ── VISTA ESTADO ──────────────────────────────────── */
     .estado-afip-row {
       display:flex; align-items:center; justify-content:space-between;
@@ -1258,6 +1326,9 @@
       <span class="material-icons nav-icon">receipt_long</span> Comprobantes
       <span class="nav-badge" id="navBadge">0</span>
     </div>
+    <div class="nav-item" id="nav-negocio" onclick="mostrarVista('negocio')">
+      <span class="material-icons nav-icon">storefront</span> Mi Negocio
+    </div>
     <div class="nav-section">Reportes</div>
     <div class="nav-item">
       <span class="material-icons nav-icon">bar_chart</span> IVA Ventas
@@ -1554,6 +1625,224 @@
     </div><!-- /vista comprobantes -->
 
     <!-- ── VISTA ESTADO ────────────────────────────────── -->
+    <!-- ── VISTA MI NEGOCIO ─────────────────────────────── -->
+    <div class="content" id="vista-negocio" style="display:none">
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:24px">
+        <div>
+          <p class="sec-label" style="margin:0">Integraciones</p>
+          <h2 style="font-size:18px;font-weight:700;color:var(--text-1);margin:4px 0 0">Mi Negocio</h2>
+        </div>
+      </div>
+
+      <!-- TIENDAS CONECTADAS -->
+      <div class="neg-section-label">Tiendas conectadas</div>
+      <div id="negIntegraciones">
+        <div class="neg-empty">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
+            <rect x="2" y="8" width="28" height="20" rx="3" stroke="var(--text-2)" stroke-width="1.5"/>
+            <path d="M10 8V6a6 6 0 0 1 12 0v2" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="16" cy="18" r="3" stroke="var(--text-2)" stroke-width="1.5"/>
+          </svg>
+          <span>Todavía no conectaste ninguna tienda</span>
+        </div>
+      </div>
+
+      <!-- PLATAFORMAS DISPONIBLES -->
+      <div class="neg-section-label" style="margin-top:28px">Conectar plataforma</div>
+      <div class="neg-plataformas">
+
+        <!-- WooCommerce -->
+        <div class="neg-card" onclick="abrirConexion('woocommerce')">
+          <div class="neg-card-logo neg-logo-woo">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#7F54B3"/>
+              <path d="M4 8.5c0-1.1.9-2 2-2h16c1.1 0 2 .9 2 2v6c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-6z" fill="white" opacity=".15"/>
+              <path d="M7 10l2 5 2-3.5 2 3.5 2-5" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+              <circle cx="20" cy="19" r="2.5" fill="white" opacity=".8"/>
+              <circle cx="13" cy="19" r="2.5" fill="white" opacity=".8"/>
+              <path d="M7 17.5h8.5" stroke="white" stroke-width="1.3" opacity=".5"/>
+            </svg>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">WooCommerce</div>
+            <div class="neg-card-desc">Conectá via OAuth</div>
+          </div>
+          <div class="neg-card-badge neg-badge-oauth">OAuth</div>
+        </div>
+
+        <!-- MercadoLibre -->
+        <div class="neg-card" onclick="abrirConexion('mercadolibre')">
+          <div class="neg-card-logo neg-logo-ml">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#FFE600"/>
+              <path d="M14 6c-4.4 0-8 3.6-8 8s3.6 8 8 8 8-3.6 8-8-3.6-8-8-8z" fill="#009EE3"/>
+              <path d="M8 13l3 3 3-3" stroke="white" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+              <path d="M14 9v7" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">Mercado Libre</div>
+            <div class="neg-card-desc">Conectá via OAuth</div>
+          </div>
+          <div class="neg-card-badge neg-badge-oauth">OAuth</div>
+        </div>
+
+        <!-- TiendaNube -->
+        <div class="neg-card" onclick="abrirConexion('tiendanube')">
+          <div class="neg-card-logo neg-logo-tn">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#1EAAF1"/>
+              <path d="M8 18a4 4 0 0 1 0-8h1a5 5 0 0 1 10 1h1a3 3 0 0 1 0 6H8z" fill="white" opacity=".9"/>
+            </svg>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">Tienda Nube</div>
+            <div class="neg-card-desc">API Token</div>
+          </div>
+          <div class="neg-card-badge neg-badge-token">Token</div>
+        </div>
+
+        <!-- Empretienda -->
+        <div class="neg-card" onclick="abrirConexion('empretienda')">
+          <div class="neg-card-logo neg-logo-em">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#FF6B35"/>
+              <path d="M7 10h14M7 14h10M7 18h12" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">Empretienda</div>
+            <div class="neg-card-desc">API Token</div>
+          </div>
+          <div class="neg-card-badge neg-badge-token">Token</div>
+        </div>
+
+        <!-- Rappi -->
+        <div class="neg-card" onclick="abrirConexion('rappi')">
+          <div class="neg-card-logo neg-logo-rappi">
+            <svg width="28" height="28" viewBox="0 0 28 28" fill="none">
+              <rect width="28" height="28" rx="8" fill="#FF441B"/>
+              <circle cx="14" cy="12" r="4" fill="white"/>
+              <path d="M7 22c0-3.9 3.1-7 7-7s7 3.1 7 7" stroke="white" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">Rappi</div>
+            <div class="neg-card-desc">API Token</div>
+          </div>
+          <div class="neg-card-badge neg-badge-token">Token</div>
+        </div>
+
+      </div><!-- /neg-plataformas -->
+
+    </div><!-- /vista-negocio -->
+
+    <!-- ── MODAL CONECTAR PLATAFORMA ──────────────────────── -->
+    <div class="modal-overlay" id="negModalOverlay" onclick="cerrarConexion()"></div>
+    <div class="modal-box" id="negModal">
+
+      <div class="modal-header">
+        <div class="modal-title" id="negModalTitle">
+          <span class="material-icons" style="color:var(--orange-2)">link</span>
+          Conectar tienda
+        </div>
+        <button class="cfg-close" onclick="cerrarConexion()">
+          <span class="material-icons">close</span>
+        </button>
+      </div>
+
+      <div class="modal-body">
+
+        <!-- Error/success -->
+        <div id="negMsgError" style="display:none;background:rgba(255,61,87,.08);border:1px solid rgba(255,61,87,.2);color:#ff6b7a;border-radius:var(--r-sm);padding:10px 14px;font-size:12px;margin-bottom:14px"></div>
+
+        <!-- WooCommerce -->
+        <div id="negFormWoo" class="neg-form" style="display:none">
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.6">
+            Ingresá la URL de tu tienda WooCommerce. Serás redirigido para autorizar el acceso.
+          </p>
+          <div class="cfg-field">
+            <label class="cfg-label">URL de tu tienda *</label>
+            <input id="wooStoreUrl" class="cfg-input" type="url" placeholder="https://mitienda.com"/>
+          </div>
+        </div>
+
+        <!-- MercadoLibre -->
+        <div id="negFormML" class="neg-form" style="display:none">
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.6">
+            Serás redirigido a Mercado Libre para autorizar el acceso a tu cuenta de vendedor.
+          </p>
+          <div style="background:rgba(0,158,227,.08);border:1px solid rgba(0,158,227,.2);border-radius:var(--r-sm);padding:12px 14px;font-size:12px;color:#4ab3e8">
+            KOI solo accede a tus órdenes. No realiza publicaciones ni modifica tu cuenta.
+          </div>
+        </div>
+
+        <!-- TiendaNube -->
+        <div id="negFormTN" class="neg-form" style="display:none">
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.6">
+            Encontrás el API Token en tu panel de TiendaNube → <strong>Mis aplicaciones → API</strong>.
+          </p>
+          <div class="cfg-field">
+            <label class="cfg-label">Store ID *</label>
+            <input id="tnStoreId" class="cfg-input" type="text" placeholder="123456"/>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Nombre de tu tienda</label>
+            <input id="tnStoreName" class="cfg-input" type="text" placeholder="Mi tienda"/>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">API Token *</label>
+            <input id="tnApiToken" class="cfg-input" type="password" placeholder="tu-api-token"/>
+          </div>
+        </div>
+
+        <!-- Empretienda -->
+        <div id="negFormEM" class="neg-form" style="display:none">
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.6">
+            Encontrás el API Token en tu panel de Empretienda → <strong>Configuración → Desarrolladores</strong>.
+          </p>
+          <div class="cfg-field">
+            <label class="cfg-label">Slug de tu tienda *</label>
+            <input id="emSlug" class="cfg-input" type="text" placeholder="mi-tienda"/>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">API Token *</label>
+            <input id="emApiToken" class="cfg-input" type="password" placeholder="tu-api-token"/>
+          </div>
+        </div>
+
+        <!-- Rappi -->
+        <div id="negFormRappi" class="neg-form" style="display:none">
+          <p style="font-size:13px;color:var(--text-2);margin-bottom:16px;line-height:1.6">
+            Pedile el API Token a tu ejecutivo de cuenta de Rappi o buscalo en el portal de partners.
+          </p>
+          <div class="cfg-field">
+            <label class="cfg-label">Restaurant ID *</label>
+            <input id="rappiId" class="cfg-input" type="text" placeholder="900123456"/>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">Nombre del local</label>
+            <input id="rappiName" class="cfg-input" type="text" placeholder="Mi local Rappi"/>
+          </div>
+          <div class="cfg-field">
+            <label class="cfg-label">API Token *</label>
+            <input id="rappiToken" class="cfg-input" type="password" placeholder="tu-api-token"/>
+          </div>
+        </div>
+
+      </div><!-- /modal-body -->
+
+      <div class="modal-footer">
+        <button class="btn-cancel" onclick="cerrarConexion()">Cancelar</button>
+        <button class="btn-registrar" id="btnConectar" onclick="confirmarConexion()">
+          <span class="material-icons" style="font-size:14px!important">link</span>
+          <span id="lblConectar">Conectar</span>
+        </button>
+      </div>
+
+    </div><!-- /negModal -->
+
     <div class="content" id="vista-estado" style="display:none">
 
       <!-- AFIP status pill -->
@@ -2042,6 +2331,10 @@ function mostrarVista(v) {
     document.getElementById('nav-comprobantes').classList.add('active');
     if (!_rangoDesde) _iniciarPeriodo();
     cargarTodosComprobantes();
+  } else if (v === 'negocio') {
+    document.getElementById('vista-negocio').style.display = 'block';
+    document.getElementById('nav-negocio').classList.add('active');
+    cargarIntegraciones();
   } else if (v === 'estado') {
     document.getElementById('vista-estado').style.display = 'block';
     document.getElementById('nav-estado').classList.add('active');
@@ -2200,6 +2493,198 @@ function _poblarSelectMes() {
     .map(k => `<option value="${k}">${meses[k]}</option>`).join('');
   sel.innerHTML = '<option value="">Todos los meses</option>' + opts;
 }
+
+/* ── MI NEGOCIO ─────────────────────────────────────── */
+let _plataformaActual = null;
+
+function cargarIntegraciones() {
+  const cont = document.getElementById('negIntegraciones');
+  if (typeof google !== 'undefined') {
+    // En GAS no hay /api/integrations, usar datos reales cuando sea web
+    return;
+  }
+  fetch('/api/integrations', { credentials:'include' })
+    .then(r => r.json())
+    .then(data => {
+      const list = data.integrations || [];
+      if (!list.length) {
+        cont.innerHTML = `<div class="neg-empty">
+          <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
+            <rect x="2" y="8" width="28" height="20" rx="3" stroke="var(--text-2)" stroke-width="1.5"/>
+            <path d="M10 8V6a6 6 0 0 1 12 0v2" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Todavía no conectaste ninguna tienda</span>
+        </div>`;
+        return;
+      }
+      const LOGOS = {
+        woocommerce:  '🛍',
+        tiendanube:   '☁️',
+        mercadolibre: '🛒',
+        empretienda:  '🏪',
+        rappi:        '🛵',
+      };
+      cont.innerHTML = list.map(i => `
+        <div class="neg-integration">
+          <div class="neg-integration-logo">${LOGOS[i.platform] || '🔗'}</div>
+          <div class="neg-integration-info">
+            <div class="neg-integration-name">${i.storeName || i.storeId}</div>
+            <div class="neg-integration-url">${i.platform} · ${i.storeUrl || i.storeId}</div>
+          </div>
+          <span class="neg-integration-status ${i.status === 'active' ? 'neg-status-ok' : 'neg-status-error'}">
+            ${i.status === 'active' ? '● Activa' : '✕ Error'}
+          </span>
+          <button class="neg-disconnect-btn" onclick="desconectar('${i._id}')">Desconectar</button>
+        </div>`).join('');
+    })
+    .catch(() => {});
+}
+
+function desconectar(id) {
+  if (!confirm('¿Desconectar esta tienda? Se dejarán de recibir nuevas órdenes.')) return;
+  fetch(`/api/integrations/${id}`, { method:'DELETE', credentials:'include' })
+    .then(r => r.json())
+    .then(d => { if(d.ok) { toast('Tienda desconectada','warn'); cargarIntegraciones(); } })
+    .catch(() => toast('Error al desconectar','error'));
+}
+
+function abrirConexion(plataforma) {
+  _plataformaActual = plataforma;
+  document.getElementById('negMsgError').style.display = 'none';
+
+  // Ocultar todos los forms
+  document.querySelectorAll('.neg-form').forEach(f => f.style.display = 'none');
+
+  const NOMBRES = {
+    woocommerce:'WooCommerce', mercadolibre:'Mercado Libre',
+    tiendanube:'Tienda Nube', empretienda:'Empretienda', rappi:'Rappi',
+  };
+  document.getElementById('negModalTitle').innerHTML =
+    `<span class="material-icons" style="color:var(--orange-2)">link</span> Conectar ${NOMBRES[plataforma]}`;
+
+  // Mostrar form correspondiente
+  const forms = {
+    woocommerce:'negFormWoo', mercadolibre:'negFormML',
+    tiendanube:'negFormTN', empretienda:'negFormEM', rappi:'negFormRappi',
+  };
+  const formId = forms[plataforma];
+  if (formId) document.getElementById(formId).style.display = 'block';
+
+  // Cambiar texto del botón para OAuth
+  const isOAuth = ['woocommerce','mercadolibre'].includes(plataforma);
+  document.getElementById('lblConectar').textContent = isOAuth ? 'Ir a autorizar →' : 'Conectar';
+
+  document.getElementById('negModalOverlay').classList.add('open');
+  document.getElementById('negModal').classList.add('open');
+}
+
+function cerrarConexion() {
+  document.getElementById('negModalOverlay').classList.remove('open');
+  document.getElementById('negModal').classList.remove('open');
+  _plataformaActual = null;
+}
+
+async function confirmarConexion() {
+  const btn = document.getElementById('btnConectar');
+  const err = document.getElementById('negMsgError');
+  err.style.display = 'none';
+  btn.disabled = true;
+
+  try {
+    switch(_plataformaActual) {
+
+      case 'woocommerce': {
+        const url = document.getElementById('wooStoreUrl').value.trim();
+        if (!url) throw new Error('Ingresá la URL de tu tienda.');
+        if (!url.startsWith('http')) throw new Error('La URL debe comenzar con http:// o https://');
+        window.location.href = `/auth/woo/connect?store_url=${encodeURIComponent(url)}`;
+        return;
+      }
+
+      case 'mercadolibre': {
+        window.location.href = '/auth/ml/connect';
+        return;
+      }
+
+      case 'tiendanube': {
+        const storeNumId = document.getElementById('tnStoreId').value.trim();
+        const storeName  = document.getElementById('tnStoreName').value.trim();
+        const apiToken   = document.getElementById('tnApiToken').value.trim();
+        if (!storeNumId || !apiToken) throw new Error('Completá Store ID y API Token.');
+        const res  = await fetch('/api/integrations/tiendanube', {
+          method:'POST', credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ storeNumId, storeName, apiToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al conectar.');
+        toast('✅ Tienda Nube conectada', 'success');
+        cerrarConexion();
+        cargarIntegraciones();
+        break;
+      }
+
+      case 'empretienda': {
+        const storeSlug = document.getElementById('emSlug').value.trim();
+        const apiToken  = document.getElementById('emApiToken').value.trim();
+        if (!storeSlug || !apiToken) throw new Error('Completá el slug y el API Token.');
+        const res  = await fetch('/api/integrations/empretienda', {
+          method:'POST', credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ storeSlug, apiToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al conectar.');
+        toast('✅ Empretienda conectada', 'success');
+        cerrarConexion();
+        cargarIntegraciones();
+        break;
+      }
+
+      case 'rappi': {
+        const restaurantId = document.getElementById('rappiId').value.trim();
+        const storeName    = document.getElementById('rappiName').value.trim();
+        const apiToken     = document.getElementById('rappiToken').value.trim();
+        if (!restaurantId || !apiToken) throw new Error('Completá Restaurant ID y API Token.');
+        const res  = await fetch('/api/integrations/rappi', {
+          method:'POST', credentials:'include',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ restaurantId, storeName, apiToken }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Error al conectar.');
+        toast('✅ Rappi conectado', 'success');
+        cerrarConexion();
+        cargarIntegraciones();
+        break;
+      }
+    }
+  } catch(e) {
+    err.textContent = e.message;
+    err.style.display = 'block';
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Detectar redirect de OAuth exitoso
+(function checkOAuthReturn() {
+  const p = new URLSearchParams(window.location.search);
+  if (p.get('woo') === 'connected') {
+    toast('✅ WooCommerce conectado correctamente', 'success');
+    history.replaceState({}, '', '/dashboard');
+    mostrarVista('negocio');
+  }
+  if (p.get('ml') === 'connected') {
+    toast('✅ Mercado Libre conectado correctamente', 'success');
+    history.replaceState({}, '', '/dashboard');
+    mostrarVista('negocio');
+  }
+  if (p.get('error') === 'ml_failed') {
+    toast('Error al conectar Mercado Libre', 'error');
+    history.replaceState({}, '', '/dashboard');
+  }
+})();
 
 /* ── MOBILE SIDEBAR ────────────────────────────────── */
 function toggleSidebar() {

@@ -1,6 +1,6 @@
 // ============================================================
 //  KOI-FACTURA · Backend Multi-Usuario (PRO Edition)
-//  Node/Express + MongoDB Atlas + Google OAuth + Multi-Plataforma
+//  Node/Express + MongoDB Atlas + Multi-Plataforma
 // ============================================================
 
 require('dotenv').config();
@@ -26,7 +26,10 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cors());
 app.use(cookieParser());
+
+// 1. Servir archivos estáticos (Tu Dashboard HTML/CSS/JS)
 app.use(express.static(path.join(__dirname, 'public')));
+
 app.use(session({
   secret:            process.env.SESSION_SECRET || 'koi-session-dev',
   resave:            false,
@@ -48,7 +51,7 @@ mongoose.connect(process.env.MONGO_URI)
   .catch(err => console.error('❌ MongoDB error:', err));
 
 // ════════════════════════════════════════════════════════════
-//  SCHEMAS Y MODELOS (Slim Data Strategy)
+//  MODELOS DE DATOS (Slim Strategy)
 // ════════════════════════════════════════════════════════════
 
 const UserSchema = new mongoose.Schema({
@@ -57,6 +60,7 @@ const UserSchema = new mongoose.Schema({
   plan:         { type: String, default: 'free' },
   creadoEn:     { type: Date, default: Date.now },
 });
+const User = mongoose.model('User', UserSchema);
 
 const IntegrationSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
@@ -71,7 +75,6 @@ const IntegrationSchema = new mongoose.Schema({
   webhookSecret: { type: String, default: () => crypto.randomBytes(24).toString('hex') },
   createdAt:  { type: Date, default: Date.now }
 });
-
 const Integration = mongoose.model('Integration', IntegrationSchema);
 
 const OrderSchema = new mongoose.Schema({
@@ -86,8 +89,9 @@ const OrderSchema = new mongoose.Schema({
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 const Order = mongoose.model('Order', OrderSchema);
 
-// ── ENCRIPTACIÓN ──────────────────────────────────────────────
+// ── ENCRIPTACIÓN DE CREDENCIALES ──────────────────────────────
 const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k', 'utf8').slice(0, 32);
+
 function encrypt(text) {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
@@ -107,14 +111,13 @@ const requireAuth = (req, res, next) => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  LÓGICA DE SUCCIÓN HISTÓRICA RECURSIVA
+//  MOTOR DE SUCCIÓN HISTÓRICA (WooCommerce)
 // ════════════════════════════════════════════════════════════
 
 async function _sincronizarHistorialWoo(integration, consumerKey, consumerSecret, storeUrl) {
   let page = 1;
   let hasMore = true;
   let totalSincronizado = 0;
-
   console.log(`⏳ [SYNC] Iniciando succión total para: ${storeUrl}`);
 
   while (hasMore) {
@@ -143,17 +146,20 @@ async function _sincronizarHistorialWoo(integration, consumerKey, consumerSecret
         }
         page++;
       } else { hasMore = false; }
-    } catch (error) { hasMore = false; }
+    } catch (error) { 
+        console.error("❌ Error en página de succión:", error.message);
+        hasMore = false; 
+    }
   }
   await Integration.findByIdAndUpdate(integration._id, { status: 'active' });
   console.log(`✅ [SYNC] Finalizado: ${totalSincronizado} ventas de ${storeUrl}.`);
 }
 
 // ════════════════════════════════════════════════════════════
-//  RUTAS DE INTEGRACIÓN Y API
+//  RUTAS DE API E INTEGRACIONES
 // ════════════════════════════════════════════════════════════
 
-// Callback de WooCommerce
+// Callback de WooCommerce: Recibe la aprobación y las llaves API
 app.post('/auth/woo/callback', async (req, res) => {
   res.status(200).json({ status: 'success' });
   const { state } = req.query;
@@ -161,6 +167,7 @@ app.post('/auth/woo/callback', async (req, res) => {
 
   try {
     const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
+    
     const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'woocommerce', storeId: storeUrl },
       {
@@ -172,14 +179,14 @@ app.post('/auth/woo/callback', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // Disparar succión en segundo plano
+    // Disparar succión en segundo plano para no trabar la respuesta
     _sincronizarHistorialWoo(integration, keys.consumer_key, keys.consumer_secret, storeUrl)
-      .catch(err => console.error("❌ Error succión:", err));
+      .catch(err => console.error("❌ Error en proceso de succión:", err));
 
-  } catch(e) { console.error('❌ Callback error:', e.message); }
+  } catch(e) { console.error('❌ Error en Callback WooCommerce:', e.message); }
 });
 
-// Endpoint Real para el Dashboard Chic
+// Endpoint para el Dashboard Real (Métricas de la marca)
 app.get('/api/stats/dashboard', requireAuth, async (req, res) => {
   try {
     const hoy = new Date();
@@ -196,21 +203,36 @@ app.get('/api/stats/dashboard', requireAuth, async (req, res) => {
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
 
-    const ultimasVentas = await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(5);
+    const ultimasVentas = await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(10);
     const integration = await Integration.findOne({ userId: req.userId, platform: 'woocommerce' });
 
     res.json({
       ok: true,
       emitidoHoy: statsHoy[0]?.total || 0,
       totalFacturadoMes: statsMes[0]?.total || 0,
-      limiteCategoria: 1500000,
+      limiteCategoria: 1500000, // Ajustable según monotributo
       isSyncing: integration?.status === 'syncing',
       ventas: ultimasVentas
     });
-  } catch (e) { res.status(500).json({ error: 'Error API' }); }
+  } catch (e) { 
+      console.error("❌ Error API Stats:", e);
+      res.status(500).json({ error: 'Error al obtener métricas' }); 
+  }
 });
 
-// ── INICIO ────────────────────────────────────────────────────
+// ════════════════════════════════════════════════════════════
+//  MANEJO DE RUTAS SPA (Solución al "Cannot GET /dashboard")
+// ════════════════════════════════════════════════════════════
+
+// Esta ruta redirige cualquier dirección no reconocida (ej. /dashboard) al index.html
+// IMPORTANTE: Siempre debe ser la última ruta definida.
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ── INICIO DEL SERVIDOR ───────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`🎏 KOI LIVE | Puerto: ${PORT} | Base: ${BASE}`);
+  console.log(`🎏 KOI-FACTURA LIVE`);
+  console.log(`📡 Puerto: ${PORT}`);
+  console.log(`🔗 URL Base: ${BASE}`);
 });

@@ -9,12 +9,10 @@ const express        = require('express');
 const mongoose       = require('mongoose');
 const cors           = require('cors');
 const axios          = require('axios');
-const bcrypt         = require('bcryptjs');
 const jwt            = require('jsonwebtoken');
 const cookieParser   = require('cookie-parser');
 const session        = require('express-session');
 const passport       = require('passport');
-const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto         = require('crypto');
 const path           = require('path');
 
@@ -39,7 +37,6 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ── ENDPOINT DE SUPERVIVENCIA (PING) ──────────────────────────
-// Registra esta URL en cron-job.org cada 14 min para evitar el sleep de Render
 app.get('/ping', (req, res) => {
   console.log('🎏 KOI: Pulso de vida recibido. Servidor Activo.');
   res.status(200).send('KOI-FACTURA está despierto 🎏');
@@ -56,46 +53,22 @@ mongoose.connect(process.env.MONGO_URI)
 
 const UserSchema = new mongoose.Schema({
   nombre:       { type: String, trim: true },
-  apellido:     { type: String, trim: true },
-  email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
-  password:     { type: String },
-  googleId:     { type: String },
-  avatar:       { type: String },
-  plan:         { type: String, default: 'free', enum: ['free', 'pro'] },
+  email:        { type: String, required: true, unique: true, lowercase: true },
+  plan:         { type: String, default: 'free' },
   creadoEn:     { type: Date, default: Date.now },
-  ultimoAcceso: { type: Date, default: Date.now },
 });
 
-// Encriptación para Tokens
-const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k', 'utf8').slice(0, 32);
-function encrypt(text) {
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
-  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
-  return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
-}
-function decrypt(payload) {
-  const [iv, tag, enc] = payload.split(':');
-  const decipher = crypto.createDecipheriv('aes-256-gcm', ENCRYPTION_KEY, Buffer.from(iv, 'hex'));
-  decipher.setAuthTag(Buffer.from(tag, 'hex'));
-  return Buffer.concat([decipher.update(Buffer.from(enc, 'hex')), decipher.final()]).toString('utf8');
-}
-
 const IntegrationSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  platform: { type: String, required: true, enum: ['woocommerce', 'tiendanube', 'empretienda', 'mercadolibre', 'rappi'] },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  platform: { type: String, required: true },
   storeId:   { type: String, required: true },
-  storeName: { type: String },
   storeUrl:  { type: String },
-  status: { type: String, default: 'active', enum: ['active', 'error', 'revoked', 'pending', 'syncing'] },
+  status: { type: String, default: 'active' },
   credentials: {
     consumerKey:    { type: String },
-    consumerSecret: { type: String },
-    accessToken:    { type: String },
-    apiToken:       { type: String }
+    consumerSecret: { type: String }
   },
   webhookSecret: { type: String, default: () => crypto.randomBytes(24).toString('hex') },
-  lastSyncAt: { type: Date },
   createdAt:  { type: Date, default: Date.now }
 });
 
@@ -103,19 +76,35 @@ const Integration = mongoose.model('Integration', IntegrationSchema);
 
 const OrderSchema = new mongoose.Schema({
   userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
   platform:      { type: String, required: true },
   externalId:    { type: String, required: true },
   customerName:  { type: String },
-  customerEmail: { type: String },
   customerDoc:   { type: String },
   amount:        { type: Number },
-  currency:      { type: String, default: 'ARS' },
-  status:        { type: String, default: 'pending_invoice' },
   createdAt:     { type: Date, default: Date.now },
 });
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 const Order = mongoose.model('Order', OrderSchema);
+
+// ── ENCRIPTACIÓN ──────────────────────────────────────────────
+const ENCRYPTION_KEY = Buffer.from(process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k', 'utf8').slice(0, 32);
+function encrypt(text) {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENCRYPTION_KEY, iv);
+  const enc = Buffer.concat([cipher.update(text, 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
+}
+
+// ── MIDDLEWARE DE AUTENTICACIÓN ───────────────────────────────
+const requireAuth = (req, res, next) => {
+  const token = req.cookies.token || req.headers.authorization?.split(' ')[1];
+  if (!token) return res.status(401).json({ error: 'No autorizado' });
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.userId;
+    next();
+  } catch (e) { res.status(401).json({ error: 'Sesión expirada' }); }
+};
 
 // ════════════════════════════════════════════════════════════
 //  LÓGICA DE SUCCIÓN HISTÓRICA RECURSIVA
@@ -135,72 +124,47 @@ async function _sincronizarHistorialWoo(integration, consumerKey, consumerSecret
         params: { per_page: 100, page: page, status: 'completed,processing' }
       });
 
-      const orders = response.data;
-
-      if (orders && orders.length > 0) {
-        for (const rawOrder of orders) {
-          const normalized = normalizeOrder('woocommerce', rawOrder);
-          if (normalized) {
-            // Guardamos usando upsert para evitar duplicados si el webhook ya captó algo
-            await Order.findOneAndUpdate(
-              { userId: integration.userId, platform: 'woocommerce', externalId: normalized.externalId },
-              { ...normalized, userId: integration.userId, integrationId: integration._id, platform: 'woocommerce' },
-              { upsert: true }
-            );
-            totalSincronizado++;
-          }
+      if (response.data && response.data.length > 0) {
+        for (const raw of response.data) {
+          const b = raw.billing || {};
+          const doc = (b.dni || b.identification || '').replace(/\D/g, '');
+          
+          await Order.findOneAndUpdate(
+            { userId: integration.userId, platform: 'woocommerce', externalId: raw.id.toString() },
+            { 
+              customerName: `${b.first_name || ''} ${b.last_name || ''}`.trim(),
+              customerDoc: doc || '0',
+              amount: parseFloat(raw.total) || 0,
+              createdAt: new Date(raw.date_created)
+            },
+            { upsert: true }
+          );
+          totalSincronizado++;
         }
-        console.log(`📦 [SYNC] Página ${page} procesada (${totalSincronizado} órdenes acumuladas)`);
         page++;
-      } else {
-        hasMore = false;
-      }
-    } catch (error) {
-      console.error(`❌ [SYNC] Error en página ${page}:`, error.message);
-      hasMore = false;
-    }
+      } else { hasMore = false; }
+    } catch (error) { hasMore = false; }
   }
-
-  await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), status: 'active' });
-  console.log(`✅ [SYNC] Finalizado. ${totalSincronizado} ventas succionadas de ${storeUrl}.`);
-}
-
-function normalizeOrder(platform, rawPayload) {
-  if (platform === 'woocommerce') {
-    const b = rawPayload.billing || {};
-    let doc = (b.dni || b.identification || '').replace(/\D/g, '');
-    return {
-      externalId:    rawPayload.id?.toString(),
-      customerName:  `${b.first_name || ''} ${b.last_name || ''}`.trim(),
-      customerEmail: b.email || '',
-      customerDoc:   doc || '0',
-      amount:        parseFloat(rawPayload.total) || 0,
-      currency:      rawPayload.currency || 'ARS',
-      createdAt:     new Date(rawPayload.date_created)
-    };
-  }
-  return null;
+  await Integration.findByIdAndUpdate(integration._id, { status: 'active' });
+  console.log(`✅ [SYNC] Finalizado: ${totalSincronizado} ventas de ${storeUrl}.`);
 }
 
 // ════════════════════════════════════════════════════════════
-//  CALLBACK WOOCOMMERCE CON DISPARO DE SUCCIÓN
+//  RUTAS DE INTEGRACIÓN Y API
 // ════════════════════════════════════════════════════════════
 
+// Callback de WooCommerce
 app.post('/auth/woo/callback', async (req, res) => {
-  res.status(200).json({ status: 'success' }); // Responder rápido a Woo
-
+  res.status(200).json({ status: 'success' });
   const { state } = req.query;
   const keys = req.body; 
 
   try {
-    const decoded = jwt.verify(state, JWT_SECRET);
-    const { userId, storeUrl } = decoded;
-
+    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
     const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'woocommerce', storeId: storeUrl },
       {
         userId, platform: 'woocommerce', storeId: storeUrl,
-        storeName: storeUrl.replace(/^https?:\/\//, ''),
         storeUrl, status: 'syncing',
         'credentials.consumerKey': encrypt(keys.consumer_key),
         'credentials.consumerSecret': encrypt(keys.consumer_secret),
@@ -208,39 +172,45 @@ app.post('/auth/woo/callback', async (req, res) => {
       { upsert: true, new: true }
     );
 
-    // 1. Webhook para el futuro
-    await _registrarWebhookWoo(integration, keys.consumer_key, keys.consumer_secret, storeUrl);
-
-    // 2. Disparar succión del PASADO (Background)
+    // Disparar succión en segundo plano
     _sincronizarHistorialWoo(integration, keys.consumer_key, keys.consumer_secret, storeUrl)
-      .catch(err => console.error("❌ Error en succión:", err));
+      .catch(err => console.error("❌ Error succión:", err));
 
-    console.log(`🚀 KOI: Integración exitosa. Succionando historial de ${storeUrl}...`);
-  } catch(e) {
-    console.error('❌ Callback error:', e.message);
-  }
+  } catch(e) { console.error('❌ Callback error:', e.message); }
 });
 
-async function _registrarWebhookWoo(integration, consumerKey, consumerSecret, storeUrl) {
-  const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
+// Endpoint Real para el Dashboard Chic
+app.get('/api/stats/dashboard', requireAuth, async (req, res) => {
   try {
-    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`, {
-      name: 'KOI - Facturación', topic: 'order.created',
-      delivery_url: webhookUrl, status: 'active', secret: integration.webhookSecret,
-    }, { auth: { username: consumerKey, password: consumerSecret } });
-    console.log(`🔌 Webhook registrado para ${storeUrl}`);
-  } catch(e) {
-    console.warn(`⚠️ Webhook Woo: Probablemente ya existía en ${storeUrl}`);
-  }
-}
+    const hoy = new Date();
+    const inicioDia = new Date(new Date().setHours(0,0,0,0));
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
 
-// ── INICIO DEL SERVIDOR ───────────────────────────────────────
+    const statsHoy = await Order.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.userId), createdAt: { $gte: inicioDia } }},
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    const statsMes = await Order.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.userId), createdAt: { $gte: inicioMes } }},
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    const ultimasVentas = await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(5);
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'woocommerce' });
+
+    res.json({
+      ok: true,
+      emitidoHoy: statsHoy[0]?.total || 0,
+      totalFacturadoMes: statsMes[0]?.total || 0,
+      limiteCategoria: 1500000,
+      isSyncing: integration?.status === 'syncing',
+      ventas: ultimasVentas
+    });
+  } catch (e) { res.status(500).json({ error: 'Error API' }); }
+});
+
+// ── INICIO ────────────────────────────────────────────────────
 app.listen(PORT, () => {
-  console.log(`
-  🎏 KOI-FACTURA LIVE
-  -------------------
-  Puerto: ${PORT}
-  Base:   ${BASE}
-  -------------------
-  `);
+  console.log(`🎏 KOI LIVE | Puerto: ${PORT} | Base: ${BASE}`);
 });

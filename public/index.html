@@ -3349,5 +3349,86 @@ document.addEventListener('DOMContentLoaded',()=>{
   `;
   document.head.appendChild(style);
 </script>
+  <script>
+  // ── CONFIGURACIÓN INICIAL ──
+  const API_URL = '/api/stats/dashboard';
+
+  // ── FUNCIÓN PRINCIPAL: CARGAR DATOS REALES ──
+  async function loadDashboardData() {
+    try {
+      const response = await fetch(API_URL);
+      const data = await response.json();
+
+      if (data.ok) {
+        // 1. Actualizar Facturación del Mes
+        const totalFacturado = data.totalFacturadoMes || 0;
+        const limite = data.limiteCategoria || 1500000;
+        
+        document.getElementById('total-facturado').innerText = `$ ${totalFacturado.toLocaleString('es-AR')}`;
+        document.getElementById('limite-valor').innerText = `$ ${limite.toLocaleString('es-AR')}`;
+        
+        // 2. Actualizar Barra de Progreso Monotributo
+        const porcentaje = Math.min((totalFacturado / limite) * 100, 100);
+        const fill = document.getElementById('progreso-fill');
+        const pctText = document.getElementById('progreso-pct');
+        
+        fill.style.width = `${porcentaje}%`;
+        pctText.innerText = `${porcentaje.toFixed(1)}%`;
+
+        // Cambiar colores según criticidad
+        if (porcentaje > 85) {
+          fill.classList.add('crit');
+          pctText.classList.add('crit');
+        } else if (porcentaje > 60) {
+          fill.classList.add('warn');
+          pctText.classList.add('warn');
+        }
+
+        // 3. Actualizar Hoy y Pendientes
+        document.getElementById('hoy-monto').innerText = `$ ${data.emitidoHoy.toLocaleString('es-AR')}`;
+        
+        // 4. Cargar Tabla de Ventas (Histórico de @sono.handmade)
+        renderVentas(data.ventas);
+      }
+    } catch (error) {
+      console.error("❌ Error cargando KOI-Stats:", error);
+    }
+  }
+
+  function renderVentas(ventas) {
+    const container = document.getElementById('lista-ventas');
+    if (!ventas || ventas.length === 0) {
+      container.innerHTML = '<div class="neg-empty">No hay ventas registradas aún.</div>';
+      return;
+    }
+
+    container.innerHTML = ventas.map(v => `
+      <div class="comp-row">
+        <div class="cae-dot cae-ok"></div>
+        <div class="comp-info">
+          <div class="comp-cliente">${v.customerName || 'Cliente Minorista'}</div>
+          <div class="comp-meta">${new Date(v.createdAt).toLocaleDateString()} · #${v.externalId}</div>
+        </div>
+        <div class="comp-monto">$ ${v.amount.toLocaleString('es-AR')}</div>
+        <div class="comp-actions">
+          <button class="act-btn"><span class="material-icons">description</span></button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // ── MANEJO DE INTERFAZ (SIDEBAR / CONFIG) ──
+  function toggleConfig() {
+    document.getElementById('cfg-overlay').classList.toggle('open');
+    document.getElementById('cfg-panel').classList.toggle('open');
+  }
+
+  // Inicializar al cargar
+  document.addEventListener('DOMContentLoaded', () => {
+    loadDashboardData();
+    // Refrescar cada 5 minutos
+    setInterval(loadDashboardData, 300000);
+  });
+</script>
 </body>
 </html>

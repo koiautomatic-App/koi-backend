@@ -3430,5 +3430,31 @@ document.addEventListener('DOMContentLoaded',()=>{
     setInterval(loadDashboardData, 300000);
   });
 </script>
+  <script>
+  async function fetchDashboardData() {
+    try {
+      const response = await fetch('/api/stats/dashboard');
+      const data = await response.json();
+      
+      if (data.ok) {
+        // Actualiza el monto total ($875.420 -> Real)
+        const totalElement = document.querySelector('.text-2xl.font-bold');
+        if (totalElement) {
+          totalElement.innerText = new Intl.NumberFormat('es-AR', {
+            style: 'currency', currency: 'ARS'
+          }).format(data.totalFacturadoMes);
+        }
+        
+        // Aquí podrías limpiar y llenar tu tabla de "Últimas Ventas"
+        console.log("Ventas cargadas:", data.ventas);
+      }
+    } catch (err) {
+      console.error("Error cargando Dashboard:", err);
+    }
+  }
+
+  // Se ejecuta al cargar la página
+  window.onload = fetchDashboardData;
+</script>
 </body>
 </html>

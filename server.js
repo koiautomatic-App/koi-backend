@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · Server Maestro (PRO)
+//  KOI-FACTURA · Server Maestro Final 
 // ============================================================
 
 require('dotenv').config();
@@ -9,7 +9,6 @@ const cors = require('cors');
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
-const crypto = require('crypto');
 const path = require('path');
 
 const app = express();
@@ -33,14 +32,6 @@ const User = mongoose.model('User', new mongoose.Schema({
   email: { type: String, required: true, unique: true, lowercase: true },
   nombre: String,
   creadoEn: { type: Date, default: Date.now }
-}));
-
-const Integration = mongoose.model('Integration', new mongoose.Schema({
-  userId: mongoose.Schema.Types.ObjectId,
-  platform: { type: String, default: 'woocommerce' },
-  storeUrl: String,
-  status: { type: String, default: 'active' },
-  credentials: { consumerKey: String, consumerSecret: String }
 }));
 
 const Order = mongoose.model('Order', new mongoose.Schema({
@@ -75,12 +66,14 @@ app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirnam
 
 // ── AUTENTICACIÓN ─────────────────────────────────────────────
 
-// Login simple (usado por tu formulario actual)
+// Login por Email
 app.post('/auth/login', async (req, res) => {
   try {
     const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Falta email' });
+
     let user = await User.findOne({ email: email.toLowerCase() });
-    if (!user) user = await User.create({ email: email.toLowerCase(), nombre: 'Usuario KOI' });
+    if (!user) user = await User.create({ email: email.toLowerCase(), nombre: 'Emprendedor KOI' });
 
     const token = jwt.sign({ userId: user._id }, JWT_SECRET, { expiresIn: '7d' });
     res.cookie('token', token, { httpOnly: true, secure: true, sameSite: 'none', maxAge: 7*24*60*60*1000 });
@@ -88,14 +81,9 @@ app.post('/auth/login', async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Error en acceso' }); }
 });
 
-// Mock de Google (para evitar el error "Cannot GET /auth/google")
+// Ruta de Google (Evita el "Cannot GET")
 app.get('/auth/google', (req, res) => {
-  res.send('Redirigiendo a Google... (Configura tus credenciales en el .env)');
-});
-
-app.get('/auth/logout', (req, res) => {
-  res.clearCookie('token');
-  res.redirect('/login');
+  res.send('Redirigiendo a Google... (Configura tus credenciales en Render para activarlo)');
 });
 
 // ── CONEXIÓN WOOCOMMERCE ───────────────────────────────────────
@@ -110,28 +98,17 @@ app.get('/auth/woo/connect', requireAuth, (req, res) => {
   res.redirect(auth_url);
 });
 
-app.post('/auth/woo/callback', async (req, res) => {
-  res.status(200).send('OK');
-  const { state } = req.query;
-  const keys = req.body; 
-
-  try {
-    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
-    await Integration.findOneAndUpdate(
-      { userId, storeUrl },
-      { userId, storeUrl, status: 'active', 'credentials.consumerKey': keys.consumer_key, 'credentials.consumerSecret': keys.consumer_secret },
-      { upsert: true }
-    );
-    console.log(`✅ Tienda vinculada: ${storeUrl}`);
-  } catch(e) { console.error('❌ Error en Callback:', e.message); }
-});
-
 // ── API DATA (DASHBOARD) ──────────────────────────────────────
 app.get('/api/stats/dashboard', requireAuth, async (req, res) => {
   try {
     const orders = await Order.find({ userId: req.userId }).sort({ createdAt: -1 });
     const total = orders.reduce((acc, curr) => acc + curr.amount, 0);
-    res.json({ ok: true, totalFacturadoMes: total, ventas: orders.slice(0, 5) });
+    res.json({ 
+        ok: true, 
+        totalFacturadoMes: total, 
+        ventas: orders.slice(0, 5),
+        userName: 'Emprendedor KOI'
+    });
   } catch (e) { res.status(500).json({ error: 'Error al obtener datos' }); }
 });
 

@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.6
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.8
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
 // ============================================================
 
@@ -56,7 +56,7 @@ const connectDB = async () => {
 };
 connectDB();
 
-// ── ENCRYPTION ───────────────────────────────────────────────
+// ── ENCRYPTION (AES-256-GCM) ─────────────────────────────────
 const ENC_KEY = Buffer.from((process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32), 'utf8');
 
 const encrypt = (text) => {
@@ -89,7 +89,7 @@ const IntegrationSchema = new mongoose.Schema({
   platform: String, storeId: String, storeName: String, storeUrl: String, status: String,
   credentials: { type: mongoose.Schema.Types.Mixed, default: {} },
   webhookSecret: { type: String, default: () => crypto.randomBytes(24).toString('hex'), index: true },
-  lastSyncAt: Date
+  lastSyncAt: { type: Date } // Campo clave para el auto-disparo
 });
 IntegrationSchema.methods.getKey = function(field) { return decrypt(this.credentials?.[field]); };
 const Integration = mongoose.model('Integration', IntegrationSchema);
@@ -154,19 +154,19 @@ const BULK_SYNC = {
         });
         
         if (!orders?.length) break;
-
-        for (const raw of orders) {
-          await upsertOrder(integration, normalize.woocommerce(raw));
-        }
+        for (const raw of orders) { await upsertOrder(integration, normalize.woocommerce(raw)); }
         
         total += orders.length;
         if (orders.length < 50) break;
         page++;
       } catch (err) {
-        console.error(`❌ Error en página ${page}:`, err.message);
+        console.error(`❌ Error en sync página ${page}:`, err.message);
         break;
       }
     }
+    
+    // Marcamos que ya se sincronizó para que no vuelva a dispararse solo
+    await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date() });
     return total;
   }
 };
@@ -178,84 +178,26 @@ const requireAuthAPI = (req, res, next) => {
   catch { res.status(401).json({ error: 'No autenticado' }); }
 };
 
-// ── API & AUTH ROUTES ────────────────────────────────────────
+// ── API ROUTES ───────────────────────────────────────────────
 
-// Callback de WooCommerce: Dispara Sync Automático
-app.post('/auth/woo/callback', async (req, res) => {
-  res.status(200).json({ status: 'ok' });
-
-  const { state } = req.query;
-  const { consumer_key, consumer_secret } = req.body;
-
-  try {
-    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
-
-    const integration = await Integration.findOneAndUpdate(
-      { userId, platform: 'woocommerce', storeId: storeUrl },
-      {
-        $set: {
-          storeName: storeUrl.replace(/^https?:\/\//, ''),
-          storeUrl,
-          status: 'active',
-          credentials: {
-            consumerKey: encrypt(consumer_key),
-            consumerSecret: encrypt(consumer_secret),
-          },
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
-      },
-      { upsert: true, new: true }
-    );
-
-    // Registro de Webhook
-    await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
-
-    // SYNC AUTOMÁTICO (Background)
-    BULK_SYNC.woocommerce(integration)
-      .then(t => console.log(`✨ Historial cargado: ${t} órdenes.`))
-      .catch(e => console.error(`⚠️ Error sync inicial:`, e.message));
-
-  } catch (e) { console.error('Woo callback error:', e.message); }
-});
-
-// Conexión genérica (TiendaNube, etc): Dispara Sync Automático
-app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
-  const { platform } = req.params;
-  try {
-    const { storeId, storeName, storeUrl, apiToken } = req.body;
-    
-    const integration = await Integration.findOneAndUpdate(
-      { userId: req.userId, platform, storeId: String(storeId) },
-      {
-        $set: {
-          storeName: storeName || `${platform} ${storeId}`,
-          storeUrl: storeUrl || '',
-          status: 'active',
-          credentials: { apiToken: encrypt(apiToken) },
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() },
-      },
-      { upsert: true, new: true }
-    );
-
-    // SYNC AUTOMÁTICO si la plataforma está soportada
-    if (BULK_SYNC[platform]) {
-      BULK_SYNC[platform](integration).catch(console.error);
-    }
-
-    res.json({ ok: true, message: `${platform} conectado. Sincronizando historial...` });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
-
-// Stats para el Dashboard
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
+    // 1. Buscamos si hay una integración que NUNCA haya sido sincronizada (lastSyncAt no existe)
+    const integration = await Integration.findOne({ userId: req.userId, status: 'active', lastSyncAt: { $exists: false } });
+    
+    if (integration && BULK_SYNC[integration.platform]) {
+        console.log(`🤖 Disparando sincronización pendiente para @sono.handmade`);
+        // Sin await para que el dashboard cargue mientras el proceso corre de fondo
+        BULK_SYNC[integration.platform](integration)
+          .then(t => console.log(`✨ Historial completado: ${t} órdenes.`))
+          .catch(e => console.error(`⚠️ Error en Sync:`, e.message));
+    }
+
     const stats = await Order.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
+
     res.json({
       ok: true,
       totalFacturado: stats[0]?.total || 0,
@@ -265,7 +207,39 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Funciones auxiliares (Webhooks)
+// Callback WooCommerce
+app.post('/auth/woo/callback', async (req, res) => {
+  res.status(200).json({ status: 'ok' });
+  const { state } = req.query;
+  const { consumer_key, consumer_secret } = req.body;
+
+  try {
+    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'woocommerce', storeId: storeUrl },
+      {
+        $set: {
+          storeName: storeUrl.replace(/^https?:\/\//, ''),
+          storeUrl,
+          status: 'active',
+          credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) },
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+    await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
+    BULK_SYNC.woocommerce(integration).catch(console.error);
+  } catch (e) { console.error('Woo callback error:', e.message); }
+});
+
+app.post('/webhook/woocommerce/:secret', async (req, res) => {
+  const integration = await Integration.findOne({ webhookSecret: req.params.secret });
+  if (integration) { await upsertOrder(integration, normalize.woocommerce(req.body)); }
+  res.status(200).send('OK');
+});
+
 async function _registerWebhookWoo(integration, key, secret, storeUrl) {
   const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
   try {
@@ -276,4 +250,4 @@ async function _registerWebhookWoo(integration, key, secret, storeUrl) {
   } catch (e) { console.warn('Webhook error:', e.message); }
 }
 
-app.listen(PORT, () => console.log(`🚀 KOI v3.6 - Background Sync Activo en ${BASE}`));
+app.listen(PORT, () => console.log(`🚀 KOI v3.8 activo en ${BASE}`));

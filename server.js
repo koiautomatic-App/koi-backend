@@ -332,6 +332,32 @@ app.get('/api/me', requireAuthAPI, async (req, res) => {
   } catch(e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
+// Agregá esto en la sección de RUTAS API de tu server.js actual
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+  try {
+    const hoy = new Date();
+    const inicioMes = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+
+    const stats = await Order.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.userId), createdAt: { $gte: inicioMes } } },
+      { $group: { _id: null, total: { $sum: "$amount" }, count: { $sum: 1 } } }
+    ]);
+
+    const ultimasVentas = await Order.find({ userId: req.userId })
+      .sort({ createdAt: -1 })
+      .limit(10).lean();
+
+    res.json({
+      ok: true,
+      totalFacturadoMes: stats[0]?.total || 0,
+      cantidadVentas: stats[0]?.count || 0,
+      ventas: ultimasVentas
+    });
+  } catch (e) {
+    res.status(500).json({ error: 'Error en Dashboard Stats' });
+  }
+});
+
 // ════════════════════════════════════════════════════════════
 //  RUTAS INTEGRACIONES — /api/integrations
 // ════════════════════════════════════════════════════════════

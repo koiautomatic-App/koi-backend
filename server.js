@@ -1035,16 +1035,3 @@ app.get('/dashboard', requireAuth, (req, res) => {
 // ── START ─────────────────────────────────────────────────────
 app.listen(PORT, () => console.log(`🚀 KOI corriendo en puerto ${PORT}`));
 
-// ... (Acá terminarían todas tus rutas de webhooks y lógica anterior) ...
-
-// ── PING DE SUPERVIVENCIA (Para que Render no se duerma) ──────
-if (process.env.NODE_ENV === 'production') {
-  setInterval(() => {
-    axios.get(`${BASE}/api/me`).catch(() => {}); 
-    console.log("🐟 KOI: Keep-alive ping enviado");
-  }, 10 * 60 * 1000); // Cada 10 minutos
-}
-
-app.listen(PORT, () => {
-  console.log(`🚀 KOI corriendo en ${BASE}`);
-});

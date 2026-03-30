@@ -3795,5 +3795,121 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 });
 </script>
+  <script>
+async function fetchDashboardData() {
+  try {
+    const response = await fetch('/api/stats/dashboard');
+
+    if (!response.ok) throw new Error('Server error');
+
+    const data = await response.json();
+    console.log("📊 DATA:", data);
+
+    if (!data.ok) throw new Error('Backend inválido');
+
+    // ─────────────────────────────
+    // 1. INGRESOS MONOTRIBUTO
+    // ─────────────────────────────
+    const total = Number(data.totalFacturadoMes) || 0;
+
+    const monoAmount = document.querySelector('.mono-amount');
+    if (monoAmount) {
+      monoAmount.innerHTML = `<span>$</span>${total.toLocaleString('es-AR')}`;
+    }
+
+    // ─────────────────────────────
+    // 2. BARRA PROGRESO
+    // ─────────────────────────────
+    const limite = 6400000;
+    const pct = (total / limite) * 100;
+
+    const fill = document.querySelector('.prog-fill');
+    if (fill) fill.style.width = `${Math.min(pct, 100)}%`;
+
+    const pctEl = document.querySelector('.prog-pct');
+    if (pctEl) pctEl.innerText = `${pct.toFixed(1)}%`;
+
+    // ─────────────────────────────
+    // 3. MÉTRICAS (CARDS)
+    // ─────────────────────────────
+    const todayEl = document.querySelector('.mc-today .mc-value');
+    if (todayEl) {
+      todayEl.innerText = `$${total.toLocaleString('es-AR')}`;
+    }
+
+    const pendEl = document.querySelector('.mc-pend .mc-value');
+    if (pendEl) {
+      pendEl.innerText = Number(data.totalVentas) || 0;
+    }
+
+    // ─────────────────────────────
+    // 4. TABLA (SIN ROMPER CSS)
+    // ─────────────────────────────
+    const container = document.querySelector('.comp-scroll');
+
+    if (container) {
+      container.innerHTML = '';
+
+      if (!data.ventas || data.ventas.length === 0) {
+        container.innerHTML = `<p style="padding:16px;color:#888;">Sin ventas</p>`;
+      } else {
+        data.ventas.forEach(orden => {
+          const amount = Number(orden.amount) || 0;
+          const date = orden.createdAt ? new Date(orden.createdAt) : new Date();
+
+          const statusClass =
+            orden.status === 'invoiced' ? 'cae-ok' :
+            orden.status === 'error' ? 'cae-err' :
+            'cae-pend';
+
+          const row = document.createElement('div');
+          row.className = 'comp-row';
+
+          // 🔑 RESPETA TUS CLASES ORIGINALES
+          row.innerHTML = `
+            <div class="comp-info">
+              <div class="cae-dot ${statusClass}"></div>
+              <div>
+                <div class="comp-cliente">${orden.customerName || 'Cliente'}</div>
+                <div class="comp-meta">${date.toLocaleDateString()} · Woo</div>
+              </div>
+            </div>
+            <div class="comp-monto">$${amount.toLocaleString('es-AR')}</div>
+          `;
+
+          container.appendChild(row);
+        });
+      }
+    }
+
+    // ─────────────────────────────
+    // 5. GRÁFICO
+    // ─────────────────────────────
+    if (data.semanal && typeof incomeChart !== 'undefined') {
+      incomeChart.data.datasets[0].data =
+        data.semanal.map(n => Number(n) || 0);
+
+      incomeChart.update();
+    }
+
+  } catch (error) {
+    console.error("❌ Error:", error);
+
+    const container = document.querySelector('.comp-scroll');
+    if (container) {
+      container.innerHTML = `<p style="padding:16px;color:#ff3d57;">Error cargando datos</p>`;
+    }
+
+    renderStatus(false);
+  }
+}
+
+// INIT
+document.addEventListener('DOMContentLoaded', () => {
+  initChart();
+  fetchDashboardData();
+  renderStatus(true);
+});
+</script>
 </body>
 </html>

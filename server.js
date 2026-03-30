@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.5
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.6
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
 // ============================================================
 
@@ -117,7 +117,7 @@ const normalize = {
       customerDoc: b.dni || b.identification || '99999999',
       amount: parseFloat(raw.total) || 0,
       currency: raw.currency || 'ARS',
-      createdAt: new Date(raw.date_created) // Preservamos fecha original
+      createdAt: new Date(raw.date_created)
     };
   }
 };
@@ -126,14 +126,13 @@ const normalize = {
 async function upsertOrder(integration, canonical) {
   if (!canonical) return;
   try {
-    // Si la orden existe la actualiza, si no la crea. Clave para el histórico.
     await Order.findOneAndUpdate(
       { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId },
       { $set: { ...canonical, integrationId: integration._id } },
-      { upsert: true, new: true }
+      { upsert: true }
     );
   } catch (err) { 
-    if (err.code !== 11000) console.error("Upsert Error:", err.message); 
+    if (err.code !== 11000) console.error("❌ Error en Upsert:", err.message); 
   }
 }
 
@@ -143,28 +142,30 @@ const BULK_SYNC = {
     const key = integration.getKey('consumerKey');
     const secret = integration.getKey('consumerSecret');
     const base = integration.storeUrl;
-    let page = 1;
-    let total = 0;
+    let page = 1, total = 0;
 
-    console.log(`⏳ Iniciando carga de histórico para @sono.handmade en ${base}`);
+    console.log(`⏳ Iniciando carga de historial para: ${base}`);
 
     while (true) {
-      const { data: orders } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
-        auth: { username: key, password: secret },
-        params: { per_page: 50, page, status: 'any' },
-      });
-      
-      if (!orders?.length) break;
+      try {
+        const { data: orders } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
+          auth: { username: key, password: secret },
+          params: { per_page: 50, page, status: 'any' },
+        });
+        
+        if (!orders?.length) break;
 
-      for (const raw of orders) {
-        await upsertOrder(integration, normalize.woocommerce(raw));
+        for (const raw of orders) {
+          await upsertOrder(integration, normalize.woocommerce(raw));
+        }
+        
+        total += orders.length;
+        if (orders.length < 50) break;
+        page++;
+      } catch (err) {
+        console.error(`❌ Error en página ${page}:`, err.message);
+        break;
       }
-      
-      total += orders.length;
-      console.log(`✅ Página ${page} completada. Total: ${total}`);
-      
-      if (orders.length < 50) break;
-      page++;
     }
     return total;
   }
@@ -177,50 +178,102 @@ const requireAuthAPI = (req, res, next) => {
   catch { res.status(401).json({ error: 'No autenticado' }); }
 };
 
-// ── API ROUTES ───────────────────────────────────────────────
+// ── API & AUTH ROUTES ────────────────────────────────────────
 
-// NUEVA RUTA: Disparar Sincronización Manual del Pasado
-app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
+// Callback de WooCommerce: Dispara Sync Automático
+app.post('/auth/woo/callback', async (req, res) => {
+  res.status(200).json({ status: 'ok' });
+
+  const { state } = req.query;
+  const { consumer_key, consumer_secret } = req.body;
+
   try {
-    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
-    if (!integration) return res.status(404).json({ error: 'No encontrada' });
+    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
 
-    if (BULK_SYNC[integration.platform]) {
-      const total = await BULK_SYNC[integration.platform](integration);
-      integration.lastSyncAt = new Date();
-      await integration.save();
-      res.json({ ok: true, message: `Histórico cargado: ${total} órdenes procesadas.` });
-    } else {
-      res.status(400).json({ error: 'Sync no disponible para esta plataforma' });
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'woocommerce', storeId: storeUrl },
+      {
+        $set: {
+          storeName: storeUrl.replace(/^https?:\/\//, ''),
+          storeUrl,
+          status: 'active',
+          credentials: {
+            consumerKey: encrypt(consumer_key),
+            consumerSecret: encrypt(consumer_secret),
+          },
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    // Registro de Webhook
+    await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
+
+    // SYNC AUTOMÁTICO (Background)
+    BULK_SYNC.woocommerce(integration)
+      .then(t => console.log(`✨ Historial cargado: ${t} órdenes.`))
+      .catch(e => console.error(`⚠️ Error sync inicial:`, e.message));
+
+  } catch (e) { console.error('Woo callback error:', e.message); }
+});
+
+// Conexión genérica (TiendaNube, etc): Dispara Sync Automático
+app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
+  const { platform } = req.params;
+  try {
+    const { storeId, storeName, storeUrl, apiToken } = req.body;
+    
+    const integration = await Integration.findOneAndUpdate(
+      { userId: req.userId, platform, storeId: String(storeId) },
+      {
+        $set: {
+          storeName: storeName || `${platform} ${storeId}`,
+          storeUrl: storeUrl || '',
+          status: 'active',
+          credentials: { apiToken: encrypt(apiToken) },
+          updatedAt: new Date(),
+        },
+        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    // SYNC AUTOMÁTICO si la plataforma está soportada
+    if (BULK_SYNC[platform]) {
+      BULK_SYNC[platform](integration).catch(console.error);
     }
+
+    res.json({ ok: true, message: `${platform} conectado. Sincronizando historial...` });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Dashboard Stats (Actualizado para mostrar históricos)
+// Stats para el Dashboard
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
-    const totalFacturado = await Order.aggregate([
+    const stats = await Order.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
-
     res.json({
       ok: true,
-      totalFacturado: totalFacturado[0]?.total || 0,
+      totalFacturado: stats[0]?.total || 0,
       totalVentas: await Order.countDocuments({ userId: req.userId }),
-      ventas: await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(15)
+      ventas: await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(10)
     });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Webhook Receptor (Para ventas nuevas en tiempo real)
-app.post('/webhook/woocommerce/:secret', async (req, res) => {
-  const integration = await Integration.findOne({ webhookSecret: req.params.secret });
-  if (integration) {
-    await upsertOrder(integration, normalize.woocommerce(req.body));
-  }
-  res.status(200).send('OK');
-});
+// Funciones auxiliares (Webhooks)
+async function _registerWebhookWoo(integration, key, secret, storeUrl) {
+  const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
+  try {
+    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`, {
+      name: 'KOI-Factura', topic: 'order.created',
+      delivery_url: webhookUrl, status: 'active',
+    }, { auth: { username: key, password: secret } });
+  } catch (e) { console.warn('Webhook error:', e.message); }
+}
 
-// ── INICIO ───────────────────────────────────────────────────
-app.listen(PORT, () => console.log(`🚀 KOI Engine v3.5 corriendo en ${BASE}`));
+app.listen(PORT, () => console.log(`🚀 KOI v3.6 - Background Sync Activo en ${BASE}`));

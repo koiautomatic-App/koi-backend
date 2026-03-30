@@ -1176,3 +1176,46 @@ app.listen(PORT, () => {
     setInterval(selfPing, PING_INTERVAL);
   }, 30_000);
 });
+// ── MOTOR DE HISTÓRICO (BULK SYNC) ──
+const BULK_SYNC = {
+  async woocommerce(integration) {
+    const key = integration.getKey('consumerKey');
+    const secret = integration.getKey('consumerSecret');
+    const base = integration.storeUrl;
+    let page = 1;
+    let totalProcesadas = 0;
+
+    console.log(`⏳ Iniciando sync histórico para: ${base}`);
+
+    while (true) {
+      try {
+        const { data: orders } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
+          auth: { username: key, password: secret },
+          params: { 
+            per_page: 50, 
+            page: page, 
+            status: 'any' // Traemos todas las órdenes (completadas, procesando, etc)
+          },
+        });
+
+        if (!orders || orders.length === 0) break; // No hay más páginas
+
+        // Procesamos cada orden con el upsertOrder que ya tenés
+        for (const raw of orders) {
+          const canonical = normalize.woocommerce(raw);
+          await upsertOrder(integration, canonical);
+        }
+
+        totalProcesadas += orders.length;
+        console.log(`✅ Página ${page} procesada (${orders.length} órdenes)`);
+
+        if (orders.length < 50) break; // Era la última página
+        page++;
+      } catch (error) {
+        console.error(`❌ Error en página ${page}:`, error.message);
+        break;
+      }
+    }
+    return totalProcesadas;
+  }
+};

@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.0 (FIXED AUTH)
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.1 (FINAL FIX)
 // ============================================================
 
 'use strict';
@@ -26,10 +26,12 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: BASE, credentials: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'))); // Sirve CSS/JS de la carpeta public
+
 app.use(session({
   secret: process.env.SESSION_SECRET || 'koi-session-dev',
-  resave: false, saveUninitialized: false,
+  resave: false,
+  saveUninitialized: false,
   cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }
 }));
 
@@ -72,24 +74,7 @@ const Order = mongoose.model('Order', new mongoose.Schema({
   createdAt: { type: Date, default: Date.now }
 }).index({ userId: 1, platform: 1, externalId: 1 }, { unique: true }));
 
-// ── HELPERS & SYNC ───────────────────────────────────────────
-const normalizeWoo = (raw) => ({
-  externalId: String(raw.id),
-  customerName: `${raw.billing?.first_name || ''} ${raw.billing?.last_name || ''}`.trim(),
-  customerEmail: raw.billing?.email || '',
-  amount: parseFloat(raw.total) || 0,
-  currency: raw.currency || 'ARS',
-  createdAt: new Date(raw.date_created)
-});
-
-async function upsertOrder(integration, canonical) {
-  await Order.findOneAndUpdate(
-    { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId },
-    { $set: { ...canonical, integrationId: integration._id } },
-    { upsert: true }
-  ).catch(() => {});
-}
-
+// ── SYNC ENGINE ──────────────────────────────────────────────
 const BULK_SYNC = {
   async woocommerce(integration) {
     const key = decrypt(integration.credentials.consumerKey);
@@ -101,7 +86,21 @@ const BULK_SYNC = {
           auth: { username: key, password: secret }, params: { per_page: 50, page }
         });
         if (!orders?.length) break;
-        for (const o of orders) await upsertOrder(integration, normalizeWoo(o));
+        for (const o of orders) {
+            const canonical = {
+                externalId: String(o.id),
+                customerName: `${o.billing?.first_name || ''} ${o.billing?.last_name || ''}`.trim(),
+                customerEmail: o.billing?.email || '',
+                amount: parseFloat(o.total) || 0,
+                currency: o.currency || 'ARS',
+                createdAt: new Date(o.date_created)
+            };
+            await Order.findOneAndUpdate(
+                { userId: integration.userId, platform: 'woocommerce', externalId: canonical.externalId },
+                { $set: { ...canonical, integrationId: integration._id } },
+                { upsert: true }
+            );
+        }
         if (orders.length < 50) break;
         page++;
         await new Promise(r => setTimeout(r, 500));
@@ -116,51 +115,61 @@ const requireAuthAPI = (req, res, next) => {
   catch { res.status(401).json({ error: 'Unauthorized' }); }
 };
 
-// ── ROUTES ───────────────────────────────────────────────────
+// ── API ROUTES ───────────────────────────────────────────────
 
-// *** RUTA RECUPERADA: DISPARA EL OAUTH DE WOOCOMMERCE ***
+// Ruta para iniciar conexión con WooCommerce
 app.get('/auth/woo/connect', (req, res) => {
   const { store_url } = req.query;
   const token = req.cookies.koi_token;
-  if (!store_url || !token) return res.status(400).send('Faltan datos');
+  if (!store_url || !token) return res.status(400).send('Faltan credenciales o URL');
 
+  const cleanUrl = store_url.replace(/\/$/, '');
   const callbackUrl = `${BASE}/auth/woo/callback`;
-  const authUrl = `${store_url}/wc-auth/v1/authorize?` + 
-    `app_name=KOI-Factura&scope=read_write&user_id=${token}&return_url=${BASE}/dashboard&callback_url=${callbackUrl}`;
+  const authUrl = `${cleanUrl}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${token}&return_url=${BASE}/dashboard&callback_url=${callbackUrl}`;
   
   res.redirect(authUrl);
 });
 
-// Callback donde WooCommerce envía las llaves
+// Callback receptor de llaves
 app.post('/auth/woo/callback', async (req, res) => {
   res.status(200).json({ status: 'ok' });
-  const { user_id: token, consumer_key, consumer_secret } = req.body;
+  const { user_id: token, consumer_key, consumer_secret, store_url } = req.body;
   try {
     const { id: userId } = jwt.verify(token, JWT_SECRET);
-    const storeUrl = req.body.store_url || "";
-
     const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'woocommerce' },
-      { $set: { status: 'active', storeUrl, credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) } } },
+      { $set: { status: 'active', storeUrl: store_url, credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) } } },
       { upsert: true, new: true }
     );
-
     setImmediate(() => BULK_SYNC.woocommerce(integration));
-  } catch (e) { console.error(e); }
+  } catch (e) { console.error('Callback error:', e); }
 });
 
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
-  const count = await Order.countDocuments({ userId: req.userId });
-  const stats = await Order.aggregate([
-    { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
-    { $group: { _id: null, total: { $sum: "$amount" } } }
-  ]);
-  res.json({
-    ok: true,
-    totalFacturado: stats[0]?.total || 0,
-    totalVentas: count,
-    ventas: await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(10)
-  });
+  try {
+    const count = await Order.countDocuments({ userId: req.userId });
+    const stats = await Order.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+    res.json({
+      ok: true,
+      totalFacturado: stats[0]?.total || 0,
+      totalVentas: count,
+      ventas: await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(10)
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-app.listen(PORT, () => console.log(`🚀 KOI v4.0 - Conexión Restaurada en ${BASE}`));
+// ── FRONTEND ROUTES (FIX PARA "CANNOT GET") ──────────────────
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+// Ruta por defecto (Login/Home)
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+app.listen(PORT, () => console.log(`🚀 KOI v4.1 - Online en ${BASE}`));

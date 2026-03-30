@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.1 (FINAL FIX)
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.2 (IRONCLAD)
 // ============================================================
 
 'use strict';
@@ -26,7 +26,9 @@ app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: BASE, credentials: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public'))); // Sirve CSS/JS de la carpeta public
+
+// IMPORTANTE: Primero servimos los archivos estáticos de la carpeta public
+app.use(express.static(path.join(__dirname, 'public')));
 
 app.use(session({
   secret: process.env.SESSION_SECRET || 'koi-session-dev',
@@ -117,7 +119,6 @@ const requireAuthAPI = (req, res, next) => {
 
 // ── API ROUTES ───────────────────────────────────────────────
 
-// Ruta para iniciar conexión con WooCommerce
 app.get('/auth/woo/connect', (req, res) => {
   const { store_url } = req.query;
   const token = req.cookies.koi_token;
@@ -130,7 +131,6 @@ app.get('/auth/woo/connect', (req, res) => {
   res.redirect(authUrl);
 });
 
-// Callback receptor de llaves
 app.post('/auth/woo/callback', async (req, res) => {
   res.status(200).json({ status: 'ok' });
   const { user_id: token, consumer_key, consumer_secret, store_url } = req.body;
@@ -161,15 +161,16 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── FRONTEND ROUTES (FIX PARA "CANNOT GET") ──────────────────
+// ── FRONTEND ROUTES (SOLUCIÓN A "NOT FOUND") ─────────────────
 
+// 1. Ruta específica para el dashboard
 app.get('/dashboard', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// Ruta por defecto (Login/Home)
+// 2. Ruta para cualquier otra cosa (fallback al index)
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => console.log(`🚀 KOI v4.1 - Online en ${BASE}`));
+app.listen(PORT, () => console.log(`🚀 KOI v4.2 - Online en ${BASE}`));

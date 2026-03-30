@@ -1,54 +1,40 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.2 (IRONCLAD)
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.6 (FINAL)
 // ============================================================
 
 'use strict';
 
 require('dotenv').config();
-
 const express        = require('express');
 const mongoose       = require('mongoose');
 const cors           = require('cors');
 const axios          = require('axios');
 const jwt            = require('jsonwebtoken');
 const cookieParser   = require('cookie-parser');
-const session        = require('express-session');
 const crypto         = require('crypto');
 const path           = require('path');
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
-const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+const BASE = (process.env.BASE_URL || `https://${process.env.RENDER_EXTERNAL_HOSTNAME}`).replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-secret';
 
 // ── MIDDLEWARES ──────────────────────────────────────────────
-app.use(express.json({ limit: '1mb' }));
-app.use(express.urlencoded({ extended: true }));
-app.use(cors({ origin: BASE, credentials: true }));
+app.use(express.json());
 app.use(cookieParser());
+app.use(cors({ origin: true, credentials: true }));
 
-// IMPORTANTE: Primero servimos los archivos estáticos de la carpeta public
+// IMPORTANTE: Servir los archivos estáticos de la carpeta /public
 app.use(express.static(path.join(__dirname, 'public')));
 
-app.use(session({
-  secret: process.env.SESSION_SECRET || 'koi-session-dev',
-  resave: false,
-  saveUninitialized: false,
-  cookie: { secure: process.env.NODE_ENV === 'production', httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 }
-}));
+// ── DB CONNECTION ───────────────────────────────────────────
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('🐟 KOI: Conectado a MongoDB Atlas'))
+  .catch(err => console.error('❌ Error DB:', err));
 
-// ── MONGODB ──────────────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI).then(() => console.log('🐟 KOI: MongoDB conectado'));
-
-// ── ENCRYPTION ───────────────────────────────────────────────
+// ── ENCRYPTION HELPER ───────────────────────────────────────
 const ENC_KEY = Buffer.from((process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32), 'utf8');
-const encrypt = (text) => {
-  if (!text) return null;
-  const iv = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
-  return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
-};
+
 const decrypt = (payload) => {
   if (!payload) return null;
   try {
@@ -59,80 +45,95 @@ const decrypt = (payload) => {
   } catch { return null; }
 };
 
+const encrypt = (text) => {
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+  const enc = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
+  return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
+};
+
 // ── SCHEMAS ──────────────────────────────────────────────────
 const Integration = mongoose.model('Integration', new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, index: true },
-  platform: String, storeId: String, storeName: String, storeUrl: String, status: String,
-  credentials: { type: mongoose.Schema.Types.Mixed, default: {} },
-  webhookSecret: { type: String, default: () => crypto.randomBytes(24).toString('hex') },
+  userId: mongoose.Schema.Types.ObjectId,
+  platform: String, storeUrl: String, status: String,
+  credentials: { type: mongoose.Schema.Types.Mixed },
   lastSyncAt: Date
 }));
 
 const Order = mongoose.model('Order', new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, required: true },
-  integrationId: mongoose.Schema.Types.ObjectId,
-  platform: String, externalId: { type: String, required: true },
-  customerName: String, customerEmail: String, amount: Number, currency: String,
-  createdAt: { type: Date, default: Date.now }
-}).index({ userId: 1, platform: 1, externalId: 1 }, { unique: true }));
+  amount: Number, externalId: String, customerName: String, createdAt: Date
+}).index({ userId: 1, externalId: 1 }, { unique: true }));
 
 // ── SYNC ENGINE ──────────────────────────────────────────────
-const BULK_SYNC = {
-  async woocommerce(integration) {
-    const key = decrypt(integration.credentials.consumerKey);
-    const secret = decrypt(integration.credentials.consumerSecret);
-    let page = 1;
-    while (true) {
-      try {
-        const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
-          auth: { username: key, password: secret }, params: { per_page: 50, page }
-        });
-        if (!orders?.length) break;
-        for (const o of orders) {
-            const canonical = {
-                externalId: String(o.id),
-                customerName: `${o.billing?.first_name || ''} ${o.billing?.last_name || ''}`.trim(),
-                customerEmail: o.billing?.email || '',
-                amount: parseFloat(o.total) || 0,
-                currency: o.currency || 'ARS',
-                createdAt: new Date(o.date_created)
-            };
-            await Order.findOneAndUpdate(
-                { userId: integration.userId, platform: 'woocommerce', externalId: canonical.externalId },
-                { $set: { ...canonical, integrationId: integration._id } },
-                { upsert: true }
-            );
-        }
-        if (orders.length < 50) break;
-        page++;
-        await new Promise(r => setTimeout(r, 500));
-      } catch (e) { break; }
-    }
-    await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date() });
+const syncWoo = async (integration) => {
+  console.log(`⏳ Iniciando Sync para ${integration.storeUrl}`);
+  const key = decrypt(integration.credentials.consumerKey);
+  const secret = decrypt(integration.credentials.consumerSecret);
+  let page = 1;
+  
+  while (page <= 20) { 
+    try {
+      const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
+        auth: { username: key, password: secret }, params: { per_page: 50, page }
+      });
+      if (!orders?.length) break;
+      for (const o of orders) {
+        await Order.findOneAndUpdate(
+          { userId: integration.userId, externalId: String(o.id) },
+          { $set: { amount: parseFloat(o.total), customerName: o.billing?.first_name || 'Cliente', createdAt: new Date(o.date_created) } },
+          { upsert: true }
+        );
+      }
+      if (orders.length < 50) break;
+      page++;
+      await new Promise(r => setTimeout(r, 400));
+    } catch (e) { console.error("Sync Page Error:", e.message); break; }
   }
-};
-
-const requireAuthAPI = (req, res, next) => {
-  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
-  catch { res.status(401).json({ error: 'Unauthorized' }); }
+  await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date() });
+  console.log(`✅ Sync finalizado.`);
 };
 
 // ── API ROUTES ───────────────────────────────────────────────
 
+app.get('/api/stats/dashboard', async (req, res) => {
+  const token = req.cookies.koi_token;
+  if (!token) return res.status(401).json({ error: 'No autenticado' });
+
+  try {
+    const { id: userId } = jwt.verify(token, JWT_SECRET);
+    const integration = await Integration.findOne({ userId, status: 'active' });
+    
+    if (integration && !integration.lastSyncAt) {
+      setImmediate(() => syncWoo(integration));
+    }
+
+    const stats = await Order.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+      { $group: { _id: null, total: { $sum: "$amount" } } }
+    ]);
+
+    res.json({
+      ok: true,
+      totalFacturado: stats[0]?.total || 0,
+      totalVentas: await Order.countDocuments({ userId }),
+      ventas: await Order.find({ userId }).sort({ createdAt: -1 }).limit(10)
+    });
+  } catch (e) { res.status(401).json({ error: 'Sesión expirada' }); }
+});
+
+// Ruta para conectar WooCommerce
 app.get('/auth/woo/connect', (req, res) => {
   const { store_url } = req.query;
   const token = req.cookies.koi_token;
-  if (!store_url || !token) return res.status(400).send('Faltan credenciales o URL');
+  if (!store_url || !token) return res.status(400).send('Faltan datos');
 
-  const cleanUrl = store_url.replace(/\/$/, '');
-  const callbackUrl = `${BASE}/auth/woo/callback`;
-  const authUrl = `${cleanUrl}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${token}&return_url=${BASE}/dashboard&callback_url=${callbackUrl}`;
-  
+  const authUrl = `${store_url.replace(/\/$/, '')}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${token}&return_url=${BASE}/dashboard&callback_url=${BASE}/auth/woo/callback`;
   res.redirect(authUrl);
 });
 
+// Callback de WooCommerce
 app.post('/auth/woo/callback', async (req, res) => {
-  res.status(200).json({ status: 'ok' });
   const { user_id: token, consumer_key, consumer_secret, store_url } = req.body;
   try {
     const { id: userId } = jwt.verify(token, JWT_SECRET);
@@ -141,36 +142,16 @@ app.post('/auth/woo/callback', async (req, res) => {
       { $set: { status: 'active', storeUrl: store_url, credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) } } },
       { upsert: true, new: true }
     );
-    setImmediate(() => BULK_SYNC.woocommerce(integration));
-  } catch (e) { console.error('Callback error:', e); }
+    setImmediate(() => syncWoo(integration));
+    res.status(200).send('OK');
+  } catch (e) { res.status(500).send('Error'); }
 });
 
-app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
-  try {
-    const count = await Order.countDocuments({ userId: req.userId });
-    const stats = await Order.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(req.userId) } },
-      { $group: { _id: null, total: { $sum: "$amount" } } }
-    ]);
-    res.json({
-      ok: true,
-      totalFacturado: stats[0]?.total || 0,
-      totalVentas: count,
-      ventas: await Order.find({ userId: req.userId }).sort({ createdAt: -1 }).limit(10)
-    });
-  } catch (e) { res.status(500).json({ error: e.message }); }
-});
+// ── VISTAS (SPA FALLBACK) ────────────────────────────────────
 
-// ── FRONTEND ROUTES (SOLUCIÓN A "NOT FOUND") ─────────────────
-
-// 1. Ruta específica para el dashboard
-app.get('/dashboard', (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
-});
-
-// 2. Ruta para cualquier otra cosa (fallback al index)
+// Cualquier ruta que no sea de la API entrega el index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => console.log(`🚀 KOI v4.2 - Online en ${BASE}`));
+app.listen(PORT, () => console.log(`🚀 KOI v4.6 Listo`));

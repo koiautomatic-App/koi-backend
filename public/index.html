@@ -3905,50 +3905,69 @@ function enviarMail(id){
   );
   if(typeof google==='undefined') setTimeout(()=>toast('Mail enviado (demo)','success'),800);
 }
-
 /* ── INIT ──────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded', async () => {
-  _initDashPeriod();
+  _initDashPeriod(); // Configura el listener del selector
 
-  // Cargar datos reales desde la API REST
-  try {
-    const raw  = await api.get('/api/stats/dashboard');
-    const data = adaptarStats(raw);
-    if (data) {
-      cargarDashboard(data);
-    } else {
-      renderStatus(false);
-      cargarDashboard(MOCK);
-    }
-  } catch(e) {
-    console.error('Init error:', e.message);
-    // Si falla auth → redirigir al login
-    if (e.message.includes('401') || e.message.includes('autenticado')) {
-      window.location.href = '/login';
-      return;
-    }
-    renderStatus(false);
-    toast('Error cargando datos: ' + e.message, 'error');
-    cargarDashboard(MOCK);
-  }
+  // Carga inicial (por defecto lo que diga el selector, ej: 'month')
+  const periodoInicial = document.getElementById('dashPeriod')?.value || 'month';
+  refrescarDashboard(periodoInicial);
 
-  // Detectar retorno de OAuth
+  // Detectar retorno de OAuth (Mantenemos esto igual)
   const params = new URLSearchParams(window.location.search);
   if (params.get('woo') === 'connected') {
     toast('✅ WooCommerce conectado correctamente', 'success');
     history.replaceState({}, '', '/dashboard');
     mostrarVista('negocio');
   }
-  if (params.get('ml') === 'connected') {
-    toast('✅ Mercado Libre conectado correctamente', 'success');
-    history.replaceState({}, '', '/dashboard');
-    mostrarVista('negocio');
-  }
-  if (params.get('error') === 'ml_failed') {
-    toast('Error al conectar Mercado Libre', 'error');
-    history.replaceState({}, '', '/dashboard');
-  }
+  // ... resto de tus validaciones de ML o errores ...
 });
+
+// NUEVA FUNCIÓN: Centraliza la carga para que sea siempre igual
+async function refrescarDashboard(periodo) {
+  try {
+    // IMPORTANTE: Aquí pasamos el ?period= al servidor
+    const raw = await api.get(`/api/stats/dashboard?period=${periodo}`);
+    const data = adaptarStats(raw);
+    
+    if (data) {
+      cargarDashboard(data); // Esto redibuja TODO
+    } else {
+      renderStatus(false);
+      cargarDashboard(MOCK);
+    }
+  } catch(e) {
+    console.error('Dash error:', e.message);
+    if (e.message.includes('401')) { window.location.href = '/login'; return; }
+    renderStatus(false);
+    toast('Error: ' + e.message, 'error');
+  }
+}
+function _initDashPeriod() {
+  const sel = document.getElementById('dashPeriod');
+  if(!sel) return;
+
+  sel.addEventListener('change', () => {
+    const periodo = sel.value;
+    
+    // 1. Cambiar etiquetas visuales
+    const texts = { month: 'este mes', year: 'este año', all: 'histórico' };
+    document.querySelectorAll('.period-label').forEach(l => {
+      l.textContent = texts[periodo] || 'período';
+    });
+
+    // 2. DISPARAR LA CARGA REAL (Esto es lo que te faltaba)
+    refrescarDashboard(periodo);
+  });
+}
+function renderActivityMap(ventas) {
+  const container = document.getElementById('activityMap');
+  if(!container) return;
+
+  container.innerHTML = ''; // <--- QUITAR ESTO: Limpia el mapa anterior antes de dibujar el nuevo
+  
+  // ... sigue tu código de creación de cuadraditos ...
+}  
 </script>
 </body>
 </html>

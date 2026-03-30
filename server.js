@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.6 (FINAL)
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.7 (FIX CALLBACK)
 // ============================================================
 
 'use strict';
@@ -23,33 +23,28 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-secret';
 app.use(express.json());
 app.use(cookieParser());
 app.use(cors({ origin: true, credentials: true }));
-
-// IMPORTANTE: Servir los archivos estáticos de la carpeta /public
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── DB CONNECTION ───────────────────────────────────────────
-mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('🐟 KOI: Conectado a MongoDB Atlas'))
-  .catch(err => console.error('❌ Error DB:', err));
+mongoose.connect(process.env.MONGO_URI).then(() => console.log('🐟 KOI: Conectado'));
 
-// ── ENCRYPTION HELPER ───────────────────────────────────────
+// ── ENCRYPTION ───────────────────────────────────────────────
 const ENC_KEY = Buffer.from((process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32), 'utf8');
-
-const decrypt = (payload) => {
-  if (!payload) return null;
-  try {
-    const [ivHex, tagHex, encHex] = payload.split(':');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString('utf8');
-  } catch { return null; }
-};
 
 const encrypt = (text) => {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
   const enc = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
+};
+
+const decrypt = (p) => {
+  try {
+    const [i, t, e] = p.split(':');
+    const d = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(i, 'hex'));
+    d.setAuthTag(Buffer.from(t, 'hex'));
+    return Buffer.concat([d.update(Buffer.from(e, 'hex')), d.final()]).toString('utf8');
+  } catch { return null; }
 };
 
 // ── SCHEMAS ──────────────────────────────────────────────────
@@ -67,12 +62,10 @@ const Order = mongoose.model('Order', new mongoose.Schema({
 
 // ── SYNC ENGINE ──────────────────────────────────────────────
 const syncWoo = async (integration) => {
-  console.log(`⏳ Iniciando Sync para ${integration.storeUrl}`);
   const key = decrypt(integration.credentials.consumerKey);
   const secret = decrypt(integration.credentials.consumerSecret);
   let page = 1;
-  
-  while (page <= 20) { 
+  while (page <= 10) {
     try {
       const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
         auth: { username: key, password: secret }, params: { per_page: 50, page }
@@ -85,54 +78,56 @@ const syncWoo = async (integration) => {
           { upsert: true }
         );
       }
-      if (orders.length < 50) break;
       page++;
-      await new Promise(r => setTimeout(r, 400));
-    } catch (e) { console.error("Sync Page Error:", e.message); break; }
+    } catch (e) { break; }
   }
   await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date() });
-  console.log(`✅ Sync finalizado.`);
 };
 
 // ── API ROUTES ───────────────────────────────────────────────
 
 app.get('/api/stats/dashboard', async (req, res) => {
   const token = req.cookies.koi_token;
-  if (!token) return res.status(401).json({ error: 'No autenticado' });
-
+  if (!token) return res.status(401).json({ error: '401' });
   try {
     const { id: userId } = jwt.verify(token, JWT_SECRET);
-    const integration = await Integration.findOne({ userId, status: 'active' });
+    const count = await Order.countDocuments({ userId });
     
-    if (integration && !integration.lastSyncAt) {
-      setImmediate(() => syncWoo(integration));
-    }
-
+    // Si ya hay órdenes, el frontend asumirá que está conectado
     const stats = await Order.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
     ]);
 
     res.json({
-      ok: true,
-      totalFacturado: stats[0]?.total || 0,
-      totalVentas: await Order.countDocuments({ userId }),
-      ventas: await Order.find({ userId }).sort({ createdAt: -1 }).limit(10)
+        ok: true,
+        totalFacturado: stats[0]?.total || 0,
+        totalVentas: count,
+        ventas: await Order.find({ userId }).sort({ createdAt: -1 }).limit(10)
     });
-  } catch (e) { res.status(401).json({ error: 'Sesión expirada' }); }
+  } catch (e) { res.status(401).json({ error: '401' }); }
 });
 
-// Ruta para conectar WooCommerce
+// MODIFICADO: Ahora el return_url incluye el parámetro que el frontend busca
 app.get('/auth/woo/connect', (req, res) => {
   const { store_url } = req.query;
   const token = req.cookies.koi_token;
   if (!store_url || !token) return res.status(400).send('Faltan datos');
 
-  const authUrl = `${store_url.replace(/\/$/, '')}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${token}&return_url=${BASE}/dashboard&callback_url=${BASE}/auth/woo/callback`;
+  const cleanUrl = store_url.replace(/\/$/, '');
+  const callbackUrl = `${BASE}/auth/woo/callback`;
+  
+  // EL FIX: return_url ahora tiene ?woo=connected
+  const authUrl = `${cleanUrl}/wc-auth/v1/authorize?` +
+    `app_name=KOI-Factura&` +
+    `scope=read_write&` +
+    `user_id=${token}&` +
+    `return_url=${BASE}/dashboard?woo=connected&` + 
+    `callback_url=${callbackUrl}`;
+  
   res.redirect(authUrl);
 });
 
-// Callback de WooCommerce
 app.post('/auth/woo/callback', async (req, res) => {
   const { user_id: token, consumer_key, consumer_secret, store_url } = req.body;
   try {
@@ -142,16 +137,14 @@ app.post('/auth/woo/callback', async (req, res) => {
       { $set: { status: 'active', storeUrl: store_url, credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) } } },
       { upsert: true, new: true }
     );
+    // Disparamos la descarga de @sono.handmade
     setImmediate(() => syncWoo(integration));
     res.status(200).send('OK');
   } catch (e) { res.status(500).send('Error'); }
 });
 
-// ── VISTAS (SPA FALLBACK) ────────────────────────────────────
-
-// Cualquier ruta que no sea de la API entrega el index.html
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => console.log(`🚀 KOI v4.6 Listo`));
+app.listen(PORT, () => console.log(`🚀 KOI v4.7 Listo`));

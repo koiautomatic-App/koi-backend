@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.7 (FIX CALLBACK)
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.8 (AUTH PERSIST)
 // ============================================================
 
 'use strict';
@@ -22,7 +22,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-secret';
 // ── MIDDLEWARES ──────────────────────────────────────────────
 app.use(express.json());
 app.use(cookieParser());
-app.use(cors({ origin: true, credentials: true }));
+
+// Configuración de CORS más permisiva para evitar bloqueos
+app.use(cors({
+  origin: true, 
+  credentials: true
+}));
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 // ── DB CONNECTION ───────────────────────────────────────────
@@ -31,10 +37,10 @@ mongoose.connect(process.env.MONGO_URI).then(() => console.log('🐟 KOI: Conect
 // ── ENCRYPTION ───────────────────────────────────────────────
 const ENC_KEY = Buffer.from((process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32), 'utf8');
 
-const encrypt = (text) => {
+const encrypt = (t) => {
   const iv = crypto.randomBytes(12);
   const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
+  const enc = Buffer.concat([cipher.update(String(t), 'utf8'), cipher.final()]);
   return `${iv.toString('hex')}:${cipher.getAuthTag().toString('hex')}:${enc.toString('hex')}`;
 };
 
@@ -65,7 +71,7 @@ const syncWoo = async (integration) => {
   const key = decrypt(integration.credentials.consumerKey);
   const secret = decrypt(integration.credentials.consumerSecret);
   let page = 1;
-  while (page <= 10) {
+  while (page <= 5) { // Para probar rápido, bajamos 250 órdenes
     try {
       const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
         auth: { username: key, password: secret }, params: { per_page: 50, page }
@@ -88,12 +94,20 @@ const syncWoo = async (integration) => {
 
 app.get('/api/stats/dashboard', async (req, res) => {
   const token = req.cookies.koi_token;
-  if (!token) return res.status(401).json({ error: '401' });
+  if (!token) return res.status(401).json({ error: 'Sesión no encontrada' });
+
   try {
     const { id: userId } = jwt.verify(token, JWT_SECRET);
-    const count = await Order.countDocuments({ userId });
     
-    // Si ya hay órdenes, el frontend asumirá que está conectado
+    // Verificamos si hay integración activa
+    const integration = await Integration.findOne({ userId, status: 'active' });
+    const count = await Order.countDocuments({ userId });
+
+    // Si hay integración pero 0 órdenes en DB, disparamos sync de emergencia
+    if (integration && count === 0) {
+        setImmediate(() => syncWoo(integration));
+    }
+
     const stats = await Order.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
       { $group: { _id: null, total: { $sum: "$amount" } } }
@@ -105,19 +119,19 @@ app.get('/api/stats/dashboard', async (req, res) => {
         totalVentas: count,
         ventas: await Order.find({ userId }).sort({ createdAt: -1 }).limit(10)
     });
-  } catch (e) { res.status(401).json({ error: '401' }); }
+  } catch (e) { 
+    res.status(401).json({ error: 'Token inválido' }); 
+  }
 });
 
-// MODIFICADO: Ahora el return_url incluye el parámetro que el frontend busca
 app.get('/auth/woo/connect', (req, res) => {
   const { store_url } = req.query;
   const token = req.cookies.koi_token;
-  if (!store_url || !token) return res.status(400).send('Faltan datos');
+  if (!store_url || !token) return res.status(400).send('Login requerido');
 
   const cleanUrl = store_url.replace(/\/$/, '');
   const callbackUrl = `${BASE}/auth/woo/callback`;
   
-  // EL FIX: return_url ahora tiene ?woo=connected
   const authUrl = `${cleanUrl}/wc-auth/v1/authorize?` +
     `app_name=KOI-Factura&` +
     `scope=read_write&` +
@@ -137,14 +151,15 @@ app.post('/auth/woo/callback', async (req, res) => {
       { $set: { status: 'active', storeUrl: store_url, credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) } } },
       { upsert: true, new: true }
     );
-    // Disparamos la descarga de @sono.handmade
     setImmediate(() => syncWoo(integration));
     res.status(200).send('OK');
-  } catch (e) { res.status(500).send('Error'); }
+  } catch (e) { res.status(500).send('Error en callback'); }
 });
+
+// ── VISTAS SPA ───────────────────────────────────────────────
 
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-app.listen(PORT, () => console.log(`🚀 KOI v4.7 Listo`));
+app.listen(PORT, () => console.log(`🚀 KOI v4.8 Activo`));

@@ -3782,5 +3782,108 @@ document.addEventListener('DOMContentLoaded',()=>{
   }
 });
 </script>
+</div> </div> <script>
+      /**
+       * 1. CONFIGURACIÓN DEL GRÁFICO (Chart.js)
+       * Inicializamos el gráfico con colores KOI (Naranja/Verde)
+       */
+      let incomeChart;
+      function initChart(data = []) {
+        const ctx = document.getElementById('incomeChart')?.getContext('2d');
+        if (!ctx) return;
+
+        incomeChart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
+            datasets: [{
+              label: 'Ventas ($)',
+              data: data.length ? data : [0, 0, 0, 0, 0, 0, 0],
+              borderColor: '#00e676',
+              backgroundColor: 'rgba(0, 230, 118, 0.1)',
+              borderWidth: 3,
+              tension: 0.4,
+              fill: true,
+              pointBackgroundColor: '#e8622a'
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+              y: { display: false },
+              x: { grid: { display: false }, ticks: { color: '#44445a' } }
+            }
+          }
+        });
+      }
+
+      /**
+       * 2. CONEXIÓN CON MONGO (vía tu API)
+       */
+      async function fetchDashboardData() {
+        try {
+          // Cambia esta URL por la de tu endpoint real de Node.js/Express
+          const response = await fetch('/api/dashboard/stats');
+          const data = await response.json();
+
+          updateUI(data);
+        } catch (error) {
+          console.error("Error conectando a MongoDB:", error);
+          // Opcional: mostrar estado 'offline' en el status dot del sidebar
+          document.querySelector('.status-dot').classList.add('offline');
+        }
+      }
+
+      /**
+       * 3. ACTUALIZAR EL HTML CON LOS DATOS REALES
+       */
+      function updateUI(data) {
+        // Actualizar Monto Monotributo
+        if(data.totalFacturado) {
+            document.querySelector('.mono-amount').innerHTML = 
+                `${data.totalFacturado.toLocaleString('es-AR')} <span>ARS</span>`;
+            
+            // Calcular barra de progreso (asumiendo un límite, ej: Cat A)
+            const limite = 6400000; 
+            const pct = (data.totalFacturado / limite) * 100;
+            const fill = document.querySelector('.prog-fill');
+            fill.style.width = `${pct}%`;
+            document.querySelector('.prog-pct').innerText = `${pct.toFixed(1)}%`;
+            
+            // Cambiar color si se acerca al límite
+            if(pct > 80) fill.classList.add('warn');
+            if(pct > 95) fill.classList.add('crit');
+        }
+
+        // Actualizar Métricas Rápidas
+        if(data.hoy) document.querySelector('.mc-today .mc-value').innerText = `$${data.hoy}`;
+        if(data.pendientes) document.querySelector('.mc-pend .mc-value').innerText = data.pendientes;
+
+        // Actualizar Gráfico
+        if(data.semanal) {
+            incomeChart.data.datasets[0].data = data.semanal;
+            incomeChart.update();
+        }
+      }
+
+      // Iniciar todo al cargar la página
+      window.addEventListener('load', () => {
+        initChart();
+        fetchDashboardData();
+      });
+
+      // Lógica para abrir/cerrar el panel de configuración (Sidebar)
+      function toggleConfig() {
+        document.querySelector('.cfg-panel').classList.toggle('open');
+        document.querySelector('.cfg-overlay').classList.toggle('open');
+      }
+    </script>
+  </body>
+</html>
+
+</body>
+</html>
 </body>
 </html>

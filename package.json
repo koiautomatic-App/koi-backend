@@ -1,7 +1,7 @@
 {
-  "name": "koi-backend",
-  "version": "2.0.0",
-  "description": "KOI-FACTURA · Sistema de Facturación Electrónica Multi-Usuario",
+  "name": "koi-factura",
+  "version": "3.0.0",
+  "description": "KOI-FACTURA · SaaS Multi-Tenant Billing Engine",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

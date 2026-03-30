@@ -2701,13 +2701,164 @@ function cargarDashboard(data){
   renderComps(d.comprobantes);
 }
 
-/* ── GAS BRIDGE ────────────────────────────────────── */
-function gasRun(fn,args,onOk,onErr){
-  _initDashPeriod();
-if(typeof google==='undefined'){if(onOk)onOk(null);return;}
-  let r=google.script.run.withSuccessHandler(onOk||(()=>{}));
-  if(onErr) r=r.withFailureHandler(onErr);
-  args?r[fn](...args):r[fn]();
+/* ── API BRIDGE — reemplaza gasRun para entorno web Render ── */
+//
+//  gasRun(fn, args, onOk, onErr) mantiene la misma firma que
+//  antes para no romper ninguna llamada existente en el código.
+//  Internamente mapea cada fn al endpoint REST correspondiente.
+
+const API_MAP = {
+  obtenerEstadoInfo:    () => api.get('/api/stats/dashboard'),
+  obtenerMetricas:      () => api.get('/api/stats/dashboard'),
+  obtenerManuales:      () => api.get('/api/orders?platform=manual'),
+  obtenerTodosComprobantes: () => api.get('/api/orders?limit=200'),
+  conmutarEstado:       () => api.post('/api/me/settings', { toggle: 'status' }),
+  verificarSuscripcion: () => api.get('/api/me'),
+  guardarConfiguracion: (datos) => api.patch('/api/me/settings', datos[0] || {}),
+  registrarVentaManual: (args) => api.post('/api/orders/manual', args[0] || {}),
+  anularManual:         (args) => api.post(`/api/orders/${args[0]}/anular`, {}),
+  enviarMail:           (args) => api.post(`/api/orders/${args[0]}/mail`, {}),
+  verPDF:               (args) => api.get(`/api/orders/${args[0]}/pdf`),
+  emitirComprobante:    (args) => api.post(`/api/orders/${args[0]}/emitir`, {}),
+  exportarIvaVentas:    () => api.get('/api/reports/iva-ventas'),
+};
+
+// HTTP helper con manejo de errores
+const api = {
+  async _fetch(method, path, body) {
+    const opts = {
+      method,
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' },
+    };
+    if (body) opts.body = JSON.stringify(body);
+    const res = await fetch(path, opts);
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(err.error || `HTTP ${res.status}`);
+    }
+    return res.json();
+  },
+  get:   (path)       => api._fetch('GET',    path),
+  post:  (path, body) => api._fetch('POST',   path, body),
+  patch: (path, body) => api._fetch('PATCH',  path, body),
+  del:   (path)       => api._fetch('DELETE', path),
+};
+
+// Transforma la respuesta de /api/stats/dashboard al formato
+// interno que esperan cargarDashboard() y las funciones render*
+function adaptarStats(raw, periodo) {
+  if (!raw) return null;
+
+  const ahora  = new Date();
+  const hoy    = ahora.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'2-digit' });
+  const mesNom = ahora.toLocaleString('es-AR', { month:'long' });
+  const anio   = ahora.getFullYear();
+
+  // Calcular ventas de HOY desde ultimas órdenes
+  const hoyTotal = (raw.ultimas || [])
+    .filter(o => o.createdAt?.startsWith(ahora.toISOString().slice(0, 10)))
+    .reduce((s, o) => s + (o.amount || 0), 0);
+
+  // Pendientes (sin CAE)
+  const pendientes = (raw.ultimas || [])
+    .filter(o => o.status === 'pending_invoice').length;
+
+  // Chart: agrupar ventas por día (últimos 14)
+  const ventasPorDia = {};
+  (raw.ultimas || []).forEach(o => {
+    if (!o.createdAt) return;
+    const dia = new Date(o.createdAt).toLocaleDateString('es-AR', { day:'2-digit' });
+    ventasPorDia[dia] = (ventasPorDia[dia] || 0) + (o.amount || 0);
+  });
+  const dias = Object.keys(ventasPorDia).sort().slice(-14);
+
+  // Comprobantes para la bandeja
+  const comprobantes = (raw.ultimas || []).map(o => ({
+    id:      o.externalId || o._id,
+    cliente: o.customerName || 'Sin nombre',
+    tipo:    o.platform || 'Venta',
+    fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+    monto:   o.amount || 0,
+    estado:  o.status === 'invoiced' ? 'cae-ok' : 'cae-pend',
+    origen:  o.platform === 'manual' ? 'manual' : 'woo',
+  }));
+
+  return {
+    serverOnline:   true,
+    monoCategoria:  'C',
+    monoFacturado:  raw.totalMonto || 0,
+    monoLimite:     2432364,
+    monoMes:        `Período: ${mesNom.charAt(0).toUpperCase() + mesNom.slice(1)} ${anio}`,
+    hoyFacturado:   hoyTotal,
+    hoyDelta:       '',
+    hoyTipo:        'up',
+    pendientesCAE:  pendientes,
+    pendDelta:      pendientes > 0 ? `${pendientes} sin emitir` : 'Al día ✓',
+    pendTipo:       pendientes > 0 ? 'warn' : 'up',
+    mesFacturado:   raw.totalMonto || 0,
+    mesDelta:       `${raw.totalOrden || 0} ventas`,
+    mesTipo:        'up',
+    chartTotal:     raw.totalMonto || 0,
+    chartDias:      dias,
+    chartVentas:    dias.map(d => Math.round(ventasPorDia[d] || 0)),
+    comprobantes,
+  };
+}
+
+// gasRun() — firma idéntica al original
+async function gasRun(fn, args, onOk, onErr) {
+  const handler = API_MAP[fn];
+  if (!handler) {
+    console.warn(`gasRun: función '${fn}' no mapeada`);
+    if (onOk) onOk(null);
+    return;
+  }
+  try {
+    const raw = await handler(args);
+
+    // Adaptar respuestas específicas
+    let result = raw;
+    if (fn === 'obtenerEstadoInfo' || fn === 'obtenerMetricas') {
+      result = adaptarStats(raw);
+    }
+    if (fn === 'obtenerTodosComprobantes') {
+      // Devolver en formato { comprobantes: [...] }
+      result = { comprobantes: (raw.orders || []).map(o => ({
+        id:      o.externalId || o._id,
+        cliente: o.customerName || 'Sin nombre',
+        tipo:    o.platform || 'Venta',
+        fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+        monto:   o.amount || 0,
+        estado:  o.status === 'invoiced' ? 'cae-ok' : 'cae-pend',
+        origen:  o.platform || 'woo',
+        email:   o.customerEmail || '',
+        concepto: o.platform || '',
+      })) };
+    }
+    if (fn === 'obtenerManuales') {
+      result = (raw.orders || []).map(o => ({
+        id:      o.externalId || o._id,
+        cliente: o.customerName || 'Sin nombre',
+        email:   o.customerEmail || '',
+        concepto: o.platform || '',
+        fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+        tipo:    'Factura C',
+        monto:   o.amount || 0,
+        estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
+        origen:  'manual',
+      }));
+    }
+    if (fn === 'verificarSuscripcion') {
+      result = { activa: raw?.user?.plan === 'pro', fechaAlta: raw?.user?.creadoEn };
+    }
+
+    if (onOk) onOk(result);
+  } catch(e) {
+    console.error(`gasRun [${fn}] error:`, e.message);
+    if (onErr) onErr(e);
+    else toast(`Error: ${e.message}`, 'error');
+  }
 }
 
 /* ── VISTAS ─────────────────────────────────────────── */
@@ -2836,43 +2987,28 @@ function cargarTodosComprobantes() {
       Cargando comprobantes…
     </td></tr>`;
 
-  if (typeof google === 'undefined') {
-    const woo = MOCK_WOO.map(c => ({...c, origen:'woo'}));
-    const man = MOCK_MANUALES.map(m => ({...m, origen:'manual'}));
-    _todosComp = [...man, ...woo].sort((a,b) => _parseFecha(b.fecha) - _parseFecha(a.fecha));
-    filtrarComprobantes();
-    return;
-  }
-
-  // Carga secuencial: primero WooCommerce, luego Manuales
-  google.script.run
-    .withSuccessHandler(function(dataWoo) {
-      const woo = ((dataWoo && dataWoo.comprobantes) ? dataWoo.comprobantes : [])
-        .map(function(c) { return Object.assign({}, c, {origen:'woo'}); });
-
-      google.script.run
-        .withSuccessHandler(function(dataManuales) {
-          const man = (dataManuales || []).map(function(m) {
-            return Object.assign({}, m, {origen: m.origen || 'manual'});
-          });
-          _todosComp = man.concat(woo).sort(function(a,b) {
-            return _parseFecha(b.fecha) - _parseFecha(a.fecha);
-          });
-          filtrarComprobantes();
-        })
-        .withFailureHandler(function() {
-          _todosComp = woo;
-          filtrarComprobantes();
-        })
-        .obtenerManuales();
+  // Cargar desde la API REST
+  api.get('/api/orders?limit=200')
+    .then(raw => {
+      _todosComp = (raw.orders || []).map(o => ({
+        id:      o.externalId || o._id,
+        cliente: o.customerName  || 'Sin nombre',
+        email:   o.customerEmail || '',
+        concepto: o.platform || '',
+        fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+        tipo:    'Factura C',
+        monto:   o.amount || 0,
+        estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
+        origen:  o.platform === 'manual' ? 'manual' : 'woo',
+      })).sort((a,b) => _parseFecha(b.fecha) - _parseFecha(a.fecha));
+      filtrarComprobantes();
     })
-    .withFailureHandler(function(err) {
+    .catch(err => {
       document.getElementById('manualesBody').innerHTML =
         `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
-          Error cargando comprobantes: ${err.message}
+          Error: ${err.message}
         </td></tr>`;
-    })
-    .obtenerTodosComprobantes();
+    });
 }
 
 function _parseFecha(str) {
@@ -3401,11 +3537,10 @@ function _recargarDashConPeriodo() {
     }
   };
 
-  if (typeof google !== 'undefined') {
-    gasRun('obtenerEstadoInfo', null, loader, null);
-  } else {
-    loader(Object.assign({}, MOCK));
-  }
+  // Siempre usar la API REST (estamos en Render, no en GAS)
+  api.get('/api/stats/dashboard')
+    .then(raw => loader(adaptarStats(raw)))
+    .catch(err => { toast('Error: ' + err.message, 'error'); loader(MOCK); });
 }
 
 /* ── CALENDARIO / PERÍODO ───────────────────────────── */
@@ -3772,26 +3907,46 @@ function enviarMail(id){
 }
 
 /* ── INIT ──────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded',()=>{
-  if(typeof google!=='undefined'){
-    google.script.run
-      .withSuccessHandler(data => {
-        if(!data || !data.serverOnline){
-          renderStatus(false);
-          toast('Sin datos del servidor','warn');
-          cargarDashboard(MOCK);
-          return;
-        }
-        cargarDashboard(data);
-      })
-      .withFailureHandler(err=>{
-        renderStatus(false);
-        toast('Error: '+err.message,'error');
-        cargarDashboard(MOCK);
-      })
-      .obtenerEstadoInfo();
-  } else {
-    setTimeout(()=>cargarDashboard(MOCK),500);
+document.addEventListener('DOMContentLoaded', async () => {
+  _initDashPeriod();
+
+  // Cargar datos reales desde la API REST
+  try {
+    const raw  = await api.get('/api/stats/dashboard');
+    const data = adaptarStats(raw);
+    if (data) {
+      cargarDashboard(data);
+    } else {
+      renderStatus(false);
+      cargarDashboard(MOCK);
+    }
+  } catch(e) {
+    console.error('Init error:', e.message);
+    // Si falla auth → redirigir al login
+    if (e.message.includes('401') || e.message.includes('autenticado')) {
+      window.location.href = '/login';
+      return;
+    }
+    renderStatus(false);
+    toast('Error cargando datos: ' + e.message, 'error');
+    cargarDashboard(MOCK);
+  }
+
+  // Detectar retorno de OAuth
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('woo') === 'connected') {
+    toast('✅ WooCommerce conectado correctamente', 'success');
+    history.replaceState({}, '', '/dashboard');
+    mostrarVista('negocio');
+  }
+  if (params.get('ml') === 'connected') {
+    toast('✅ Mercado Libre conectado correctamente', 'success');
+    history.replaceState({}, '', '/dashboard');
+    mostrarVista('negocio');
+  }
+  if (params.get('error') === 'ml_failed') {
+    toast('Error al conectar Mercado Libre', 'error');
+    history.replaceState({}, '', '/dashboard');
   }
 });
 </script>

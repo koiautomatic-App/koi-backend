@@ -124,7 +124,7 @@ arcaStatus: {
   default: 'sin_vincular', 
   enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
 },
-arcaNotas:  { type: String },
+arcaNotas:  { type: String },}, // <--- ESTA LLAVE CIERRA 'settings' (Faltaba aquí o estaba mal puesta)
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 }, { timestamps: false });

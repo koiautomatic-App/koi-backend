@@ -1269,7 +1269,7 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
   try {
     // 1. Validar que seas vos (tu email de admin)
     const admin = await User.findById(req.userId);
-    if (admin.email !== 'koi.automatic@gmail.com') { // <--- CAMBIÁ ESTO
+    if (!admin || admin.email.trim() !== 'koi.automatic@gmail.com') {
       return res.status(403).json({ error: 'No tenés permisos de administrador.' });
     }
 
@@ -1279,31 +1279,48 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
     }).select('nombre apellido email settings').lean();
 
     // 3. Desencriptar claves para que las puedas copiar y usar en AFIP
-    const lista = pendientes.map(u => ({
-      id: u._id,
-      cliente: `${u.nombre} ${u.apellido}`,
-      email: u.email,
-      cuit: u.settings.cuit,
-      claveFiscal: decrypt(u.settings.arcaPass), // <--- ACÁ OCURRE LA MAGIA
-      status: u.settings.arcaStatus,
-      notas: u.settings.arcaNotas
-    }));
+    const lista = pendientes.map(u => {
+      const s = u.settings || {};
+      return {
+        id: u._id,
+        cliente: `${u.nombre} ${u.apellido}`,
+        email: u.email,
+        cuit: s.cuit || 'N/A',
+        // Cambiado de arcaPass a arcaClave para coincidir con Atlas
+        claveFiscal: s.arcaClave ? decrypt(s.arcaClave) : 'Sin clave', 
+        status: s.arcaStatus || 'pendiente',
+        notas: s.arcaNotas || ''
+      };
+    });
 
     res.json({ ok: true, total: lista.length, lista });
   } catch (e) {
+    console.error('Error Admin Get:', e);
     res.status(500).json({ error: 'Error en el panel de admin' });
   }
 });
 
 // Endpoint para que vos cambies el estado una vez que termines el trámite
 app.post('/api/admin/update-status', requireAuthAPI, async (req, res) => {
-  const { userId, nuevoStatus, notas } = req.body;
-  // (Agregá acá la misma validación de email de admin que arriba)
-  
-  await User.findByIdAndUpdate(userId, {
-    'settings.arcaStatus': nuevoStatus,
-    'settings.arcaNotas': notas
-  });
+  try {
+    const { userId, nuevoStatus, notas } = req.body;
 
-  res.json({ ok: true, message: 'Estado actualizado' });
+    // Validamos permisos nuevamente
+    const admin = await User.findById(req.userId);
+    if (!admin || admin.email.trim() !== 'koi.automatic@gmail.com') {
+      return res.status(403).json({ error: 'No tenés permisos.' });
+    }
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'settings.arcaStatus': nuevoStatus, // 'vinculado' o 'rechazado'
+        'settings.arcaNotas': notas
+      }
+    });
+
+    res.json({ ok: true, message: 'Estado actualizado correctamente' });
+  } catch (e) {
+    console.error('Error Admin Update:', e);
+    res.status(500).json({ error: 'No se pudo actualizar el estado.' });
+  }
 });

@@ -1,19 +1,6 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.0
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.1
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
-// ============================================================
-//  ENV VARS (Render → Environment):
-//
-//  MONGO_URI              mongodb+srv://...
-//  JWT_SECRET             random 64-char string
-//  SESSION_SECRET         random 32-char string
-//  ENCRYPTION_KEY         exactly 32 chars
-//  GOOGLE_CLIENT_ID       Google Cloud Console
-//  GOOGLE_CLIENT_SECRET   Google Cloud Console
-//  ML_CLIENT_ID           MercadoLibre Developers
-//  ML_CLIENT_SECRET       MercadoLibre Developers
-//  BASE_URL               https://koi-backend-zzoc.onrender.com
-//  PORT                   (Render sets this automatically)
 // ============================================================
 
 'use strict';
@@ -60,7 +47,7 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 // ════════════════════════════════════════════════════════════
-//  MONGODB — conexión con retry automático
+//  MONGODB
 // ════════════════════════════════════════════════════════════
 const connectDB = async () => {
   try {
@@ -71,13 +58,13 @@ const connectDB = async () => {
     console.log('🐟 KOI: MongoDB conectado');
   } catch (err) {
     console.error('❌ MongoDB error:', err.message);
-    setTimeout(connectDB, 5000); // retry en 5s
+    setTimeout(connectDB, 5000);
   }
 };
 connectDB();
 
 // ════════════════════════════════════════════════════════════
-//  ENCRYPTION — AES-256-GCM para tokens en reposo
+//  ENCRYPTION — AES-256-GCM
 // ════════════════════════════════════════════════════════════
 const ENC_KEY = Buffer.from(
   (process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32),
@@ -114,7 +101,6 @@ const decrypt = (payload) => {
 //  SCHEMAS
 // ════════════════════════════════════════════════════════════
 
-// ── USER ─────────────────────────────────────────────────────
 const UserSchema = new mongoose.Schema({
   nombre:       { type: String, trim: true },
   apellido:     { type: String, trim: true },
@@ -144,57 +130,41 @@ UserSchema.methods.checkPassword = function(plain) {
 
 const User = mongoose.model('User', UserSchema);
 
-// ── INTEGRATION — Universal Connector ────────────────────────
-//
-//  Un documento por (userId, platform, storeId).
-//  `credentials` guarda CUALQUIER tipo de clave encriptada.
-//  El `webhookSecret` es la clave de routing multi-tenant.
-
 const IntegrationSchema = new mongoose.Schema({
   userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-
-  // Plataforma — extendible sin cambiar el schema
   platform: {
     type:     String,
     required: true,
     enum:     ['woocommerce', 'tiendanube', 'mercadolibre', 'empretienda', 'rappi', 'vtex', 'shopify'],
   },
-
-  // Identificador único de la tienda dentro de la plataforma
   storeId:   { type: String, required: true },
   storeName: { type: String },
   storeUrl:  { type: String },
-
   status: {
     type:    String,
     default: 'active',
     enum:    ['active', 'paused', 'error', 'pending'],
   },
-
-  // Credenciales — TODAS encriptadas. Usamos un objeto libre
-  // para soportar cualquier plataforma sin migrar el schema.
   credentials: {
     type:    mongoose.Schema.Types.Mixed,
     default: {},
   },
-
-  // Token único de 48 chars que identifica al usuario en webhooks
   webhookSecret: {
     type:    String,
     default: () => crypto.randomBytes(24).toString('hex'),
     index:   true,
   },
-
   lastSyncAt:  { type: Date },
-  syncCursor:  { type: String },  // paginación: guarda el último cursor/página
+  syncCursor:  { type: String },
   errorLog:    { type: String },
+  // ── NUEVO: marca si ya se hizo el sync histórico inicial ──
+  initialSyncDone: { type: Boolean, default: false },
   updatedAt:   { type: Date, default: Date.now },
   createdAt:   { type: Date, default: Date.now },
 }, { timestamps: false });
 
 IntegrationSchema.index({ userId: 1, platform: 1, storeId: 1 }, { unique: true });
 
-// Helpers de credenciales
 IntegrationSchema.methods.setKey = function(field, value) {
   this.credentials = { ...this.credentials, [field]: encrypt(value) };
 };
@@ -204,56 +174,42 @@ IntegrationSchema.methods.getKey = function(field) {
 
 const Integration = mongoose.model('Integration', IntegrationSchema);
 
-// ── ORDER — Slim canonical model ──────────────────────────────
-//
-//  Solo campos financieros. Sin rawPayload.
-//  El índice único evita duplicados incluso en bulk ingests.
-
 const OrderSchema = new mongoose.Schema({
   userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
   platform:      { type: String, required: true },
-
-  // Identificador original de la orden en la plataforma
   externalId:    { type: String, required: true },
-
-  // Datos del cliente (normalizados)
   customerName:  { type: String, default: '' },
   customerEmail: { type: String, default: '' },
-  customerDoc:   { type: String, default: '0' },  // DNI/CUIT normalizado
-
-  // Financiero
-  amount:   { type: Number, required: true },
-  currency: { type: String, default: 'ARS' },
-
-  // Estado de facturación
+  customerDoc:   { type: String, default: '0' },
+  amount:        { type: Number, required: true },
+  currency:      { type: String, default: 'ARS' },
   status: {
     type:    String,
     default: 'pending_invoice',
     enum:    ['pending_invoice', 'invoiced', 'error_data', 'error_afip', 'skipped'],
   },
-  caeNumber: { type: String },
-  caeExpiry: { type: Date },
-  errorLog:  { type: String },
-  createdAt: { type: Date, default: Date.now },
+  // ── NUEVO: fecha original de la venta en la plataforma ──
+  // Permite filtrar correctamente por período incluso en sincronizaciones futuras
+  orderDate:  { type: Date },
+  caeNumber:  { type: String },
+  caeExpiry:  { type: Date },
+  errorLog:   { type: String },
+  createdAt:  { type: Date, default: Date.now },
 }, { timestamps: false });
 
-// Índice único multi-tenant: (usuario, plataforma, orden) → 1 registro
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
-// Índice para consultas de stats
+// Índice optimizado para queries de stats con rango de fecha
+OrderSchema.index({ userId: 1, platform: 1, orderDate: -1 });
 OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  NORMALIZER — Universal Data Cleaner
-//
-//  Recibe el payload crudo de cada plataforma y devuelve
-//  un objeto canónico con solo los campos que necesitamos.
-//  Nunca guarda el objeto original.
+//  NORMALIZER
 // ════════════════════════════════════════════════════════════
 const ARCA_LIMIT = 380_000;
-const CUIT_CF    = '99999999';  // consumidor final AFIP
+const CUIT_CF    = '99999999';
 
 const normalize = {
 
@@ -267,6 +223,8 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
+      // Fecha original de la orden
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
     };
   },
 
@@ -279,11 +237,11 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
+      orderDate:     raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
 
   mercadolibre(raw) {
-    // ML no comparte DNI — solo usable si llega en order_items buyer
     const doc = _cleanDoc(raw.billing_info?.doc_number || '');
     return {
       externalId:    String(raw.id),
@@ -292,6 +250,7 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount) || 0),
       amount:        parseFloat(raw.total_amount) || 0,
       currency:      raw.currency_id || 'ARS',
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
     };
   },
 
@@ -302,9 +261,10 @@ const normalize = {
       externalId:    raw.orderId || String(raw.id),
       customerName:  `${client.firstName || ''} ${client.lastName || ''}`.trim(),
       customerEmail: client.email || '',
-      customerDoc:   _resolveDoc(doc, parseFloat(raw.value) / 100 || 0), // VTEX en centavos
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.value) / 100 || 0),
       amount:        parseFloat(raw.value) / 100 || 0,
       currency:      raw.currencyCode || 'ARS',
+      orderDate:     raw.creationDate ? new Date(raw.creationDate) : undefined,
     };
   },
 
@@ -317,6 +277,7 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price || raw.total) || 0),
       amount:        parseFloat(raw.total_price || raw.total) || 0,
       currency:      'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
 
@@ -329,6 +290,7 @@ const normalize = {
       customerDoc:   CUIT_CF,
       amount:        parseFloat(order.total_products || order.total) || 0,
       currency:      'ARS',
+      orderDate:     order.created_at ? new Date(order.created_at) : undefined,
     };
   },
 
@@ -342,29 +304,25 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price) || 0),
       amount:        parseFloat(raw.total_price) || 0,
       currency:      raw.currency || 'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
 };
 
-// Helpers de normalización
 function _cleanDoc(raw) {
   return String(raw || '').replace(/\D/g, '');
 }
 function _resolveDoc(doc, amount) {
   if (doc.length >= 7 && doc.length <= 11) return doc;
-  return amount >= ARCA_LIMIT ? null : CUIT_CF; // null = error_data
+  return amount >= ARCA_LIMIT ? null : CUIT_CF;
 }
 
 // ════════════════════════════════════════════════════════════
-//  UPSERT ENGINE — Slim Atomic Write
-//
-//  Guarda solo los campos canónicos. Idempotente: si la orden
-//  ya existe (re-delivery del webhook) simplemente la ignora.
+//  UPSERT ENGINE
 // ════════════════════════════════════════════════════════════
 async function upsertOrder(integration, canonical) {
   if (!canonical) return;
 
-  // Sin DNI y monto alto → error sin guardar basura
   if (canonical.customerDoc === null) {
     return Order.findOneAndUpdate(
       { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId },
@@ -380,7 +338,7 @@ async function upsertOrder(integration, canonical) {
         },
       },
       { upsert: true, new: false }
-    ).catch(() => {}); // ignora duplicados silenciosamente
+    ).catch(() => {});
   }
 
   return Order.findOneAndUpdate(
@@ -391,12 +349,12 @@ async function upsertOrder(integration, canonical) {
         integrationId: integration._id,
         platform:      integration.platform,
         ...canonical,
-        status:    'pending_invoice',
+        status: 'pending_invoice',
       },
     },
     { upsert: true, new: false }
   ).catch(err => {
-    if (err.code !== 11000) // ignora duplicate key, relanza el resto
+    if (err.code !== 11000)
       console.error(`❌ upsert error [${integration.platform}#${canonical.externalId}]:`, err.message);
   });
 }
@@ -415,7 +373,6 @@ const setTokenCookie = (res, token) =>
     maxAge:   7 * 24 * 60 * 60 * 1000,
   });
 
-// Middleware para páginas HTML — redirige al login
 const requireAuth = (req, res, next) => {
   try {
     req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id;
@@ -426,7 +383,6 @@ const requireAuth = (req, res, next) => {
   }
 };
 
-// Middleware para rutas API — devuelve JSON
 const requireAuthAPI = (req, res, next) => {
   const token = req.cookies.koi_token
     || (req.headers.authorization || '').replace('Bearer ', '');
@@ -575,7 +531,6 @@ app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════
 
-// Listar — nunca expone credentials
 app.get('/api/integrations', requireAuthAPI, async (req, res) => {
   const list = await Integration.find({ userId: req.userId })
     .select('-credentials -webhookSecret')
@@ -583,7 +538,6 @@ app.get('/api/integrations', requireAuthAPI, async (req, res) => {
   res.json({ ok: true, integrations: list });
 });
 
-// Activar / Pausar
 app.patch('/api/integrations/:id/status', requireAuthAPI, async (req, res) => {
   try {
     const { status } = req.body;
@@ -599,7 +553,6 @@ app.patch('/api/integrations/:id/status', requireAuthAPI, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
-// Desconectar
 app.delete('/api/integrations/:id', requireAuthAPI, async (req, res) => {
   try {
     const doc = await Integration.findOneAndDelete({ _id: req.params.id, userId: req.userId });
@@ -608,7 +561,6 @@ app.delete('/api/integrations/:id', requireAuthAPI, async (req, res) => {
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
-// Webhook URL (para mostrar al usuario)
 app.get('/api/integrations/:id/webhook', requireAuthAPI, async (req, res) => {
   const doc = await Integration.findOne({ _id: req.params.id, userId: req.userId })
     .select('platform webhookSecret');
@@ -616,7 +568,7 @@ app.get('/api/integrations/:id/webhook', requireAuthAPI, async (req, res) => {
   res.json({ ok: true, url: `${BASE}/webhook/${doc.platform}/${doc.webhookSecret}` });
 });
 
-// ── Conectar Token-Based (TiendaNube, Empretienda, Rappi, VTEX) ──
+// ── Conectar Token-Based ──────────────────────────────────
 app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
   const { platform } = req.params;
   const TOKEN_PLATFORMS = ['tiendanube', 'empretienda', 'rappi', 'vtex', 'shopify'];
@@ -636,29 +588,34 @@ app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
       { userId: req.userId, platform, storeId: String(storeId) },
       {
         $set: {
-          storeName: storeName || `${platform} ${storeId}`,
-          storeUrl:  storeUrl || '',
-          status:    'active',
-          errorLog:  '',
+          storeName:   storeName || `${platform} ${storeId}`,
+          storeUrl:    storeUrl || '',
+          status:      'active',
+          errorLog:    '',
           credentials: creds,
-          updatedAt: new Date(),
+          updatedAt:   new Date(),
+          // Resetear flag para re-sincronizar al reconectar
+          initialSyncDone: false,
         },
         $setOnInsert: {
-          userId:   req.userId,
+          userId:    req.userId,
           platform,
-          storeId:  String(storeId),
+          storeId:   String(storeId),
           createdAt: new Date(),
         },
       },
       { upsert: true, new: true }
     );
 
-    // Registrar webhook si la plataforma lo soporta
+    // Registrar webhook si aplica
     if (platform === 'tiendanube' && apiToken) {
       await _registerWebhookTiendaNube(integration, apiToken).catch(console.warn);
     }
 
-    res.json({ ok: true, message: `${platform} conectado correctamente.` });
+    // ── NUEVO: disparar sync histórico completo en background ──
+    _dispararSyncHistorico(integration);
+
+    res.json({ ok: true, message: `${platform} conectado correctamente. Sincronizando historial...` });
   } catch (e) {
     console.error(`Connect ${platform}:`, e.message);
     res.status(500).json({ error: 'Error al conectar. Verificá las credenciales.' });
@@ -674,8 +631,6 @@ app.get('/auth/woo/connect', requireAuth, (req, res) => {
   if (!store_url) return res.status(400).send('Falta store_url');
 
   const clean = store_url.replace(/\/$/, '').toLowerCase();
-
-  // Firmamos userId + storeUrl en un state token (15 min de validez)
   const state = jwt.sign({ userId: req.userId, storeUrl: clean }, JWT_SECRET, { expiresIn: '15m' });
 
   const callbackUrl = `${BASE}/auth/woo/callback?state=${encodeURIComponent(state)}`;
@@ -692,7 +647,7 @@ app.get('/auth/woo/connect', requireAuth, (req, res) => {
 });
 
 app.post('/auth/woo/callback', async (req, res) => {
-  res.status(200).json({ status: 'ok' }); // WooCommerce necesita 200 inmediato
+  res.status(200).json({ status: 'ok' });
 
   const { state } = req.query;
   const { consumer_key, consumer_secret } = req.body;
@@ -712,6 +667,7 @@ app.post('/auth/woo/callback', async (req, res) => {
             consumerKey:    encrypt(consumer_key),
             consumerSecret: encrypt(consumer_secret),
           },
+          initialSyncDone: false,
           updatedAt: new Date(),
         },
         $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
@@ -720,6 +676,10 @@ app.post('/auth/woo/callback', async (req, res) => {
     );
 
     await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
+
+    // ── NUEVO: sync histórico completo ──
+    _dispararSyncHistorico(integration);
+
     console.log(`✅ WooCommerce conectado: ${storeUrl} → usuario ${userId}`);
   } catch (e) {
     console.error('WooCommerce callback error:', e.message);
@@ -751,7 +711,7 @@ async function _registerWebhookTiendaNube(integration, apiToken) {
   await axios.post(
     `https://api.tiendanube.com/v1/${storeId}/webhooks`,
     { event: 'order/paid', url: webhookUrl },
-    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/3.0' } }
+    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/3.1' } }
   );
   console.log(`🔌 TiendaNube webhook registrado: ${storeId}`);
 }
@@ -790,7 +750,7 @@ app.get('/auth/ml/callback', async (req, res) => {
 
     const sellerId = String(token.user_id || seller.id);
 
-    await Integration.findOneAndUpdate(
+    const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'mercadolibre', storeId: sellerId },
       {
         $set: {
@@ -803,12 +763,16 @@ app.get('/auth/ml/callback', async (req, res) => {
             tokenExpiry:  new Date(Date.now() + token.expires_in * 1000).toISOString(),
             sellerId,
           },
+          initialSyncDone: false,
           updatedAt: new Date(),
         },
         $setOnInsert: { userId, platform: 'mercadolibre', storeId: sellerId, createdAt: new Date() },
       },
-      { upsert: true }
+      { upsert: true, new: true }
     );
+
+    // ── NUEVO: sync histórico completo ──
+    _dispararSyncHistorico(integration);
 
     console.log(`✅ MercadoLibre conectado: seller ${sellerId} → usuario ${userId}`);
     res.redirect('/dashboard?ml=connected');
@@ -818,7 +782,6 @@ app.get('/auth/ml/callback', async (req, res) => {
   }
 });
 
-// Refresh automático de token ML
 async function _getMLToken(integration) {
   const expiry = new Date(integration.credentials.tokenExpiry || 0);
   const isExpiringSoon = expiry < new Date(Date.now() + 10 * 60 * 1000);
@@ -842,11 +805,7 @@ async function _getMLToken(integration) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  BULK SYNC ENGINE — Paginación máxima por plataforma
-//
-//  Cada integración puede triggerear un sync manual o
-//  programado. El cursor se guarda en integration.syncCursor
-//  para reanudar si falla.
+//  BULK SYNC ENGINE — Historial completo por plataforma
 // ════════════════════════════════════════════════════════════
 
 const BULK_SYNC = {
@@ -861,7 +820,8 @@ const BULK_SYNC = {
     while (true) {
       const { data: orders } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
         auth:   { username: key, password: secret },
-        params: { per_page: 100, page, status: 'completed', orderby: 'date', order: 'desc' },
+        // Sin filtro de status para traer TODAS las órdenes históricas
+        params: { per_page: 100, page, orderby: 'date', order: 'desc' },
       });
       if (!orders?.length) break;
 
@@ -885,8 +845,9 @@ const BULK_SYNC = {
       const { data: orders } = await axios.get(
         `https://api.tiendanube.com/v1/${storeId}/orders`,
         {
-          headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.0' },
-          params:  { per_page: 200, page, payment_status: 'paid' },
+          headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.1' },
+          // Sin filtro de payment_status para traer todo el historial
+          params:  { per_page: 200, page },
         }
       );
       if (!orders?.length) break;
@@ -903,7 +864,7 @@ const BULK_SYNC = {
     const sellerId    = integration.credentials.sellerId;
     let   offset      = 0;
     let   total       = 0;
-    const LIMIT       = 50; // ML máximo
+    const LIMIT       = 50;
 
     while (true) {
       const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
@@ -923,7 +884,7 @@ const BULK_SYNC = {
   async vtex(integration) {
     const apiKey    = integration.getKey('apiKey');
     const apiToken  = integration.getKey('apiToken');
-    const storeUrl  = integration.storeUrl; // ej: https://mitienda.myvtex.com
+    const storeUrl  = integration.storeUrl;
     let   page      = 1;
     let   total     = 0;
     const PER_PAGE  = 100;
@@ -934,7 +895,7 @@ const BULK_SYNC = {
           'X-VTEX-API-AppKey':   apiKey,
           'X-VTEX-API-AppToken': apiToken,
         },
-        params: { page, per_page: PER_PAGE, f_status: 'invoiced,payment-approved' },
+        params: { page, per_page: PER_PAGE },
       });
       const orders = data.list || [];
       if (!orders.length) break;
@@ -947,7 +908,36 @@ const BULK_SYNC = {
   },
 };
 
-// Endpoint para disparar sync manual desde el dashboard
+// ── Helper centralizado: disparar sync histórico ──────────
+//  Se llama siempre que una integración se conecta/reconecta.
+//  Marca initialSyncDone=true cuando termina exitosamente.
+async function _dispararSyncHistorico(integration) {
+  const syncFn = BULK_SYNC[integration.platform];
+  if (!syncFn) {
+    console.warn(`⚠️  No hay sync para ${integration.platform}`);
+    return;
+  }
+
+  console.log(`🔄 Iniciando sync histórico: ${integration.platform} / ${integration.storeId}`);
+
+  try {
+    const count = await syncFn(integration);
+    await Integration.findByIdAndUpdate(integration._id, {
+      lastSyncAt:      new Date(),
+      errorLog:        '',
+      initialSyncDone: true,
+    });
+    console.log(`✅ Sync histórico ${integration.platform}: ${count} órdenes importadas`);
+  } catch (err) {
+    console.error(`❌ Sync histórico ${integration.platform} error:`, err.message);
+    await Integration.findByIdAndUpdate(integration._id, {
+      errorLog: `Sync error: ${err.message}`,
+      status:   'error',
+    });
+  }
+}
+
+// ── Sync manual desde dashboard ───────────────────────────
 app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
@@ -957,29 +947,24 @@ app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
     const syncFn = BULK_SYNC[integration.platform];
     if (!syncFn) return res.status(400).json({ error: `Sync no disponible para ${integration.platform}` });
 
-    // Responder inmediato y ejecutar en background
     res.json({ ok: true, message: 'Sincronización iniciada en background' });
 
     syncFn(integration)
       .then(count => {
-        console.log(`✅ Sync ${integration.platform} completado: ${count} órdenes`);
+        console.log(`✅ Sync manual ${integration.platform}: ${count} órdenes`);
         return Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '' });
       })
       .catch(async err => {
-        console.error(`❌ Sync ${integration.platform} error:`, err.message);
+        console.error(`❌ Sync manual ${integration.platform} error:`, err.message);
         await Integration.findByIdAndUpdate(integration._id, { errorLog: err.message, status: 'error' });
       });
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
 // ════════════════════════════════════════════════════════════
-//  WEBHOOKS UNIVERSALES — /webhook/:platform/:secret
-//
-//  El webhookSecret es el router multi-tenant.
-//  Un solo lookup de DB identifica userId + platform.
+//  WEBHOOKS UNIVERSALES
 // ════════════════════════════════════════════════════════════
 
-// Handler genérico reutilizable
 async function handleWebhook(platform, secret, getCanonical) {
   const integration = await Integration.findOne({
     platform,
@@ -1008,12 +993,11 @@ app.post('/webhook/woocommerce/:secret', async (req, res) => {
 app.post('/webhook/tiendanube/:secret', async (req, res) => {
   res.status(200).send('OK');
   await handleWebhook('tiendanube', req.params.secret, async (integration) => {
-    // TiendaNube solo envía el ID → fetchear la orden completa
     const token   = integration.getKey('apiToken');
     const orderId = req.body.id;
     const { data } = await axios.get(
       `https://api.tiendanube.com/v1/${integration.storeId}/orders/${orderId}`,
-      { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.0' } }
+      { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.1' } }
     );
     return normalize.tiendanube(data);
   });
@@ -1033,36 +1017,35 @@ app.post('/webhook/mercadolibre/:secret', async (req, res) => {
 
 app.post('/webhook/vtex/:secret', async (req, res) => {
   res.status(200).send('OK');
-  await handleWebhook('vtex', req.params.secret, () =>
-    normalize.vtex(req.body)
-  );
+  await handleWebhook('vtex', req.params.secret, () => normalize.vtex(req.body));
 });
 
 app.post('/webhook/empretienda/:secret', async (req, res) => {
   res.status(200).send('OK');
-  await handleWebhook('empretienda', req.params.secret, () =>
-    normalize.empretienda(req.body)
-  );
+  await handleWebhook('empretienda', req.params.secret, () => normalize.empretienda(req.body));
 });
 
 app.post('/webhook/rappi/:secret', async (req, res) => {
   res.status(200).send('OK');
-  await handleWebhook('rappi', req.params.secret, () =>
-    normalize.rappi(req.body)
-  );
+  await handleWebhook('rappi', req.params.secret, () => normalize.rappi(req.body));
 });
 
 app.post('/webhook/shopify/:secret', async (req, res) => {
   res.status(200).send('OK');
-  await handleWebhook('shopify', req.params.secret, () =>
-    normalize.shopify(req.body)
-  );
+  await handleWebhook('shopify', req.params.secret, () => normalize.shopify(req.body));
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — STATS MULTI-FUENTE (/api/stats/dashboard)
+//  API — STATS CON FILTRO DE PERÍODO
 //
-//  Aislamiento garantizado: todas las queries incluyen userId.
+//  Query params opcionales:
+//    ?desde=YYYY-MM-DD   (inicio del período, inclusive)
+//    ?hasta=YYYY-MM-DD   (fin del período, inclusive)
+//    ?platform=xxx
+//
+//  El filtro se aplica sobre `orderDate` (fecha original de la
+//  venta en la plataforma). Si orderDate es null cae en createdAt
+//  como fallback.
 // ════════════════════════════════════════════════════════════
 
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
@@ -1070,42 +1053,100 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const { platform, desde, hasta } = req.query;
 
     const match = { userId: new mongoose.Types.ObjectId(req.userId) };
-    if (platform)                         match.platform = platform;
+
+    if (platform) match.platform = platform;
+
+    // ── Filtro de período sobre orderDate (con fallback a createdAt) ──
     if (desde || hasta) {
-      match.createdAt = {};
-      if (desde) match.createdAt.$gte = new Date(desde);
-      if (hasta) match.createdAt.$lte = new Date(hasta);
+      const dateFilter = {};
+      if (desde) dateFilter.$gte = new Date(desde);
+      // hasta: incluir todo el día hasta las 23:59:59
+      if (hasta) {
+        const h = new Date(hasta);
+        h.setHours(23, 59, 59, 999);
+        dateFilter.$lte = h;
+      }
+
+      // Usamos $or para cubrir órdenes con y sin orderDate
+      match.$or = [
+        { orderDate: dateFilter },
+        // Fallback: si no tiene orderDate, usar createdAt
+        { orderDate: { $exists: false }, createdAt: dateFilter },
+        { orderDate: null,               createdAt: dateFilter },
+      ];
     }
 
-    const [totals, byPlatform, recent] = await Promise.all([
+    // ── Fecha de inicio del día de hoy (para métrica "hoy") ──
+    const hoyStart = new Date();
+    hoyStart.setHours(0, 0, 0, 0);
+    const hoyEnd = new Date();
+    hoyEnd.setHours(23, 59, 59, 999);
 
-      // Total facturado multi-plataforma
+    // ── Filtro exclusivo para métrica "hoy" dentro del período ──
+    const matchHoy = {
+      userId:   new mongoose.Types.ObjectId(req.userId),
+      status:   { $in: ['pending_invoice', 'invoiced'] },
+      $or: [
+        { orderDate: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: { $exists: false }, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: null, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+      ],
+    };
+    if (platform) matchHoy.platform = platform;
+
+    const [totals, byPlatform, recent, hoyAgg, pendientesCount] = await Promise.all([
+
+      // Total del período seleccionado (facturas emitidas + pendientes)
       Order.aggregate([
         { $match: { ...match, status: { $in: ['pending_invoice', 'invoiced'] } } },
         { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
       ]),
 
-      // Desglose por plataforma
+      // Total FACTURADO del período (solo invoiced)
       Order.aggregate([
-        { $match: { ...match, status: { $in: ['pending_invoice', 'invoiced'] } } },
-        { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } },
-        { $sort: { total: -1 } },
+        { $match: { ...match, status: 'invoiced' } },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
       ]),
 
-      // Últimas 50 órdenes
+      // Últimas 100 órdenes del período para el chart y bandeja
       Order.find({ ...match })
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .select('platform externalId customerName amount currency status createdAt')
+        .sort({ orderDate: -1, createdAt: -1 })
+        .limit(100)
+        .select('platform externalId customerName amount currency status createdAt orderDate')
         .lean(),
+
+      // Monto de hoy
+      Order.aggregate([
+        { $match: matchHoy },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+
+      // Pendientes de facturar en el período
+      Order.countDocuments({ ...match, status: 'pending_invoice' }),
+    ]);
+
+    // Desglose por plataforma (período)
+    const platformBreakdown = await Order.aggregate([
+      { $match: { ...match, status: { $in: ['pending_invoice', 'invoiced'] } } },
+      { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      { $sort: { total: -1 } },
     ]);
 
     res.json({
-      ok:         true,
-      totalMonto: totals[0]?.total  || 0,
-      totalOrden: totals[0]?.count  || 0,
-      plataformas: byPlatform,
-      ultimas:     recent,
+      ok:            true,
+      // Ingresos totales del período (pagadas + pendientes de facturar)
+      totalMonto:    totals[0]?.total     || 0,
+      totalOrden:    totals[0]?.count     || 0,
+      // Solo las efectivamente FACTURADAS (con CAE) del período
+      facturadoMonto: byPlatform[0]?.total || 0,
+      facturadoCount: byPlatform[0]?.count || 0,
+      // Hoy
+      hoyMonto:      hoyAgg[0]?.total    || 0,
+      hoyCount:      hoyAgg[0]?.count    || 0,
+      // Pendientes
+      pendientes:    pendientesCount      || 0,
+      plataformas:   platformBreakdown,
+      ultimas:       recent,
     });
   } catch (e) {
     console.error('Stats error:', e.message);
@@ -1120,7 +1161,7 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     if (platform) filter.platform = platform;
     if (status)   filter.status   = status;
     const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
+      .sort({ orderDate: -1, createdAt: -1 })
       .limit(Math.min(parseInt(limit), 500))
       .lean();
     res.json({ ok: true, orders });
@@ -1128,7 +1169,7 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  PÁGINAS HTML — Static routing
+//  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
 
 const isLoggedIn = (req) => {
@@ -1146,16 +1187,13 @@ app.get('/dashboard', requireAuth, (req, res) =>
 );
 
 // ════════════════════════════════════════════════════════════
-//  KEEP-ALIVE — Anti cold-start para Render free tier
-//
-//  Cada 10 minutos hace un self-ping para mantener la instancia
-//  caliente y asegurar que los webhooks no sufran cold-start delay.
+//  KEEP-ALIVE
 // ════════════════════════════════════════════════════════════
 
-const PING_INTERVAL = 10 * 60 * 1000; // 10 minutos
+const PING_INTERVAL = 10 * 60 * 1000;
 
 const selfPing = () => {
-  if (!process.env.BASE_URL) return; // no pingear en desarrollo local
+  if (!process.env.BASE_URL) return;
   axios.get(`${BASE}/health`, { timeout: 10_000 })
     .then(() => console.log(`🏓 Keep-alive ping OK [${new Date().toISOString()}]`))
     .catch(err => console.warn(`⚠️  Keep-alive ping failed: ${err.message}`));
@@ -1163,14 +1201,9 @@ const selfPing = () => {
 
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 
-// ════════════════════════════════════════════════════════════
-//  START
-// ════════════════════════════════════════════════════════════
-
 app.listen(PORT, () => {
-  console.log(`🚀 KOI-Factura v3.0 corriendo en puerto ${PORT}`);
+  console.log(`🚀 KOI-Factura v3.1 corriendo en puerto ${PORT}`);
   console.log(`📡 Base URL: ${BASE}`);
-  // Iniciar keep-alive después de 30s (espera que el server esté estable)
   setTimeout(() => {
     selfPing();
     setInterval(selfPing, PING_INTERVAL);

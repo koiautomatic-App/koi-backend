@@ -1260,3 +1260,50 @@ app.listen(PORT, () => {
     setInterval(selfPing, PING_INTERVAL);
   }, 30_000);
 });
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN PANEL — CONSERJERÍA MANUAL (SOLO VOS)
+// ════════════════════════════════════════════════════════════
+
+app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
+  try {
+    // 1. Validar que seas vos (tu email de admin)
+    const admin = await User.findById(req.userId);
+    if (admin.email !== 'tu-email@gmail.com') { // <--- CAMBIÁ ESTO
+      return res.status(403).json({ error: 'No tenés permisos de administrador.' });
+    }
+
+    // 2. Buscar usuarios con trámites pendientes
+    const pendientes = await User.find({ 
+      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso'] } 
+    }).select('nombre apellido email settings').lean();
+
+    // 3. Desencriptar claves para que las puedas copiar y usar en AFIP
+    const lista = pendientes.map(u => ({
+      id: u._id,
+      cliente: `${u.nombre} ${u.apellido}`,
+      email: u.email,
+      cuit: u.settings.cuit,
+      claveFiscal: decrypt(u.settings.arcaPass), // <--- ACÁ OCURRE LA MAGIA
+      status: u.settings.arcaStatus,
+      notas: u.settings.arcaNotas
+    }));
+
+    res.json({ ok: true, total: lista.length, lista });
+  } catch (e) {
+    res.status(500).json({ error: 'Error en el panel de admin' });
+  }
+});
+
+// Endpoint para que vos cambies el estado una vez que termines el trámite
+app.post('/api/admin/update-status', requireAuthAPI, async (req, res) => {
+  const { userId, nuevoStatus, notas } = req.body;
+  // (Agregá acá la misma validación de email de admin que arriba)
+  
+  await User.findByIdAndUpdate(userId, {
+    'settings.arcaStatus': nuevoStatus,
+    'settings.arcaNotas': notas
+  });
+
+  res.json({ ok: true, message: 'Estado actualizado' });
+});

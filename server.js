@@ -545,18 +545,22 @@ app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
 // ── NUEVO: Vincular Carpeta Fiscal (ARCA) ──
 app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
   try {
-    const { cuit, arcaPass } = req.body;
+    // Recibimos arcaClave desde el frontend para ser consistentes
+    const { cuit, arcaClave } = req.body;
 
-    if (!cuit || !arcaPass) {
+    if (!cuit || !arcaClave) {
       return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
     }
 
     const cleanCuit = String(cuit).replace(/\D/g, '');
     
+    // Encriptamos la clave usando tu función encrypt()
+    const encryptedPass = encrypt(arcaClave);
+
     const update = {
       'settings.cuit': cleanCuit,
       'settings.arcaUser': cleanCuit,
-      'settings.arcaPass': encrypt(arcaPass), // Encriptación AES-256-GCM
+      'settings.arcaClave': encryptedPass, // Nombre exacto usado en MongoDB Atlas
       'settings.arcaStatus': 'pendiente',
       'settings.arcaNotas': 'Datos recibidos. Validando vinculación con ARCA...'
     };

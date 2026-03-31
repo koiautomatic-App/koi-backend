@@ -118,7 +118,7 @@ const UserSchema = new mongoose.Schema({
    // --- DENTRO DE USER SCHEMA ---
 // ── NUEVO: Datos para Vinculación Manual ARCA ──
 arcaUser:   { type: String },
-arcaClave:  { type: String }, // <--- CAMBIÁ arcaPass por arcaClave
+arcaClave:  { type: String }, // <--- CAMBIÁ 'arcaPass' por 'arcaClave'
 arcaStatus: { 
   type: String, 
   default: 'sin_vincular', 

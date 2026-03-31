@@ -504,7 +504,7 @@ app.get('/auth/logout', (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — USUARIO
+//  API — USUARIO & CONFIGURACIÓN
 // ════════════════════════════════════════════════════════════
 
 app.get('/api/me', requireAuthAPI, async (req, res) => {
@@ -513,15 +513,24 @@ app.get('/api/me', requireAuthAPI, async (req, res) => {
   res.json({ ok: true, user });
 });
 
+// Settings generales (nombre, avisos, etc)
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
-    const allowed = ['factAuto', 'envioAuto', 'categoria', 'cuit', 'nombre', 'apellido'];
-    const update  = {};
-    for (const key of allowed) {
-      if (req.body[key] !== undefined) {
-        update[`settings.${key}`] = req.body[key];
+    const { nombre, apellido, ...settings } = req.body;
+    const update = {};
+
+    // Campos de la raíz del User
+    if (nombre) update.nombre = nombre;
+    if (apellido) update.apellido = apellido;
+
+    // Campos dentro del objeto settings
+    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit'];
+    for (const key of allowedSettings) {
+      if (settings[key] !== undefined) {
+        update[`settings.${key}`] = settings[key];
       }
     }
+
     const user = await User.findByIdAndUpdate(
       req.userId,
       { $set: update },
@@ -530,6 +539,42 @@ app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
     res.json({ ok: true, user });
   } catch (e) {
     res.status(500).json({ error: 'Error al guardar configuración' });
+  }
+});
+
+// ── NUEVO: Vincular Carpeta Fiscal (ARCA) ──
+app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
+  try {
+    const { cuit, arcaPass } = req.body;
+
+    if (!cuit || !arcaPass) {
+      return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
+    }
+
+    const cleanCuit = String(cuit).replace(/\D/g, '');
+    
+    const update = {
+      'settings.cuit': cleanCuit,
+      'settings.arcaUser': cleanCuit,
+      'settings.arcaPass': encrypt(arcaPass), // Encriptación AES-256-GCM
+      'settings.arcaStatus': 'pendiente',
+      'settings.arcaNotas': 'Datos recibidos. Validando vinculación con ARCA...'
+    };
+
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { $set: update },
+      { new: true, select: '-password' }
+    ).lean();
+
+    res.json({ 
+      ok: true, 
+      message: 'Carpeta fiscal enviada. El proceso puede demorar hasta 24hs.',
+      user 
+    });
+  } catch (e) {
+    console.error('Error ARCA Link:', e.message);
+    res.status(500).json({ error: 'No se pudo procesar la vinculación.' });
   }
 });
 

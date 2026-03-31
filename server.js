@@ -98,7 +98,7 @@ const decrypt = (payload) => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  SCHEMAS
+//  SCHEMAS (Actualizados para Vinculación ARCA)
 // ════════════════════════════════════════════════════════════
 
 const UserSchema = new mongoose.Schema({
@@ -114,6 +114,16 @@ const UserSchema = new mongoose.Schema({
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
     cuit:       { type: String },
+    
+    // ── NUEVO: Datos para Vinculación Manual ARCA ──
+    arcaUser:   { type: String }, // Generalmente el mismo CUIT
+    arcaPass:   { type: String }, // Se guardará ENCRIPTADA con encrypt()
+    arcaStatus: { 
+      type: String, 
+      default: 'sin_vincular', 
+      enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
+    },
+    arcaNotas:  { type: String }, // Por si necesitas decirle algo al usuario (ej: "Clave vencida")
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
@@ -133,9 +143,9 @@ const User = mongoose.model('User', UserSchema);
 const IntegrationSchema = new mongoose.Schema({
   userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   platform: {
-    type:     String,
+    type:      String,
     required: true,
-    enum:     ['woocommerce', 'tiendanube', 'mercadolibre', 'empretienda', 'rappi', 'vtex', 'shopify'],
+    enum:      ['woocommerce', 'tiendanube', 'mercadolibre', 'empretienda', 'rappi', 'vtex', 'shopify'],
   },
   storeId:   { type: String, required: true },
   storeName: { type: String },
@@ -157,7 +167,6 @@ const IntegrationSchema = new mongoose.Schema({
   lastSyncAt:  { type: Date },
   syncCursor:  { type: String },
   errorLog:    { type: String },
-  // ── NUEVO: marca si ya se hizo el sync histórico inicial ──
   initialSyncDone: { type: Boolean, default: false },
   updatedAt:   { type: Date, default: Date.now },
   createdAt:   { type: Date, default: Date.now },
@@ -165,6 +174,7 @@ const IntegrationSchema = new mongoose.Schema({
 
 IntegrationSchema.index({ userId: 1, platform: 1, storeId: 1 }, { unique: true });
 
+// Estos métodos son clave: usan la función encrypt/decrypt que ya tenés en el server
 IntegrationSchema.methods.setKey = function(field, value) {
   this.credentials = { ...this.credentials, [field]: encrypt(value) };
 };
@@ -175,22 +185,20 @@ IntegrationSchema.methods.getKey = function(field) {
 const Integration = mongoose.model('Integration', IntegrationSchema);
 
 const OrderSchema = new mongoose.Schema({
-  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId:         { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
-  platform:      { type: String, required: true },
-  externalId:    { type: String, required: true },
-  customerName:  { type: String, default: '' },
-  customerEmail: { type: String, default: '' },
-  customerDoc:   { type: String, default: '0' },
-  amount:        { type: Number, required: true },
-  currency:      { type: String, default: 'ARS' },
+  platform:       { type: String, required: true },
+  externalId:     { type: String, required: true },
+  customerName:   { type: String, default: '' },
+  customerEmail:  { type: String, default: '' },
+  customerDoc:    { type: String, default: '0' },
+  amount:         { type: Number, required: true },
+  currency:       { type: String, default: 'ARS' },
   status: {
     type:    String,
     default: 'pending_invoice',
     enum:    ['pending_invoice', 'invoiced', 'error_data', 'error_afip', 'skipped'],
   },
-  // ── NUEVO: fecha original de la venta en la plataforma ──
-  // Permite filtrar correctamente por período incluso en sincronizaciones futuras
   orderDate:  { type: Date },
   caeNumber:  { type: String },
   caeExpiry:  { type: Date },
@@ -199,12 +207,10 @@ const OrderSchema = new mongoose.Schema({
 }, { timestamps: false });
 
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
-// Índice optimizado para queries de stats con rango de fecha
 OrderSchema.index({ userId: 1, platform: 1, orderDate: -1 });
 OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 
 const Order = mongoose.model('Order', OrderSchema);
-
 // ════════════════════════════════════════════════════════════
 //  NORMALIZER
 // ════════════════════════════════════════════════════════════

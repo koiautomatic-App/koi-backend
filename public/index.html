@@ -3030,43 +3030,63 @@ function _poblarSelectMes() {
   sel.innerHTML = '<option value="">Todos los meses</option>' + opts;
 }
 
-/* ── ARCA SYNC ──────────────────────────────────────── */
-function iniciarSyncArca() {
+/* ── ARCA SYNC (CORREGIDO) ──────────────────────────────────────── */
+async function iniciarSyncArca() {
   const cuit  = document.getElementById('arcaCuit').value.trim();
   const clave = document.getElementById('arcaClave').value.trim();
-  if (!cuit || !clave) { toast('Ingresá CUIT y Clave Fiscal', 'warn'); return; }
-
-  document.getElementById('arcaProgress').style.display = 'block';
-  document.getElementById('btnArcaSync').disabled = true;
-
-  const steps = ['astep1','astep2','astep3','astep4','astep5'];
-  const labels = ['Validando CUIT…','Autenticando con AFIP…','Obteniendo certificado…','Configurando punto de venta…','¡Listo!'];
-  let current = 0;
-
-  function nextStep() {
-    if (current > 0) {
-      document.getElementById(steps[current-1]).classList.remove('active');
-      document.getElementById(steps[current-1]).classList.add('done');
-      const dot = document.getElementById(steps[current-1]).querySelector('.cfg-step-dot');
-      if (dot) dot.style.background = 'var(--green)';
-    }
-    if (current >= steps.length) {
-      document.getElementById('arcaProgressTitle').textContent = '¡Sincronización completada!';
-      document.getElementById('arcaSpinner').style.display = 'none';
-      document.getElementById('arcaStatusBadge').innerHTML = '<div class="status-dot" style="background:var(--green);box-shadow:0 0 6px var(--green)"></div><span style="color:var(--green)">Activo</span>';
-      toast('✅ ARCA sincronizado correctamente', 'success');
-      return;
-    }
-    document.getElementById(steps[current]).classList.add('active');
-    document.getElementById('arcaProgressTitle').textContent = labels[current];
-    current++;
-    setTimeout(nextStep, 900 + Math.random() * 400);
+  
+  if (!cuit || !clave) { 
+    toast('Ingresá CUIT y Clave Fiscal', 'warn'); 
+    return; 
   }
 
-  // En producción aquí iría: fetch('/api/arca/sync', { method:'POST', body:... })
-  nextStep();
-}
+  // --- PARTE REAL: Enviamos los datos al servidor ---
+  try {
+    // Usamos 'arcaClave' para que coincida con lo que espera el server
+    const res = await api.patch('/api/me/arca', { 
+        cuit: cuit, 
+        arcaClave: clave 
+    });
 
+    if (!res.ok) {
+        throw new Error(res.error || 'Error al conectar con el servidor');
+    }
+
+    // --- PARTE VISUAL: Solo si el servidor respondió OK, mostramos los pasos ---
+    document.getElementById('arcaProgress').style.display = 'block';
+    document.getElementById('btnArcaSync').disabled = true;
+
+    const steps = ['astep1','astep2','astep3','astep4','astep5'];
+    const labels = ['Validando CUIT…','Autenticando con AFIP…','Obteniendo certificado…','Configurando punto de venta…','¡Listo!'];
+    let current = 0;
+
+    function nextStep() {
+      if (current > 0) {
+        document.getElementById(steps[current-1]).classList.remove('active');
+        document.getElementById(steps[current-1]).classList.add('done');
+        const dot = document.getElementById(steps[current-1]).querySelector('.cfg-step-dot');
+        if (dot) dot.style.background = 'var(--green)';
+      }
+      if (current >= steps.length) {
+        document.getElementById('arcaProgressTitle').textContent = '¡Sincronización completada!';
+        document.getElementById('arcaSpinner').style.display = 'none';
+        // Lo dejamos en "Pendiente" (Naranja) porque vos tenés que validarlo manual
+        document.getElementById('arcaStatusBadge').innerHTML = '<div class="status-dot" style="background:#f59e0b;box-shadow:0 0 6px #f59e0b"></div><span style="color:#f59e0b">Verificando...</span>';
+        toast('✅ Datos enviados. Validando con ARCA...', 'success');
+        return;
+      }
+      document.getElementById(steps[current]).classList.add('active');
+      document.getElementById('arcaProgressTitle').textContent = labels[current];
+      current++;
+      setTimeout(nextStep, 800); 
+    }
+
+    nextStep();
+
+  } catch (error) {
+    toast('❌ Error: ' + error.message, 'error');
+  }
+}
 /* ── TOGGLE INTEGRACIÓN ──────────────────────────────── */
 function toggleIntegracion(platform, enabled) {
   // Actualizar estado visual de la card

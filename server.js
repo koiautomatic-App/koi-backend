@@ -545,7 +545,6 @@ app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
 // ── NUEVO: Vincular Carpeta Fiscal (ARCA) ──
 app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
   try {
-    // Recibimos arcaClave desde el frontend para ser consistentes
     const { cuit, arcaClave } = req.body;
 
     if (!cuit || !arcaClave) {
@@ -553,14 +552,12 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
     }
 
     const cleanCuit = String(cuit).replace(/\D/g, '');
-    
-    // Encriptamos la clave usando tu función encrypt()
     const encryptedPass = encrypt(arcaClave);
 
     const update = {
       'settings.cuit': cleanCuit,
       'settings.arcaUser': cleanCuit,
-      'settings.arcaClave': encryptedPass, // Nombre exacto usado en MongoDB Atlas
+      'settings.arcaClave': encryptedPass, 
       'settings.arcaStatus': 'pendiente',
       'settings.arcaNotas': 'Datos recibidos. Validando vinculación con ARCA...'
     };
@@ -581,7 +578,6 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'No se pudo procesar la vinculación.' });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════

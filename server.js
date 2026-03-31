@@ -115,16 +115,16 @@ const UserSchema = new mongoose.Schema({
     categoria:  { type: String, default: 'C' },
     cuit:       { type: String },
     
-    // ── NUEVO: Datos para Vinculación Manual ARCA ──
-    arcaUser:   { type: String }, // Generalmente el mismo CUIT
-    arcaPass:   { type: String }, // Se guardará ENCRIPTADA con encrypt()
-    arcaStatus: { 
-      type: String, 
-      default: 'sin_vincular', 
-      enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
-    },
-    arcaNotas:  { type: String }, // Por si necesitas decirle algo al usuario (ej: "Clave vencida")
-  },
+   // --- DENTRO DE USER SCHEMA ---
+// ── NUEVO: Datos para Vinculación Manual ARCA ──
+arcaUser:   { type: String },
+arcaClave:  { type: String }, // <--- CAMBIÁ arcaPass por arcaClave
+arcaStatus: { 
+  type: String, 
+  default: 'sin_vincular', 
+  enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
+},
+arcaNotas:  { type: String },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 }, { timestamps: false });

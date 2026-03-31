@@ -1269,8 +1269,7 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
   try {
     // 1. Validar que seas vos (tu email de admin)
     const admin = await User.findById(req.userId);
-    if (admin.email !== 'koi.automatic@gmail.com
-') { // <--- CAMBIÁ ESTO
+    if (admin.email !== 'koi.automatic@gmail.com') { // <--- CAMBIÁ ESTO
       return res.status(403).json({ error: 'No tenés permisos de administrador.' });
     }
 

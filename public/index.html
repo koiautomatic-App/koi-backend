@@ -3989,5 +3989,46 @@ function renderActivityMap(ventas) {
   // ... sigue tu código de creación de cuadraditos ...
 }  
 </script>
+<script>
+// FUNCION PARA GUARDAR: Se dispara cuando tocas el switch
+async function saveToggle(key, value) {
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [key]: value })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            console.log(`✅ ${key} guardado: ${value}`);
+        }
+    } catch (err) {
+        console.error("Error al guardar en MongoDB:", err);
+    }
+}
+
+// FUNCION PARA ABRIR Y SINCRONIZAR: 
+// Usala en el botón que abre el panel de configuración
+async function abrirConfiguracion() {
+    try {
+        // 1. Le pedimos a Mongo los valores actuales
+        const res = await fetch('/api/me');
+        const data = await res.json();
+        
+        if (data.ok && data.user.settings) {
+            const s = data.user.settings;
+            // 2. Ponemos los switches en su lugar real (true o false)
+            document.getElementById('sw-fact-auto').checked = !!s.factAuto;
+            document.getElementById('sw-envio-auto').checked = !!s.envioAuto;
+        }
+
+        // 3. Mostramos el panel (Tus clases de CSS)
+        document.querySelector('.cfg-panel').classList.add('open');
+        document.querySelector('.cfg-overlay').classList.add('open');
+    } catch (err) {
+        console.error("Error al sincronizar el panel:", err);
+    }
+}
+</script>  
 </body>
 </html>

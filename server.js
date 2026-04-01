@@ -1277,12 +1277,13 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
       return res.status(403).json({ error: 'No tenés permisos de administrador.' });
     }
 
-    // 2. Buscar usuarios con trámites pendientes
+    // 2. Buscar usuarios con trámites o ya vinculados
+    // Incluimos 'vinculado' para poder gestionar el Punto de Venta después del trámite
     const pendientes = await User.find({ 
-      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso'] } 
+      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso', 'vinculado'] } 
     }).select('nombre apellido email settings').lean();
 
-    // 3. Desencriptar claves para que las puedas copiar y usar en AFIP
+    // 3. Mapear la lista incluyendo el Punto de Venta y desencriptando la clave
     const lista = pendientes.map(u => {
       const s = u.settings || {};
       return {
@@ -1290,9 +1291,10 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
         cliente: `${u.nombre} ${u.apellido}`,
         email: u.email,
         cuit: s.cuit || 'N/A',
-        // Cambiado de arcaPass a arcaClave para coincidir con Atlas
+        // Usamos decrypt para que puedas ver la clave y entrar a ARCA si es necesario
         claveFiscal: s.arcaClave ? decrypt(s.arcaClave) : 'Sin clave', 
         status: s.arcaStatus || 'pendiente',
+        puntoVenta: s.arcaPtoVta || 1, // <--- Se muestra en tu tabla de Admin
         notas: s.arcaNotas || ''
       };
     });
@@ -1304,10 +1306,10 @@ app.get('/api/admin/pendientes', requireAuthAPI, async (req, res) => {
   }
 });
 
-// Endpoint para que vos cambies el estado una vez que termines el trámite
+// Endpoint actualizado para procesar la vinculación con Punto de Venta
 app.post('/api/admin/update-status', requireAuthAPI, async (req, res) => {
   try {
-    const { userId, nuevoStatus, notas } = req.body;
+    const { userId, nuevoStatus, notas, puntoVenta } = req.body;
 
     // Validamos permisos nuevamente
     const admin = await User.findById(req.userId);
@@ -1315,14 +1317,19 @@ app.post('/api/admin/update-status', requireAuthAPI, async (req, res) => {
       return res.status(403).json({ error: 'No tenés permisos.' });
     }
 
+    // Actualizamos el estado, las notas y el PUNTO DE VENTA específico
     await User.findByIdAndUpdate(userId, {
       $set: {
-        'settings.arcaStatus': nuevoStatus, // 'vinculado' o 'rechazado'
-        'settings.arcaNotas': notas
+        'settings.arcaStatus': nuevoStatus, // ej: 'vinculado'
+        'settings.arcaNotas': notas,
+        'settings.arcaPtoVta': Number(puntoVenta) || 1 // ej: 3
       }
     });
 
-    res.json({ ok: true, message: 'Estado actualizado correctamente' });
+    res.json({ 
+      ok: true, 
+      message: `Estado actualizado a ${nuevoStatus}. Punto de Venta configurado: ${puntoVenta || 1}` 
+    });
   } catch (e) {
     console.error('Error Admin Update:', e);
     res.status(500).json({ error: 'No se pudo actualizar el estado.' });

@@ -3972,9 +3972,11 @@ function renderActivityMap(ventas) {
 }  
 </script>
 <script>
-// 1. Función que guarda los cambios (conectada a tus onchange="guardarSwitch")
+// 1. GUARDAR: Esta función envía el dato real a MongoDB
 async function guardarSwitch(key, value) {
+    // Buscamos el cartelito de "Guardado" que tenés en el HTML
     const statusDiv = document.getElementById('cfgAutoStatus2');
+    
     try {
         const res = await fetch('/api/me/settings', {
             method: 'PATCH',
@@ -3983,43 +3985,62 @@ async function guardarSwitch(key, value) {
         });
 
         if (res.ok) {
-            // Muestra el badge de "Guardado" verde que ya tenés en el HTML
+            // Si el servidor respondió OK, mostramos el badge verde
             if (statusDiv) {
                 statusDiv.style.display = 'block';
                 setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
             }
-            console.log(`✅ ${key} guardado correctamente`);
+            console.log(`✅ Propiedad ${key} guardada como: ${value}`);
+        } else {
+            console.error("Error al guardar: El servidor no respondió OK");
         }
     } catch (err) {
-        console.error("Error al guardar:", err);
+        console.error("Error de conexión con el servidor:", err);
     }
 }
 
-// 2. Función para abrir el panel y que los botones NO se reseteen
+// 2. ABRIR Y SINCRONIZAR: Esta función trae la verdad de la DB
 async function abrirConfiguracion() {
     try {
+        // Pedimos los datos del usuario a la API
         const res = await fetch('/api/me');
         const data = await res.json();
         
         if (data.ok && data.user.settings) {
             const s = data.user.settings;
-            // Sincronizamos con los IDs de tu HTML actual
-            document.getElementById('switchFactAuto2').checked = (s.factAuto !== false);
-            document.getElementById('switchEnvioAuto2').checked = (s.envioAuto !== false);
-        }
+            
+            // Buscamos los inputs por los IDs que tenés en el HTML
+            const inputFact = document.getElementById('switchFactAuto2');
+            const inputEnvio = document.getElementById('switchEnvioAuto2');
 
-        // Abrimos el panel visualmente
-        document.querySelector('.cfg-panel').classList.add('open');
-        document.querySelector('.cfg-overlay').classList.add('open');
+            // Sincronizamos: Si en la DB es true, se marca. Si es false, se desmarca.
+            if (inputFact) inputFact.checked = (s.factAuto !== false);
+            if (inputEnvio) inputEnvio.checked = (s.envioAuto !== false);
+            
+            console.log("Sincronización con Atlas completada");
+        }
     } catch (err) {
-        console.error("Error al sincronizar el panel:", err);
+        console.error("Error al sincronizar con el servidor:", err);
+    }
+
+    // Lógica para mostrar el panel (clases de tu CSS)
+    const panel = document.getElementById('cfgPanel');
+    const overlay = document.getElementById('cfgOverlay');
+    
+    if (panel && overlay) {
+        panel.classList.add('open');
+        overlay.classList.add('open');
+        document.body.style.overflow = 'hidden';
     }
 }
 
-// 3. Función para cerrar el panel
+// 3. CERRAR
 function cerrarConfiguracion() {
-    document.querySelector('.cfg-panel').classList.remove('open');
-    document.querySelector('.cfg-overlay').classList.remove('open');
+    const panel = document.getElementById('cfgPanel');
+    const overlay = document.getElementById('cfgOverlay');
+    if (panel) panel.classList.remove('open');
+    if (overlay) overlay.classList.remove('open');
+    document.body.style.overflow = '';
 }
 </script>
 </body>

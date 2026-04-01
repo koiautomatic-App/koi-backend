@@ -3972,78 +3972,94 @@ function renderActivityMap(ventas) {
 }  
 </script>
 <script>
-// 1. FUNCIÓN PARA ACTUALIZAR EL DASHBOARD (EL BADGE VERDE)
-function actualizarEstadoDashboard(user) {
-    const s = user.settings;
-    const statusBadge = document.getElementById('statusBadge');
-    
-    if (statusBadge && s && s.arcaStatus === 'vinculado') {
-        statusBadge.innerText = 'Conectado';
-        statusBadge.style.backgroundColor = '#10b981'; // Verde
-        console.log("🟢 Dashboard: Estado vinculado");
-    } else if (statusBadge) {
-        statusBadge.innerText = 'Sin Conexión';
-        statusBadge.style.backgroundColor = '#ef4444'; // Rojo
+// 1. FUNCIÓN PARA ACTUALIZAR LA VISTA DE ARCA (EL BADGE Y CAMPOS)
+function actualizarEstadoARCA(user) {
+    const s = user.settings || {};
+    const statusBadge = document.getElementById('arcaStatusBadge');
+    const inputCuit = document.getElementById('arcaCuit');
+    const inputClave = document.getElementById('arcaClave');
+    const btnSync = document.getElementById('btnArcaSync');
+
+    if (s.arcaStatus === 'vinculado') {
+        // Ponemos el badge en verde
+        if (statusBadge) {
+            statusBadge.innerHTML = '<div class="status-dot active" style="background:#10b981"></div><span style="color:#10b981">Conectado</span>';
+        }
+        
+        // Bloqueamos los inputs y el botón para que no se pisen datos por error
+        if (inputCuit) { 
+            inputCuit.value = s.cuit || ""; 
+            inputCuit.disabled = true; 
+            inputCuit.style.opacity = "0.6";
+        }
+        if (inputClave) { 
+            inputClave.placeholder = "••••••••••••"; 
+            inputClave.disabled = true; 
+            inputClave.style.opacity = "0.6";
+        }
+        if (btnSync) {
+            btnSync.innerHTML = '<span class="material-icons" style="font-size:16px!important">check_circle</span> Vinculado correctamente';
+            btnSync.style.background = "rgba(16, 185, 129, 0.1)";
+            btnSync.style.color = "#10b981";
+            btnSync.disabled = true;
+        }
+        console.log("🟢 KOI: Estado ARCA detectado como VINCULADO.");
+    } else {
+        // Estado por defecto si no hay conexión
+        if (statusBadge) {
+            statusBadge.innerHTML = '<div class="status-dot offline" style="background:#ef4444"></div><span style="color:#ef4444">Sin Conexión</span>';
+        }
     }
 }
 
-// 2. GUARDAR SWITCHES
-async function guardarSwitch(key, value) {
-    const statusDiv = document.getElementById('cfgAutoStatus2');
-    try {
-        const res = await fetch('/api/me/settings', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ [key]: value })
-        });
-        if (res.ok) {
-            if (statusDiv) {
-                statusDiv.style.display = 'block';
-                setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
-            }
-        }
-    } catch (err) { console.error("Error al guardar:", err); }
-}
-
-// 3. ABRIR PANEL DE CONFIGURACIÓN (CON SINCRONIZACIÓN)
-async function abrirConfiguracion() {
+// 2. CARGA INICIAL: Se ejecuta apenas abrís la página
+window.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/api/me');
         const data = await res.json();
         
-        if (data.ok && data.user.settings) {
-            const s = data.user.settings;
+        if (data.ok && data.user) {
+            // Ejecutamos la actualización con los datos de Atlas
+            actualizarEstadoARCA(data.user);
             
-            // Sincroniza los switches
-            const inputFact = document.getElementById('switchFactAuto2');
-            const inputEnvio = document.getElementById('switchEnvioAuto2');
-            if (inputFact) inputFact.checked = (s.factAuto !== false);
-            if (inputEnvio) inputEnvio.checked = (s.envioAuto !== false);
-            
-            // ACTUALIZA EL DASHBOARD DE PASO
-            actualizarEstadoDashboard(data.user);
+            // Si tenés la función de los switches de ayer, llamala acá también:
+            if (typeof actualizarEstadoDashboard === 'function') {
+                actualizarEstadoDashboard(data.user);
+            }
         }
-    } catch (err) { console.error("Error al sincronizar:", err); }
-
-    document.getElementById('cfgPanel')?.classList.add('open');
-    document.getElementById('cfgOverlay')?.classList.add('open');
-    document.body.style.overflow = 'hidden';
-}
-
-function cerrarConfiguracion() {
-    document.getElementById('cfgPanel')?.classList.remove('open');
-    document.getElementById('cfgOverlay')?.classList.remove('open');
-    document.body.style.overflow = '';
-}
-
-// 4. LÓGICA AUTOMÁTICA AL CARGAR LA PÁGINA
-window.addEventListener('DOMContentLoaded', async () => {
-    const res = await fetch('/api/me');
-    const data = await res.json();
-    if (data.ok) {
-        actualizarEstadoDashboard(data.user);
+    } catch (err) {
+        console.error("Error al conectar con KOI Server:", err);
     }
 });
+
+// 3. FUNCIÓN PARA MOSTRAR/OCULTAR CLAVE (La que tenés en el onclick del ojo)
+function toggleClave() {
+    const input = document.getElementById('arcaClave');
+    const icon = document.getElementById('cfgEyeIcon');
+    if (input.type === "password") {
+        input.type = "text";
+        icon.innerText = "visibility_off";
+    } else {
+        input.type = "password";
+        icon.innerText = "visibility";
+    }
+}
+
+// 4. GUARDAR CONFIGURACIÓN (Switches)
+async function guardarSwitch(key, value) {
+    try {
+        await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [key]: value })
+        });
+        const statusDiv = document.getElementById('cfgAutoStatus2');
+        if (statusDiv) {
+            statusDiv.style.display = 'block';
+            setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
+        }
+    } catch (err) { console.error("Error al guardar:", err); }
+}
 </script>
 </body>
 </html>

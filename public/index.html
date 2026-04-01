@@ -3972,76 +3972,78 @@ function renderActivityMap(ventas) {
 }  
 </script>
 <script>
-// 1. GUARDAR: Esta función envía el dato real a MongoDB
-async function guardarSwitch(key, value) {
-    // Buscamos el cartelito de "Guardado" que tenés en el HTML
-    const statusDiv = document.getElementById('cfgAutoStatus2');
+// 1. FUNCIÓN PARA ACTUALIZAR EL DASHBOARD (EL BADGE VERDE)
+function actualizarEstadoDashboard(user) {
+    const s = user.settings;
+    const statusBadge = document.getElementById('statusBadge');
     
+    if (statusBadge && s && s.arcaStatus === 'vinculado') {
+        statusBadge.innerText = 'Conectado';
+        statusBadge.style.backgroundColor = '#10b981'; // Verde
+        console.log("🟢 Dashboard: Estado vinculado");
+    } else if (statusBadge) {
+        statusBadge.innerText = 'Sin Conexión';
+        statusBadge.style.backgroundColor = '#ef4444'; // Rojo
+    }
+}
+
+// 2. GUARDAR SWITCHES
+async function guardarSwitch(key, value) {
+    const statusDiv = document.getElementById('cfgAutoStatus2');
     try {
         const res = await fetch('/api/me/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [key]: value })
         });
-
         if (res.ok) {
-            // Si el servidor respondió OK, mostramos el badge verde
             if (statusDiv) {
                 statusDiv.style.display = 'block';
                 setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
             }
-            console.log(`✅ Propiedad ${key} guardada como: ${value}`);
-        } else {
-            console.error("Error al guardar: El servidor no respondió OK");
         }
-    } catch (err) {
-        console.error("Error de conexión con el servidor:", err);
-    }
+    } catch (err) { console.error("Error al guardar:", err); }
 }
 
-// 2. ABRIR Y SINCRONIZAR: Esta función trae la verdad de la DB
+// 3. ABRIR PANEL DE CONFIGURACIÓN (CON SINCRONIZACIÓN)
 async function abrirConfiguracion() {
     try {
-        // Pedimos los datos del usuario a la API
         const res = await fetch('/api/me');
         const data = await res.json();
         
         if (data.ok && data.user.settings) {
             const s = data.user.settings;
             
-            // Buscamos los inputs por los IDs que tenés en el HTML
+            // Sincroniza los switches
             const inputFact = document.getElementById('switchFactAuto2');
             const inputEnvio = document.getElementById('switchEnvioAuto2');
-
-            // Sincronizamos: Si en la DB es true, se marca. Si es false, se desmarca.
             if (inputFact) inputFact.checked = (s.factAuto !== false);
             if (inputEnvio) inputEnvio.checked = (s.envioAuto !== false);
             
-            console.log("Sincronización con Atlas completada");
+            // ACTUALIZA EL DASHBOARD DE PASO
+            actualizarEstadoDashboard(data.user);
         }
-    } catch (err) {
-        console.error("Error al sincronizar con el servidor:", err);
-    }
+    } catch (err) { console.error("Error al sincronizar:", err); }
 
-    // Lógica para mostrar el panel (clases de tu CSS)
-    const panel = document.getElementById('cfgPanel');
-    const overlay = document.getElementById('cfgOverlay');
-    
-    if (panel && overlay) {
-        panel.classList.add('open');
-        overlay.classList.add('open');
-        document.body.style.overflow = 'hidden';
-    }
+    document.getElementById('cfgPanel')?.classList.add('open');
+    document.getElementById('cfgOverlay')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
 }
 
-// 3. CERRAR
 function cerrarConfiguracion() {
-    const panel = document.getElementById('cfgPanel');
-    const overlay = document.getElementById('cfgOverlay');
-    if (panel) panel.classList.remove('open');
-    if (overlay) overlay.classList.remove('open');
+    document.getElementById('cfgPanel')?.classList.remove('open');
+    document.getElementById('cfgOverlay')?.classList.remove('open');
     document.body.style.overflow = '';
 }
+
+// 4. LÓGICA AUTOMÁTICA AL CARGAR LA PÁGINA
+window.addEventListener('DOMContentLoaded', async () => {
+    const res = await fetch('/api/me');
+    const data = await res.json();
+    if (data.ok) {
+        actualizarEstadoDashboard(data.user);
+    }
+});
 </script>
 </body>
 </html>

@@ -3972,7 +3972,7 @@ function renderActivityMap(ventas) {
 }  
 </script>
 <script>
-// 1. FUNCIÓN PARA ACTUALIZAR LA VISTA DE ARCA (EL BADGE Y CAMPOS)
+// 1. FUNCIÓN PARA ACTUALIZAR LA VISTA DE ARCA (BADGE, CAMPOS Y BOTONES DE VENTA)
 function actualizarEstadoARCA(user) {
     const s = user.settings || {};
     const statusBadge = document.getElementById('arcaStatusBadge');
@@ -3981,12 +3981,11 @@ function actualizarEstadoARCA(user) {
     const btnSync = document.getElementById('btnArcaSync');
 
     if (s.arcaStatus === 'vinculado') {
-        // Ponemos el badge en verde
+        // --- PARTE A: LA SECCIÓN DE ARCA (Lo que ya funciona) ---
         if (statusBadge) {
             statusBadge.innerHTML = '<div class="status-dot active" style="background:#10b981"></div><span style="color:#10b981">Conectado</span>';
         }
         
-        // Bloqueamos los inputs y el botón para que no se pisen datos por error
         if (inputCuit) { 
             inputCuit.value = s.cuit || ""; 
             inputCuit.disabled = true; 
@@ -4003,26 +4002,45 @@ function actualizarEstadoARCA(user) {
             btnSync.style.color = "#10b981";
             btnSync.disabled = true;
         }
-        console.log("🟢 KOI: Estado ARCA detectado como VINCULADO.");
+
+        // --- PARTE B: HABILITAR BOTONES EN LA LISTA DE VENTAS (Lo que faltaba) ---
+        // Buscamos todos los botones que tengan el tooltip de "requiere credenciales"
+        const botonesBloqueados = document.querySelectorAll('[title*="credenciales"], .btn-cae, .btn-emitir');
+        
+        botonesBloqueados.forEach(btn => {
+            btn.disabled = false;
+            btn.style.opacity = "1";
+            btn.style.cursor = "pointer";
+            btn.setAttribute('title', 'Emitir Factura Electrónica'); // Cambiamos el texto del cartelito
+            
+            // Si el botón tiene un icono de alerta (warning), lo cambiamos por un rayito o play
+            const icon = btn.querySelector('.material-icons');
+            if (icon && (icon.innerText === 'warning' || icon.innerText === 'priority_high')) {
+                icon.innerText = 'bolt'; 
+                icon.style.color = '#10b981';
+            }
+        });
+
+        console.log("🟢 KOI: Estado ARCA Vinculado y botones de venta habilitados.");
     } else {
-        // Estado por defecto si no hay conexión
         if (statusBadge) {
             statusBadge.innerHTML = '<div class="status-dot offline" style="background:#ef4444"></div><span style="color:#ef4444">Sin Conexión</span>';
         }
     }
 }
 
-// 2. CARGA INICIAL: Se ejecuta apenas abrís la página
+// 2. CARGA INICIAL
 window.addEventListener('DOMContentLoaded', async () => {
     try {
         const res = await fetch('/api/me');
         const data = await res.json();
         
         if (data.ok && data.user) {
-            // Ejecutamos la actualización con los datos de Atlas
+            // Guardamos el usuario en una variable global por si la necesitamos después
+            window.currentUser = data.user;
+            
             actualizarEstadoARCA(data.user);
             
-            // Si tenés la función de los switches de ayer, llamala acá también:
             if (typeof actualizarEstadoDashboard === 'function') {
                 actualizarEstadoDashboard(data.user);
             }
@@ -4032,7 +4050,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     }
 });
 
-// 3. FUNCIÓN PARA MOSTRAR/OCULTAR CLAVE (La que tenés en el onclick del ojo)
+// 3. FUNCIÓN TOGGLE CLAVE
 function toggleClave() {
     const input = document.getElementById('arcaClave');
     const icon = document.getElementById('cfgEyeIcon');
@@ -4045,7 +4063,7 @@ function toggleClave() {
     }
 }
 
-// 4. GUARDAR CONFIGURACIÓN (Switches)
+// 4. GUARDAR CONFIGURACIÓN
 async function guardarSwitch(key, value) {
     try {
         await fetch('/api/me/settings', {
@@ -4060,6 +4078,17 @@ async function guardarSwitch(key, value) {
         }
     } catch (err) { console.error("Error al guardar:", err); }
 }
+
+// 5. REFUERZO: Por si la tabla de ventas tarda en cargar
+setInterval(() => {
+    if (window.currentUser && window.currentUser.settings && window.currentUser.settings.arcaStatus === 'vinculado') {
+        document.querySelectorAll('[title*="credenciales"]').forEach(el => {
+            el.setAttribute('title', 'Emitir Factura Electrónica');
+            el.disabled = false;
+            el.style.opacity = "1";
+        });
+    }
+}, 3000);
 </script>
 </body>
 </html>

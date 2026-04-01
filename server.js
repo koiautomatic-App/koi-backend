@@ -98,7 +98,7 @@ const decrypt = (payload) => {
 };
 
 // ════════════════════════════════════════════════════════════
-//  SCHEMAS (Actualizados para Vinculación ARCA)
+//  SCHEMAS (Corregido y Optimizado para Puntos de Venta)
 // ════════════════════════════════════════════════════════════
 
 const UserSchema = new mongoose.Schema({
@@ -109,22 +109,25 @@ const UserSchema = new mongoose.Schema({
   googleId:     { type: String, sparse: true },
   avatar:       { type: String },
   plan:         { type: String, default: 'free', enum: ['free', 'pro'] },
+  
   settings: {
     factAuto:   { type: Boolean, default: true },
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
     cuit:       { type: String },
     
-   // --- DENTRO DE USER SCHEMA ---
-// ── NUEVO: Datos para Vinculación Manual ARCA ──
-arcaUser:   { type: String },
-arcaClave:  { type: String }, // <--- CAMBIÁ 'arcaPass' por 'arcaClave'
-arcaStatus: { 
-  type: String, 
-  default: 'sin_vincular', 
-  enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
-},
-arcaNotas:  { type: String },}, // <--- ESTA LLAVE CIERRA 'settings' (Faltaba aquí o estaba mal puesta)
+    // --- DATOS DE VINCULACIÓN ARCA ---
+    arcaUser:   { type: String },
+    arcaClave:  { type: String }, 
+    arcaPtoVta: { type: Number, default: 1 }, // <--- AGREGADO: Aquí guardaremos el "3" de María
+    arcaStatus: { 
+      type: String, 
+      default: 'sin_vincular', 
+      enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'] 
+    },
+    arcaNotas:  { type: String }
+  }, // <--- LLAVE DE CIERRE DE SETTINGS (Corregida)
+
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 }, { timestamps: false });
@@ -134,6 +137,7 @@ UserSchema.pre('save', async function(next) {
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
+
 UserSchema.methods.checkPassword = function(plain) {
   return bcrypt.compare(plain, this.password);
 };

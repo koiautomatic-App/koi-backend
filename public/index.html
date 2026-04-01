@@ -3870,24 +3870,6 @@ function conmutarEstado(){
   }
 }
 
-function abrirConfiguracion(){
-  const panel   = document.getElementById('cfgPanel');
-  const overlay = document.getElementById('cfgOverlay');
-  // Forzar altura al documento completo (necesario dentro del iframe de GAS)
-  const h = Math.max(document.body.scrollHeight, document.documentElement.scrollHeight, window.innerHeight || 750);
-  overlay.style.height = h + 'px';
-  panel.style.height   = h + 'px';
-  panel.classList.add('open');
-  overlay.classList.add('open');
-  document.body.style.overflow = 'hidden';
-}
-
-function cerrarConfiguracion(){
-  document.getElementById('cfgPanel').classList.remove('open');
-  document.getElementById('cfgOverlay').classList.remove('open');
-  document.body.style.overflow = '';
-}
-
 function abrirCalendario(){
   toast('Abriendo calendario…','info');
   gasRun('abrirCalendario',null,

@@ -3990,45 +3990,55 @@ function renderActivityMap(ventas) {
 }  
 </script>
 <script>
-// FUNCION PARA GUARDAR: Se dispara cuando tocas el switch
-async function saveToggle(key, value) {
+// 1. Función que guarda los cambios (conectada a tus onchange="guardarSwitch")
+async function guardarSwitch(key, value) {
+    const statusDiv = document.getElementById('cfgAutoStatus2');
     try {
         const res = await fetch('/api/me/settings', {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [key]: value })
         });
-        const data = await res.json();
-        if (data.ok) {
-            console.log(`✅ ${key} guardado: ${value}`);
+
+        if (res.ok) {
+            // Muestra el badge de "Guardado" verde que ya tenés en el HTML
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 2000);
+            }
+            console.log(`✅ ${key} guardado correctamente`);
         }
     } catch (err) {
-        console.error("Error al guardar en MongoDB:", err);
+        console.error("Error al guardar:", err);
     }
 }
 
-// FUNCION PARA ABRIR Y SINCRONIZAR: 
-// Usala en el botón que abre el panel de configuración
+// 2. Función para abrir el panel y que los botones NO se reseteen
 async function abrirConfiguracion() {
     try {
-        // 1. Le pedimos a Mongo los valores actuales
         const res = await fetch('/api/me');
         const data = await res.json();
         
         if (data.ok && data.user.settings) {
             const s = data.user.settings;
-            // 2. Ponemos los switches en su lugar real (true o false)
-            document.getElementById('sw-fact-auto').checked = !!s.factAuto;
-            document.getElementById('sw-envio-auto').checked = !!s.envioAuto;
+            // Sincronizamos con los IDs de tu HTML actual
+            document.getElementById('switchFactAuto2').checked = (s.factAuto !== false);
+            document.getElementById('switchEnvioAuto2').checked = (s.envioAuto !== false);
         }
 
-        // 3. Mostramos el panel (Tus clases de CSS)
+        // Abrimos el panel visualmente
         document.querySelector('.cfg-panel').classList.add('open');
         document.querySelector('.cfg-overlay').classList.add('open');
     } catch (err) {
         console.error("Error al sincronizar el panel:", err);
     }
 }
-</script>  
+
+// 3. Función para cerrar el panel
+function cerrarConfiguracion() {
+    document.querySelector('.cfg-panel').classList.remove('open');
+    document.querySelector('.cfg-overlay').classList.remove('open');
+}
+</script>
 </body>
 </html>

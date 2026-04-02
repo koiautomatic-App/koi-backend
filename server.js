@@ -1,654 +1,1657 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>KOI · Facturación</title>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-  <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
+// ============================================================
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.2
+//  Node/Express · MongoDB Atlas · Google OAuth · JWT
+//  AFIP/ARCA — Delegación Multi-Tenant integrada
+// ============================================================
 
-  <style>
-    :root {
-      --bg:           #080810;
-      --bg-2:         #0d0d1a;
-      --surface:      #111120;
-      --card:         #13131f;
-      --card-2:       #17172a;
-      --border:       rgba(255,255,255,0.055);
-      --border-2:     rgba(255,255,255,0.09);
-      --green:        #00e676;
-      --green-dim:    #00c853;
-      --green-glow:   rgba(0,230,118,0.18);
-      --green-soft:   rgba(0,230,118,0.08);
-      --orange:       #e8622a;
-      --orange-2:     #f5a623;
-      --orange-glow:  rgba(232,98,42,0.22);
-      --orange-soft:  rgba(232,98,42,0.10);
-      --red:          #ff3d57;
-      --yellow:       #ffb300;
-      --blue:         #2979ff;
-      --text-1:       #f0f0fa;
-      --text-2:       #8888aa;
-      --text-3:       #44445a;
-      --font-ui:      'Plus Jakarta Sans', sans-serif;
-      --font-num:     'Space Grotesk', sans-serif;
-      --r-sm:  8px; --r-md:  14px; --r-lg:  18px; --r-xl:  24px;
-      --sh-card: 0 4px 24px rgba(0,0,0,0.5);
-      --sh-glow: 0 0 28px rgba(0,230,118,0.22);
-    }
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-    body {
-      background: var(--bg);
-      color: var(--text-1);
-      font-family: var(--font-ui);
-      font-size: 13px;
-      line-height: 1.5;
-      min-height: 100vh;
-      position: relative;
-    }
+'use strict';
 
-    /* LAYOUT */
-    .shell { display: flex; min-height: 100vh; height: 100%; position: relative; }
+require('dotenv').config();
 
-    /* SIDEBAR */
-    .sidebar {
-      width: 220px; flex-shrink: 0;
-      background: var(--card);
-      border-right: 1px solid var(--border);
-      display: flex; flex-direction: column;
-      padding: 24px 0 20px;
-      position: sticky; top: 0;
-      height: 100vh; overflow: hidden;
-    }
-    .sidebar-logo {
-      display: flex; align-items: center; gap: 10px;
-      padding: 0 20px 28px;
-      border-bottom: 1px solid var(--border);
-      margin-bottom: 12px;
-    }
-    .logo-mark {
-      width: 36px; height: 36px; border-radius: 10px;
-      background: linear-gradient(135deg, var(--orange), var(--orange-2), var(--green));
-      display: flex; align-items: center; justify-content: center;
-      font-size: 19px; box-shadow: 0 0 28px rgba(232,98,42,.35); flex-shrink: 0;
-    }
-    .logo-name { font-weight: 800; font-size: 16px; color: var(--text-1); }
-    .logo-sub  { font-size: 9px; font-weight: 500; color: var(--text-3); letter-spacing: 1.4px; text-transform: uppercase; }
-    .nav-section {
-      padding: 6px 12px 4px; font-size: 9px; font-weight: 700;
-      letter-spacing: 2px; text-transform: uppercase; color: var(--text-3); margin-top: 8px;
-    }
-    .nav-item {
-      display: flex; align-items: center; gap: 10px;
-      padding: 9px 20px; color: var(--text-2);
-      cursor: pointer; font-weight: 500; font-size: 13px;
-      transition: all 0.18s; position: relative;
-      margin: 1px 8px; border-radius: var(--r-sm);
-    }
-    .nav-item:hover { background: rgba(255,255,255,0.04); color: var(--text-1); }
-    .nav-item.active { background: var(--green-soft); color: var(--green); }
-    .nav-item.active::before {
-      content:''; position:absolute; left:0; top:20%; bottom:20%;
-      width:3px; background: var(--green); border-radius: 0 3px 3px 0;
-      box-shadow: 0 0 10px rgba(0,230,118,.5); margin-left: -8px;
-    }
-    .nav-icon { font-size: 17px !important; opacity: 0.8; }
-    .nav-badge {
-      margin-left: auto; background: var(--red); color: #fff;
-      font-size: 9px; font-weight: 700; padding: 2px 6px; border-radius: 999px;
-    }
-    .sidebar-footer { margin-top: auto; padding: 16px 20px 0; border-top: 1px solid var(--border); }
+const express        = require('express');
+const mongoose       = require('mongoose');
+const cors           = require('cors');
+const axios          = require('axios');
+const bcrypt         = require('bcryptjs');
+const jwt            = require('jsonwebtoken');
+const cookieParser   = require('cookie-parser');
+const session        = require('express-session');
+const passport       = require('passport');
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const crypto         = require('crypto');
+const path           = require('path');
+const fs             = require('fs');
+const { execSync }   = require('child_process');
+const os             = require('os');
+const https          = require('https');
 
-    .server-status {
-      display: flex; align-items: center; gap: 8px;
-      padding: 10px 12px; border-radius: var(--r-sm);
-      background: var(--card-2); border: 1px solid var(--border);
-      cursor: pointer; transition: border-color 0.2s;
-    }
-    .server-status:hover { border-color: var(--border-2); }
-    .status-dot {
-      width: 8px; height: 8px; border-radius: 50%;
-      background: var(--green); box-shadow: 0 0 8px var(--green);
-      animation: pulse 2s infinite; flex-shrink: 0;
-    }
-    .status-dot.offline  { background: var(--red); box-shadow: 0 0 8px var(--red); }
-    .status-dot.checking { background: var(--yellow); box-shadow: 0 0 8px var(--yellow); }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .status-info { flex:1; min-width:0; }
-    .status-label { font-weight: 600; font-size: 12px; color: var(--text-1); }
-    .status-sub   { font-size: 10px; color: var(--text-3); }
+const app  = express();
+const PORT = process.env.PORT || 10000;
+const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
+const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
-    /* MAIN */
-    .main { flex:1; overflow-x:hidden; display:flex; flex-direction:column; }
+// ════════════════════════════════════════════════════════════
+//  AFIP — CONFIGURACIÓN GLOBAL
+//
+//  Render Secret Files:
+//    /etc/secrets/koi.crt  ← certificado del CUIT Maestro
+//    /etc/secrets/koi.key  ← clave privada del CUIT Maestro
+//
+//  Variables de entorno en Render:
+//    AFIP_CUIT      → CUIT del maestro (ej: 20309782489)
+//    AFIP_CERT_PATH → ruta al .crt  (ej: /etc/secrets/koi.crt)
+//    AFIP_KEY_PATH  → ruta al .key  (ej: /etc/secrets/koi.key)
+//
+//  Cache de Tickets de Acceso por usuario: /tmp/koi-ta/{cuit}/ta-wsfe.json
+//  (En Render el filesystem /tmp persiste durante la instancia)
+// ════════════════════════════════════════════════════════════
+const CUIT_MAESTRO = (process.env.AFIP_CUIT || process.env.CUIT_MAESTRO || '20309782489').replace(/\D/g, '');
+const PROD_MODE    = process.env.NODE_ENV === 'production';
 
-    /* TOPBAR */
-    .topbar {
-      display: grid;
-      grid-template-columns: 1fr auto 1fr;
-      align-items: center;
-      padding: 10px 24px;
-      border-bottom: 1px solid var(--border);
-      background: var(--card);
-      position: sticky; top:0; z-index:10;
-      box-shadow: 0 1px 0 rgba(232,98,42,.08);
-      gap: 16px;
-    }
-    .topbar-right { justify-content: flex-end; }
-    .topbar-left { display:flex; flex-direction:column; gap:2px; }
-    .topbar-title { font-weight: 700; font-size: 15px; color: var(--text-1); }
-    .topbar-sub   { font-size: 10px; color: var(--text-3); letter-spacing:.3px; }
-    .topbar-right { display:flex; align-items:center; gap:10px; }
-    .topbar-status {
-      display:flex; align-items:center; gap:7px;
-      padding:6px 13px; border-radius:999px;
-      background:var(--card-2); border:1px solid var(--border);
-      font-size:12px; font-weight:600; color:var(--text-2);
-      cursor:pointer; transition:border-color .2s;
-    }
-    .topbar-status:hover { border-color:rgba(0,230,118,.25); color:var(--text-1); }
+// Rutas de certs — primero env vars, luego Secret Files de Render como default
+const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || '/etc/secrets/koi.crt';
+const AFIP_KEY_PATH  = process.env.AFIP_KEY_PATH  || '/etc/secrets/koi.key';
 
-    .topbar-period-wrap {
-      position: relative; display: flex; justify-content: center;
-    }
-    .topbar-period-btn {
-      display:inline-flex; align-items:center; gap:8px;
-      padding:7px 16px; border-radius:var(--r-sm);
-      background:rgba(232,98,42,.09);
-      border:1px solid rgba(232,98,42,.25);
-      color:var(--orange-2);
-      font-family:var(--font-ui); font-weight:600; font-size:13px;
-      cursor:pointer; white-space:nowrap; transition:all .18s;
-      letter-spacing:0.1px;
-    }
-    .topbar-period-btn:hover {
-      background:rgba(232,98,42,.16);
-      border-color:rgba(232,98,42,.4);
-      box-shadow:0 2px 12px rgba(232,98,42,.2);
-    }
-    .topbar-cal-dropdown {
-      position:absolute; top:calc(100% + 10px); left:50%;
-      transform:translateX(-50%);
-      width:380px;
-      background:var(--card); border:1px solid rgba(232,98,42,.18);
-      border-radius:var(--r-lg);
-      box-shadow:0 20px 48px rgba(0,0,0,.7), 0 0 0 1px rgba(232,98,42,.08);
-      z-index:999; padding:18px 18px 14px;
-      display:none; animation:fadeUp .18s ease;
-    }
-    .topbar-cal-dropdown.open { display:block; }
+// Directorio para cache de Tickets de Acceso por usuario
+const TA_CACHE_DIR = process.env.TA_CACHE_DIR || path.join(os.tmpdir(), 'koi-ta');
+fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
 
-    .tcal-presets { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:0; }
-    .tcal-preset {
-      padding:5px 14px; border-radius:999px;
-      background:rgba(255,255,255,.04); border:1px solid var(--border);
-      color:var(--text-2); font-family:var(--font-ui); font-weight:600;
-      font-size:11px; cursor:pointer; transition:all .14s;
-    }
-    .tcal-preset:hover { border-color:rgba(232,98,42,.3); color:var(--orange-2); }
-    .tcal-preset.active {
-      background:rgba(232,98,42,.12); border-color:rgba(232,98,42,.4);
-      color:var(--orange-2);
-    }
+const WSAA_URL = PROD_MODE
+  ? 'https://wsaa.afip.gov.ar/ws/services/LoginCms'
+  : 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms';
 
-    .tcal-divider { height:1px; background:var(--border); margin:14px 0 12px; }
+const WSFE_URL = PROD_MODE
+  ? 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
+  : 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx';
 
-    .tcal-custom-lbl {
-      font-size:9px; font-weight:700; letter-spacing:2px;
-      text-transform:uppercase; color:var(--text-3); margin-bottom:10px;
-    }
-    .tcal-custom-inputs { display:flex; align-items:center; gap:8px; }
-    .tcal-custom-inputs > div { flex:1; }
-    .tcal-arrow { color:var(--text-3); font-size:14px; flex-shrink:0; padding-top:16px; }
-    .tcal-input-lbl { font-size:10px; color:var(--text-3); margin-bottom:4px; font-weight:600; letter-spacing:.5px; }
-    .tcal-input { background:var(--card-2) !important; font-size:12px; padding:7px 10px; }
+// Verificación temprana de certs al arrancar
+function _verificarCertsMaestro() {
+  const certOk = fs.existsSync(AFIP_CERT_PATH);
+  const keyOk  = fs.existsSync(AFIP_KEY_PATH);
+  if (certOk && keyOk) {
+    console.log(`🔐 Certs AFIP listos: ${AFIP_CERT_PATH} / ${AFIP_KEY_PATH}`);
+    console.log(`🔐 CUIT Maestro: ${CUIT_MAESTRO}`);
+  } else {
+    console.warn(`⚠️  Certs AFIP NO encontrados:`);
+    if (!certOk) console.warn(`   Falta .crt en: ${AFIP_CERT_PATH}`);
+    if (!keyOk)  console.warn(`   Falta .key en: ${AFIP_KEY_PATH}`);
+    console.warn(`   Configurá AFIP_CERT_PATH y AFIP_KEY_PATH en Render Environment`);
+  }
+}
+_verificarCertsMaestro();
 
-    .tcal-active-label {
-      font-size:10px; color:rgba(232,98,42,.5); text-align:center;
-      margin-top:10px; font-weight:600; letter-spacing:.5px;
-      min-height:14px;
-    }
+// ════════════════════════════════════════════════════════════
+//  MIDDLEWARES
+// ════════════════════════════════════════════════════════════
+app.use(express.json({ limit: '1mb' }));
+app.use(express.urlencoded({ extended: true }));
+app.use(cors({ origin: BASE, credentials: true }));
+app.use(cookieParser());
+app.use(express.static(path.join(__dirname, 'public')));
+app.use(session({
+  secret:            process.env.SESSION_SECRET || 'koi-session-dev',
+  resave:            false,
+  saveUninitialized: false,
+  cookie: { secure: PROD_MODE, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+}));
+app.use(passport.initialize());
+app.use(passport.session());
 
-    /* CONTENT */
-    .content { padding: 22px 24px 40px; animation: fadeUp .4s ease both; }
-    @keyframes fadeUp { from{opacity:0;transform:translateY(12px)} to{opacity:1;transform:translateY(0)} }
+// ════════════════════════════════════════════════════════════
+//  MONGODB
+// ════════════════════════════════════════════════════════════
+const connectDB = async () => {
+  try {
+    await mongoose.connect(process.env.MONGO_URI, {
+      maxPoolSize: 10, serverSelectionTimeoutMS: 5000,
+    });
+    console.log('🐟 KOI: MongoDB conectado');
+  } catch (err) {
+    console.error('❌ MongoDB error:', err.message);
+    setTimeout(connectDB, 5000);
+  }
+};
+connectDB();
 
-    .sec-label {
-      font-size:10px; font-weight:700; letter-spacing:2px;
-      text-transform:uppercase; color:var(--text-3); margin-bottom:12px;
-    }
+// ════════════════════════════════════════════════════════════
+//  ENCRYPTION — AES-256-GCM
+// ════════════════════════════════════════════════════════════
+const ENC_KEY = Buffer.from(
+  (process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32),
+  'utf8'
+);
 
-    /* MONO */
-    .mono-card {
-      background: var(--card); border: 1px solid var(--border);
-      border-radius: var(--r-xl); padding: 22px 24px 20px;
-      margin-bottom: 20px; position: relative; overflow: hidden;
-      box-shadow: var(--sh-card);
-    }
-    .mono-card::after {
-      content:''; position:absolute; top:-60px; right:-60px;
-      width:220px; height:220px; border-radius:50%;
-      background: radial-gradient(circle,rgba(232,98,42,.05) 0%,rgba(0,230,118,.04) 60%,transparent 100%);
-      pointer-events:none;
-    }
-    .mono-top { display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; }
-    .mono-left h3 { font-weight:700; font-size:14px; color:var(--text-1); }
-    .mono-left p  { font-size:11px; color:var(--text-3); margin-top:2px; }
-    .cat-chip {
-      display:inline-flex; align-items:center; gap:6px;
-      padding:5px 14px; border-radius:999px;
-      background:var(--green-soft); border:1px solid rgba(0,230,118,.2);
-      color:var(--green); font-size:12px; font-weight:700; font-family:var(--font-num);
-    }
-    .cat-dot { width:6px;height:6px;border-radius:50%;background:var(--green);box-shadow:0 0 6px var(--green); }
-    .mono-numbers { display:flex; justify-content:space-between; align-items:flex-end; margin-bottom:14px; }
-    .mono-amount {
-      font-family:var(--font-num); font-weight:700;
-      font-size:32px; color:var(--text-1); letter-spacing:-1px; line-height:1;
-    }
-    .mono-amount span { font-size:15px; color:var(--text-3); font-weight:500; }
-    .mono-limit-box { text-align:right; }
-    .mono-limit-val { font-family:var(--font-num); font-size:14px; font-weight:600; color:var(--text-2); }
-    .mono-limit-lbl { font-size:10px; color:var(--text-3); }
-    .prog-track {
-      width:100%; height:7px; background:rgba(255,255,255,.05);
-      border-radius:999px; overflow:hidden; margin-bottom:10px;
-    }
-    .prog-fill {
-      height:100%; border-radius:999px;
-      background:linear-gradient(90deg,var(--orange),var(--orange-2),var(--green));
-      box-shadow:0 0 12px rgba(0,230,118,.6);
-      transition:width 1.2s cubic-bezier(.34,1.56,.64,1);
-      position:relative;
-    }
-    .prog-fill.warn { background:linear-gradient(90deg,#ff9800,var(--yellow)); box-shadow:0 0 12px rgba(255,179,0,.6); }
-    .prog-fill.crit { background:linear-gradient(90deg,#e53935,var(--red)); box-shadow:0 0 12px rgba(255,61,87,.6); }
-    .prog-meta { display:flex; justify-content:space-between; align-items:center; }
-    .prog-pct  { font-family:var(--font-num); font-weight:700; font-size:13px; color:var(--green); }
-    .prog-mes  { font-size:11px; color:var(--text-3); }
+const encrypt = (text) => {
+  if (!text) return null;
+  const iv     = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+  const enc    = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
+  const tag    = cipher.getAuthTag();
+  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+};
 
-    /* METRICS */
-    .metrics-row { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; margin-bottom:20px; }
-    .metric-card {
-      background:var(--card); border:1px solid var(--border);
-      border-radius:var(--r-lg); padding:16px 14px 14px;
-      box-shadow:var(--sh-card);
-      transition:transform .2s,border-color .2s,box-shadow .2s;
-      position:relative; overflow:visible; min-width:0;
-    }
-    .metric-card:hover {
-      transform:translateY(-3px);
-      border-color:rgba(0,230,118,.15);
-      box-shadow:0 8px 32px rgba(0,0,0,.6),0 0 0 1px rgba(0,230,118,.08);
-    }
-    .mc-icon-wrap { width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:14px;font-size:17px; }
-    .mc-today .mc-icon-wrap { background:var(--green-soft); }
-    .mc-pend  .mc-icon-wrap { background:rgba(255,179,0,.08); }
-    .mc-month .mc-icon-wrap { background:var(--orange-soft); }
-    .mc-label { font-size:10px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;color:var(--text-3);margin-bottom:6px; }
-    .mc-value { font-family:var(--font-num);font-weight:700;font-size:clamp(14px,2vw,20px);color:var(--text-1);letter-spacing:-.5px;line-height:1.1;margin-bottom:6px;word-break:break-word; }
-    .mc-delta { font-size:11px;font-weight:500;color:var(--text-3);display:flex;align-items:center;gap:3px; }
-    .mc-delta.up   { color:var(--green); }
-    .mc-delta.down { color:var(--red); }
-    .mc-delta.warn { color:var(--yellow); }
+const decrypt = (payload) => {
+  if (!payload) return null;
+  try {
+    const [ivHex, tagHex, encHex] = payload.split(':');
+    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
+    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    return Buffer.concat([
+      decipher.update(Buffer.from(encHex, 'hex')),
+      decipher.final(),
+    ]).toString('utf8');
+  } catch { return null; }
+};
 
-    /* BOTTOM ROW */
-    .bottom-row { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+// ════════════════════════════════════════════════════════════
+//  SCHEMAS
+// ════════════════════════════════════════════════════════════
 
-    /* CHART */
-    .chart-card {
-      background:var(--card); border:1px solid var(--border);
-      border-radius:var(--r-xl); padding:20px 20px 14px; box-shadow:var(--sh-card);
-      position:relative; overflow:hidden;
-    }
-    .chart-header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:18px; }
-    .chart-title { font-weight:700; font-size:14px; color:var(--text-1); }
-    .chart-sub   { font-size:11px; color:var(--text-3); margin-top:2px; }
-    .chart-total { text-align:right; }
-    .chart-total-val { font-family:var(--font-num);font-weight:700;font-size:clamp(13px,1.8vw,18px);color:var(--green);letter-spacing:-.5px; }
-    .chart-wrap  { position:relative; height:160px; }
+const UserSchema = new mongoose.Schema({
+  nombre:       { type: String, trim: true },
+  apellido:     { type: String, trim: true },
+  email:        { type: String, required: true, unique: true, lowercase: true, trim: true },
+  password:     { type: String, select: false },
+  googleId:     { type: String, sparse: true },
+  avatar:       { type: String },
+  plan:         { type: String, default: 'free', enum: ['free', 'pro'] },
 
-    /* COMPROBANTES */
-    .comp-card {
-      background:var(--card); border:1px solid var(--border);
-      border-radius:var(--r-xl); overflow:hidden; box-shadow:var(--sh-card);
-      display:flex; flex-direction:column;
-    }
-    .comp-head {
-      display:flex; align-items:center; justify-content:space-between;
-      padding:18px 20px 14px; border-bottom:1px solid var(--border);
-    }
-    .comp-head-title { font-weight:700; font-size:14px; color:var(--text-1); }
-    .comp-badge {
-      padding:3px 9px; border-radius:999px;
-      background:var(--green-soft); color:var(--green);
-      font-size:11px; font-weight:700; border:1px solid rgba(0,230,118,.15);
-    }
-    .comp-scroll { flex:1; overflow-y:auto; max-height:420px; }
-    .comp-row {
-      display:flex; align-items:center; gap:10px;
-      padding:11px 20px; border-bottom:1px solid var(--border);
-      transition:background .14s;
-    }
-    .comp-row:hover { background:rgba(255,255,255,.02); }
-    .cae-dot { width:7px;height:7px;border-radius:50%;flex-shrink:0; }
-    .cae-ok   { background:var(--green); box-shadow:0 0 6px rgba(0,230,118,.7); }
-    .cae-pend { background:var(--yellow); box-shadow:0 0 6px rgba(255,179,0,.7); }
-    .cae-err  { background:var(--red);   box-shadow:0 0 6px rgba(255,61,87,.7); }
-    .comp-info { flex:1; min-width:0; }
-    .comp-cliente { font-weight:600;font-size:12px;color:var(--text-1);white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
-    .comp-meta    { font-size:10px;color:var(--text-3);margin-top:1px; }
-    .comp-monto   { font-family:var(--font-num);font-weight:700;font-size:12px;color:var(--text-1);margin-right:8px; }
-    .comp-actions { display:flex; gap:4px; }
-    .act-btn {
-      width:28px;height:28px;border-radius:7px;
-      background:var(--card-2); border:1px solid var(--border);
-      color:var(--text-3); font-size:12px; cursor:pointer;
-      display:flex;align-items:center;justify-content:center;
-      transition:all .16s;
-    }
-    .act-btn:hover { background:var(--green-soft); border-color:rgba(0,230,118,.25); color:var(--green); }
+  settings: {
+    factAuto:   { type: Boolean, default: true },   // Facturación automática
+    envioAuto:  { type: Boolean, default: true },   // Envío automático de mail
+    categoria:  { type: String, default: 'C' },
+    cuit:       { type: String },
+    arcaUser:   { type: String },
+    arcaClave:  { type: String },                   // encriptada
+    arcaPtoVta: { type: Number, default: 1 },
+    arcaStatus: {
+      type:    String,
+      default: 'sin_vincular',
+      enum:    ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'],
+    },
+    arcaNotas:  { type: String },
+  },
 
-    /* ACTION BAR */
-    .ab-btn {
-      display:inline-flex; align-items:center; gap:7px;
-      padding:9px 18px; border-radius:var(--r-sm);
-      font-family:var(--font-ui); font-weight:600; font-size:13px;
-      cursor:pointer; border:none; transition:all .18s;
-    }
-    .ab-btn.primary { background:var(--green); color:#080810; }
-    .ab-btn.secondary { background:var(--card-2); color:var(--text-1); border:1px solid var(--border); }
+  ultimoAcceso: { type: Date, default: Date.now },
+  creadoEn:     { type: Date, default: Date.now },
+}, { timestamps: false });
 
-    /* CONFIG PANEL */
-    .cfg-overlay {
-      position:fixed; inset:0; background:rgba(0,0,0,0.65);
-      z-index:100; opacity:0; pointer-events:none; transition:opacity .3s;
-    }
-    .cfg-overlay.open { opacity:1; pointer-events:all; }
-    .cfg-panel {
-      position:fixed; top:0; right:0; bottom:0; width:480px; max-width:100%;
-      background:var(--card); border-left:1px solid var(--border);
-      z-index:101; display:flex; flex-direction:column;
-      transform:translateX(100%); transition:transform .35s cubic-bezier(.4,0,.2,1);
-    }
-    .cfg-panel.open { transform:translateX(0); }
-    .cfg-panel-header { display:flex; align-items:center; justify-content:space-between; padding:20px 24px; border-bottom:1px solid var(--border); }
-    .cfg-body { flex:1; overflow-y:auto; padding:24px 24px 40px; }
-    .cfg-section { background:var(--card-2); border:1px solid var(--border); border-radius:var(--r-lg); padding:20px; margin-bottom:16px; position:relative; overflow:hidden; }
-    .cfg-label { font-size:10px; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:var(--text-3); }
-    .cfg-input { width:100%; background:var(--card); border:1px solid var(--border); border-radius:var(--r-sm); color:var(--text-1); font-family:var(--font-ui); font-size:13px; padding:10px 14px; outline:none; }
-    .input-wrap-cfg { position:relative; }
-    .eye-btn-cfg { position:absolute; right:12px; top:50%; transform:translateY(-50%); background:none; border:none; cursor:pointer; color:var(--text-3); }
+UserSchema.pre('save', async function(next) {
+  if (!this.isModified('password') || !this.password) return next();
+  this.password = await bcrypt.hash(this.password, 12);
+  next();
+});
+UserSchema.methods.checkPassword = function(plain) {
+  return bcrypt.compare(plain, this.password);
+};
+const User = mongoose.model('User', UserSchema);
 
-    /* SWITCHES CLAUDE-COMPATIBLE */
-    .cfg-switch-row { display:flex; align-items:center; justify-content:space-between; background:var(--card); border:1px solid var(--border); border-radius:var(--r-md); padding:12px 16px; margin-top:4px; }
-    .sw { position:relative; width:42px; height:24px; flex-shrink:0; }
-    .sw input { opacity:0; width:0; height:0; position:absolute; }
-    .sw-track { position:absolute; inset:0; background:var(--card-2); border:1px solid var(--border-2); border-radius:999px; cursor:pointer; transition:background .2s; }
-    .sw-track::after { content:''; position:absolute; width:16px; height:16px; left:3px; top:3px; background:var(--text-3); border-radius:50%; transition:transform .2s; }
-    .sw input:checked + .sw-track { background:var(--green-soft); border-color:rgba(0,230,118,0.35); }
-    .sw input:checked + .sw-track::after { transform:translateX(18px); background:var(--green); }
+const IntegrationSchema = new mongoose.Schema({
+  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  platform: {
+    type:     String,
+    required: true,
+    enum:     ['woocommerce', 'tiendanube', 'mercadolibre', 'empretienda', 'rappi', 'vtex', 'shopify'],
+  },
+  storeId:         { type: String, required: true },
+  storeName:       { type: String },
+  storeUrl:        { type: String },
+  status:          { type: String, default: 'active', enum: ['active', 'paused', 'error', 'pending'] },
+  credentials:     { type: mongoose.Schema.Types.Mixed, default: {} },
+  webhookSecret:   { type: String, default: () => crypto.randomBytes(24).toString('hex'), index: true },
+  lastSyncAt:      { type: Date },
+  syncCursor:      { type: String },
+  errorLog:        { type: String },
+  initialSyncDone: { type: Boolean, default: false },
+  updatedAt:       { type: Date, default: Date.now },
+  createdAt:       { type: Date, default: Date.now },
+}, { timestamps: false });
 
-    .btn-cfg-save { width:100%; padding:13px; border-radius:var(--r-sm); margin-top:18px; background:var(--green); border:none; font-weight:700; cursor:pointer; }
-    .btn-cfg-sync { width:100%; padding:13px; border-radius:var(--r-sm); border:none; margin-top:18px; background:linear-gradient(135deg,#a855f7,#7c3aed); color:#fff; font-weight:700; cursor:pointer; }
+IntegrationSchema.index({ userId: 1, platform: 1, storeId: 1 }, { unique: true });
+IntegrationSchema.methods.setKey = function(field, value) {
+  this.credentials = { ...this.credentials, [field]: encrypt(value) };
+};
+IntegrationSchema.methods.getKey = function(field) {
+  return decrypt(this.credentials?.[field]);
+};
+const Integration = mongoose.model('Integration', IntegrationSchema);
 
-    /* TOAST */
-    #toast-wrap { position:fixed; bottom:24px; right:24px; z-index:9999; display:flex; flex-direction:column; gap:10px; pointer-events:none; }
-    .toast { padding:12px 20px; border-radius:var(--r-md); background:var(--card-2); border-left:4px solid var(--green); color:var(--text-1); font-weight:600; box-shadow:0 10px 30px rgba(0,0,0,0.5); animation:toastIn .3s ease forwards; pointer-events:all; display:flex; align-items:center; gap:10px; }
-    .toast.error { border-left-color:var(--red); }
-    @keyframes toastIn { from{opacity:0;transform:translateX(50px)} to{opacity:1;transform:translateX(0)} }
-  </style>
-</head>
+const OrderSchema = new mongoose.Schema({
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
+  platform:      { type: String, required: true },
+  externalId:    { type: String, required: true },
+  customerName:  { type: String, default: '' },
+  customerEmail: { type: String, default: '' },
+  customerDoc:   { type: String, default: '0' },
+  amount:        { type: Number, required: true },
+  currency:      { type: String, default: 'ARS' },
+  // Concepto — solo para ventas manuales
+  concepto:      { type: String, default: '' },
+  status: {
+    type:    String,
+    default: 'pending_invoice',
+    enum:    ['pending_invoice', 'invoiced', 'error_data', 'error_afip', 'skipped'],
+  },
+  orderDate:  { type: Date },
+  caeNumber:  { type: String },
+  caeExpiry:  { type: Date },
+  errorLog:   { type: String },
+  createdAt:  { type: Date, default: Date.now },
+}, { timestamps: false });
 
-<body>
-  <div class="shell">
-    <aside class="sidebar">
-      <div class="sidebar-logo">
-        <div class="logo-mark"><span class="material-icons" style="color:#080810; font-size:22px;">bolt</span></div>
-        <div class="logo-text"><div class="logo-name">KOI</div><div class="logo-sub">Facturación</div></div>
-      </div>
-      <div class="nav-section">Dashboard</div>
-      <div class="nav-item active" onclick="mostrarVista('resumen')"><span class="material-icons nav-icon">dashboard</span> Panel General</div>
-      <div class="nav-item" onclick="mostrarVista('ventas')"><span class="material-icons nav-icon">receipt_long</span> Ventas <span class="nav-badge" id="badgeVentas">...</span></div>
-      <div class="nav-section">Herramientas</div>
-      <div class="nav-item" onclick="mostrarVista('arca')"><span class="material-icons nav-icon">account_balance</span> ARCA / AFIP</div>
-      <div class="nav-item" onclick="mostrarVista('negocio')"><span class="material-icons nav-icon">storefront</span> Mi Negocio</div>
-      <div class="nav-section">Cuenta</div>
-      <div class="nav-item" onclick="toggleConfig()"><span class="material-icons nav-icon">settings</span> Configuración</div>
-      <div class="nav-item" style="color:var(--red)" onclick="cerrarSesion()"><span class="material-icons nav-icon">logout</span> Salir</div>
-      <div class="sidebar-footer">
-        <div class="server-status">
-          <div class="status-dot" id="serverDot"></div>
-          <div class="status-info"><div class="status-label" id="serverLabel">Conectando...</div></div>
-        </div>
-      </div>
-    </aside>
+OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
+OrderSchema.index({ userId: 1, platform: 1, orderDate: -1 });
+OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
+const Order = mongoose.model('Order', OrderSchema);
 
-    <main class="main">
-      <header class="topbar">
-        <div class="topbar-left"><div class="topbar-title" id="viewTitle">Panel General</div><div class="topbar-sub" id="viewSub">Sono Handmade</div></div>
-        <div class="topbar-period-wrap">
-          <button class="topbar-period-btn" onclick="togglePeriodDropdown()"><span class="material-icons" style="font-size:16px;">calendar_today</span> <span id="periodLabel">Este mes</span> <span class="material-icons">expand_more</span></button>
-          <div class="topbar-cal-dropdown" id="periodDropdown"><div class="tcal-presets" id="periodPresets"></div></div>
-        </div>
-        <div class="topbar-right"><div class="topbar-status" id="arcaStatusBadge" onclick="mostrarVista('arca')"><div class="status-dot offline"></div> ARCA Offline</div></div>
-      </header>
+// ════════════════════════════════════════════════════════════
+//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT
+// ════════════════════════════════════════════════════════════
 
-      <div id="content" class="content">
-        <div id="v-resumen">
-          <div class="mono-card">
-            <div class="mono-top"><div class="mono-left"><h3 id="monoCat">Categoría -</h3><p>Límite Anual</p></div><div class="cat-chip">VIGENTE</div></div>
-            <div class="mono-numbers"><div class="mono-amount" id="monoFact"><span>$</span> 0</div><div class="mono-limit-val" id="monoLimit">$ 0</div></div>
-            <div class="prog-track"><div class="prog-fill" id="monoBar" style="width: 0%"></div></div>
-            <div class="prog-meta"><div class="prog-pct" id="monoPct">0%</div><div class="prog-mes" id="monoMes">Período</div></div>
-          </div>
-          <div class="metrics-row">
-            <div class="metric-card mc-today"><div class="mc-label">Hoy</div><div class="mc-value" id="valHoy">$ 0</div><div id="deltaHoy" class="mc-delta">...</div></div>
-            <div class="metric-card mc-pend"><div class="mc-label">Pendientes</div><div class="mc-value" id="valPend">0</div><div id="deltaPend" class="mc-delta">...</div></div>
-            <div class="metric-card mc-month"><div class="mc-label">Mes</div><div class="mc-value" id="valMes">$ 0</div><div id="deltaMes" class="mc-delta">...</div></div>
-          </div>
-          <div class="bottom-row">
-            <div class="chart-card"><div class="chart-header"><div class="chart-title">Facturación</div><div class="chart-total-val" id="chartTotal">$ 0</div></div><div class="chart-wrap"><canvas id="mainChart"></canvas></div></div>
-            <div class="comp-card"><div class="comp-head"><div class="comp-head-title">Últimas Ventas</div><div class="comp-badge" id="valVentasTotal">0</div></div><div class="comp-scroll" id="tablaHome"></div></div>
-          </div>
-        </div>
+function _firmarCMS(xml) {
+  // Usa los certs de Render Secret Files directamente
+  if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
+    throw new Error(
+      `Certificados AFIP no encontrados.\n` +
+      `  .key esperado en: ${AFIP_KEY_PATH}\n` +
+      `  .crt esperado en: ${AFIP_CERT_PATH}\n` +
+      `Verificá que los Secret Files "koi.key" y "koi.crt" estén cargados en Render.`
+    );
+  }
 
-        <div id="v-arca" style="display:none">
-          <div class="sec-label">AFIP</div>
-          <div class="cfg-section">
-            <h4 style="margin-bottom:10px;">Vincular CUIT Maestro</h4>
-            <button class="btn-arca-sync" onclick="toggleConfig()">Ir a Configuración</button>
-          </div>
-        </div>
+  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
+  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
 
-        <div id="v-negocio" style="display:none">
-          <div class="sec-label">Integraciones</div>
-          <div class="cfg-section">
-            <div class="cfg-switch-row">
-              <div><div class="cfg-switch-title">Facturación Automática</div><div class="cfg-switch-sub">Emitir CAE al recibir pago</div></div>
-              <label class="sw"><input type="checkbox" id="swFactAuto" onchange="guardarSwitch('factAuto', this.checked)"><span class="sw-track"></span></label>
-            </div>
-            <div class="cfg-switch-row">
-              <div><div class="cfg-switch-title">Envío de Email</div><div class="cfg-switch-sub">Enviar PDF al cliente</div></div>
-              <label class="sw"><input type="checkbox" id="swEnvioEmail" onchange="guardarSwitch('envioAuto', this.checked)"><span class="sw-track"></span></label>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+  try {
+    fs.writeFileSync(tmpXml, xml, 'utf8');
+    execSync(
+      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}"` +
+      ` -nodetach -outform DER -out "${tmpOut}"`,
+      { stdio: 'pipe' }
+    );
+    return fs.readFileSync(tmpOut).toString('base64');
+  } finally {
+    try { fs.unlinkSync(tmpXml); } catch {}
+    try { fs.unlinkSync(tmpOut); } catch {}
+  }
+}
 
-    <div class="cfg-overlay" id="cfgOverlay" onclick="toggleConfig()"></div>
-    <div class="cfg-panel" id="cfgPanel">
-      <div class="cfg-panel-header"><h3>Configuración</h3><button onclick="toggleConfig()">Cerrar</button></div>
-      <div class="cfg-body">
-        <div class="cfg-section">
-          <label class="cfg-label">Nombre</label><input type="text" id="cfgNombre" class="cfg-input">
-          <button class="btn-cfg-save" onclick="guardarPerfil()">Guardar Perfil</button>
-        </div>
-        <div class="cfg-section">
-          <label class="cfg-label">CUIT</label><input type="text" id="arcaCuit" class="cfg-input">
-          <label class="cfg-label">Clave Fiscal</label>
-          <div class="input-wrap-cfg"><input type="password" id="arcaClave" class="cfg-input"><button class="eye-btn-cfg" onclick="toggleClave()">👁️</button></div>
-          <button class="btn-cfg-sync" id="btnArcaSync" onclick="sincronizarARCA()">Sincronizar AFIP</button>
-        </div>
-      </div>
-    </div>
-    <div id="toast-wrap"></div>
-  </div>
+function _generarCMS(servicio = 'wsfe') {
+  const ahora = new Date();
+  const desde = new Date(ahora.getTime() - 60_000);
+  const hasta = new Date(ahora.getTime() + 12 * 3600_000);
+  const toAFIP = d => d.toISOString().replace(/\.\d{3}Z$/, '-03:00');
 
-  <script>
-    /* ── CLIENTE API ── */
-    const api = {
-      async get(url) {
-        const r = await fetch(url);
-        if (!r.ok) throw new Error(r.status);
-        return r.json();
+  const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<loginTicketRequest version="1.0">
+  <header>
+    <uniqueId>${Date.now()}</uniqueId>
+    <generationTime>${toAFIP(desde)}</generationTime>
+    <expirationTime>${toAFIP(hasta)}</expirationTime>
+  </header>
+  <service>${servicio}</service>
+</loginTicketRequest>`;
+
+  return _firmarCMS(xml);
+}
+
+function _soapPost(url, body) {
+  return new Promise((resolve, reject) => {
+    const parsed   = new URL(url);
+    const postData = Buffer.from(body, 'utf8');
+    const options  = {
+      hostname: parsed.hostname,
+      port:     parsed.port || 443,
+      path:     parsed.pathname + (parsed.search || ''),
+      method:   'POST',
+      headers:  {
+        'Content-Type':   'text/xml; charset=utf-8',
+        'Content-Length': postData.length,
       },
-      async post(url, data) {
-        const r = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        const res = await r.json();
-        if (!r.ok) throw new Error(res.error || 'Error');
-        return res;
-      },
-      async patch(url, data) {
-        const r = await fetch(url, { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data) });
-        const res = await r.json();
-        if (!r.ok) throw new Error(res.error || 'Error');
-        return res;
-      }
     };
 
-    /* ── VISTAS ── */
-    function mostrarVista(id) {
-      ['resumen', 'arca', 'negocio'].forEach(v => {
-        const el = document.getElementById(`v-${v}`);
-        if(el) el.style.display = (v === id) ? 'block' : 'none';
+    const req = https.request(options, res => {
+      let data = '';
+      res.setEncoding('utf8');
+      res.on('data', c => data += c);
+      res.on('end', () => {
+        if (res.statusCode >= 400) reject(new Error(`AFIP HTTP ${res.statusCode}: ${data.slice(0, 300)}`));
+        else resolve(data);
       });
-      if (id === 'negocio') cargarConfigVista();
+    });
+
+    req.on('error', reject);
+    req.setTimeout(30_000, () => { req.destroy(); reject(new Error('Timeout AFIP')); });
+    req.write(postData);
+    req.end();
+  });
+}
+
+function _leerTACache(cuit) {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json'), 'utf8'));
+  } catch { return null; }
+}
+
+function _guardarTACache(cuit, ta) {
+  const dir = path.join(TA_CACHE_DIR, cuit);
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'ta-wsfe.json'), JSON.stringify(ta, null, 2), 'utf8');
+}
+
+function _taEsValido(ta) {
+  if (!ta?.expiracion) return false;
+  return Date.now() < new Date(ta.expiracion).getTime() - 10 * 60 * 1000;
+}
+
+function _parsearTA(xml) {
+  const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
+  if (!m) throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
+
+  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+  const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
+  const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
+  const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
+
+  if (!token || !sign) throw new Error('WSAA: no se pudo extraer token/sign del TA');
+  return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
+}
+
+async function afip_obtenerTA(cuitUsuario) {
+  const cache = _leerTACache(cuitUsuario);
+  if (cache && _taEsValido(cache)) return { token: cache.token, sign: cache.sign };
+
+  const cms = _generarCMS('wsfe');
+
+  const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <wsaa:loginCms>
+      <wsaa:in0>${cms}</wsaa:in0>
+    </wsaa:loginCms>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+  const resp = await _soapPost(WSAA_URL, soapBody);
+  const ta   = _parsearTA(resp);
+  _guardarTACache(cuitUsuario, ta);
+  return { token: ta.token, sign: ta.sign };
+}
+
+function _fechaAFIP(d) {
+  return [
+    d.getFullYear(),
+    String(d.getMonth() + 1).padStart(2, '0'),
+    String(d.getDate()).padStart(2, '0'),
+  ].join('');
+}
+
+function _parseFechaAFIP(str) {
+  if (!str || str.length !== 8) return null;
+  return new Date(`${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}`);
+}
+
+function _docTipo(doc) {
+  const d = String(doc || '0').replace(/\D/g, '');
+  if (d === '0' || d.startsWith('9999')) return 99;
+  if (d.length === 11) return 80;
+  return 96;
+}
+
+function _tipoComprobante(categoria) {
+  return 11; // Monotributistas A-K → siempre Factura C
+}
+
+async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
+  const soap = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECompUltimoAutorizado>
+      <ar:Auth>
+        <ar:Token>${token}</ar:Token>
+        <ar:Sign>${sign}</ar:Sign>
+        <ar:Cuit>${cuit}</ar:Cuit>
+      </ar:Auth>
+      <ar:PtoVta>${puntoVenta}</ar:PtoVta>
+      <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
+    </ar:FECompUltimoAutorizado>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+  const resp  = await _soapPost(WSFE_URL, soap);
+  const match = resp.match(/<CbteNro>(\d+)<\/CbteNro>/);
+  return match ? parseInt(match[1], 10) : 0;
+}
+
+async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
+  const { token, sign } = await afip_obtenerTA(cuitEmisor);
+
+  const cbTipo    = datos.tipoComprobante || 11;
+  const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
+  const nroComp   = ultimoNro + 1;
+  const fechaHoy  = _fechaAFIP(new Date());
+  const importe   = parseFloat(datos.importeTotal.toFixed(2));
+  const docTipo   = _docTipo(datos.clienteDoc);
+  const docNro    = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+
+  const soap = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECAESolicitar>
+      <ar:Auth>
+        <ar:Token>${token}</ar:Token>
+        <ar:Sign>${sign}</ar:Sign>
+        <ar:Cuit>${cuitEmisor}</ar:Cuit>
+      </ar:Auth>
+      <ar:FeCAEReq>
+        <ar:FeCabReq>
+          <ar:CantReg>1</ar:CantReg>
+          <ar:PtoVta>${puntoVenta}</ar:PtoVta>
+          <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
+        </ar:FeCabReq>
+        <ar:FeDetReq>
+          <ar:FECAEDetRequest>
+            <ar:Concepto>1</ar:Concepto>
+            <ar:DocTipo>${docTipo}</ar:DocTipo>
+            <ar:DocNro>${docNro}</ar:DocNro>
+            <ar:CbteDesde>${nroComp}</ar:CbteDesde>
+            <ar:CbteHasta>${nroComp}</ar:CbteHasta>
+            <ar:CbteFch>${fechaHoy}</ar:CbteFch>
+            <ar:ImpTotal>${importe}</ar:ImpTotal>
+            <ar:ImpTotConc>0.00</ar:ImpTotConc>
+            <ar:ImpNeto>${importe}</ar:ImpNeto>
+            <ar:ImpOpEx>0.00</ar:ImpOpEx>
+            <ar:ImpIVA>0.00</ar:ImpIVA>
+            <ar:ImpTrib>0.00</ar:ImpTrib>
+            <ar:MonId>PES</ar:MonId>
+            <ar:MonCotiz>1</ar:MonCotiz>
+          </ar:FECAEDetRequest>
+        </ar:FeDetReq>
+      </ar:FeCAEReq>
+    </ar:FECAESolicitar>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+  const resp      = await _soapPost(WSFE_URL, soap);
+  const resultado = resp.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1]?.trim();
+  const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
+
+  if (resultado !== 'A') {
+    throw new Error(`AFIP rechazó el comprobante: ${errMsg || 'Error desconocido'}`);
+  }
+
+  const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();
+  const caeVto = resp.match(/<CAEFchVto>([\s\S]*?)<\/CAEFchVto>/)?.[1]?.trim();
+
+  if (!cae) throw new Error('AFIP: respuesta aprobada pero sin CAE');
+
+  return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
+}
+
+async function afip_verificarDelegacion(cuitUsuario) {
+  try {
+    await afip_obtenerTA(cuitUsuario);
+    return { ok: true, mensaje: 'Delegación activa ✓' };
+  } catch (e) {
+    const msg = e.message || '';
+    const sinDelegacion = msg.includes('10003') || msg.toLowerCase().includes('no autorizado');
+    return {
+      ok:      false,
+      mensaje: sinDelegacion
+        ? `El CUIT ${cuitUsuario} no delegó wsfe al maestro de KOI (${CUIT_MAESTRO}). ` +
+          `Ir a AFIP: Mi SIL → Administrador de Relaciones → Adherir WSFE → Representante: ${CUIT_MAESTRO}`
+        : `Error de conexión con AFIP: ${msg}`,
+    };
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto
+// ════════════════════════════════════════════════════════════
+async function requireArcaCuit(req, res, next) {
+  const user = await User.findById(req.userId).select('settings').lean();
+
+  if (!user?.settings?.cuit) {
+    return res.status(400).json({
+      error: 'No tenés un CUIT configurado. Ingresalo en la sección ARCA antes de facturar.',
+    });
+  }
+  if (user.settings.arcaStatus !== 'vinculado') {
+    return res.status(400).json({
+      error: `Tu CUIT está en estado "${user.settings.arcaStatus}". ` +
+             `La facturación se habilita cuando el admin confirme tu vinculación.`,
+    });
+  }
+
+  req.arcaCuit      = user.settings.cuit.replace(/\D/g, '');
+  req.arcaPtoVta    = user.settings.arcaPtoVta  || 1;
+  req.arcaCategoria = user.settings.categoria   || 'C';
+  req.factAuto      = user.settings.factAuto    !== false; // default true
+  req.envioAuto     = user.settings.envioAuto   !== false; // default true
+  next();
+}
+
+// ════════════════════════════════════════════════════════════
+//  NORMALIZER
+// ════════════════════════════════════════════════════════════
+const ARCA_LIMIT = 380_000;
+const CUIT_CF    = '99999999';
+
+const normalize = {
+  woocommerce(raw) {
+    const b   = raw.billing || {};
+    const doc = _cleanDoc(b.dni || b.identification || b.cpf || '');
+    return {
+      externalId:    String(raw.id),
+      customerName:  `${b.first_name || ''} ${b.last_name || ''}`.trim(),
+      customerEmail: b.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
+      amount:        parseFloat(raw.total) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
+    };
+  },
+  tiendanube(raw) {
+    const doc = _cleanDoc(raw.billing_info?.document || '');
+    return {
+      externalId:    String(raw.id),
+      customerName:  raw.contact?.name || `${raw.contact?.first_name || ''} ${raw.contact?.last_name || ''}`.trim(),
+      customerEmail: raw.contact?.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
+      amount:        parseFloat(raw.total) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
+    };
+  },
+  mercadolibre(raw) {
+    const doc = _cleanDoc(raw.billing_info?.doc_number || '');
+    return {
+      externalId:    String(raw.id),
+      customerName:  raw.buyer?.nickname || '',
+      customerEmail: raw.buyer?.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount) || 0),
+      amount:        parseFloat(raw.total_amount) || 0,
+      currency:      raw.currency_id || 'ARS',
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
+    };
+  },
+  vtex(raw) {
+    const client = raw.clientProfileData || {};
+    const doc    = _cleanDoc(client.document || client.cpf || '');
+    return {
+      externalId:    raw.orderId || String(raw.id),
+      customerName:  `${client.firstName || ''} ${client.lastName || ''}`.trim(),
+      customerEmail: client.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.value) / 100 || 0),
+      amount:        parseFloat(raw.value) / 100 || 0,
+      currency:      raw.currencyCode || 'ARS',
+      orderDate:     raw.creationDate ? new Date(raw.creationDate) : undefined,
+    };
+  },
+  empretienda(raw) {
+    const doc = _cleanDoc(raw.customer?.dni || raw.customer?.document || '');
+    return {
+      externalId:    String(raw.order_id || raw.id),
+      customerName:  raw.customer?.name || '',
+      customerEmail: raw.customer?.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price || raw.total) || 0),
+      amount:        parseFloat(raw.total_price || raw.total) || 0,
+      currency:      'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
+    };
+  },
+  rappi(raw) {
+    const order = raw.order || raw;
+    return {
+      externalId:    String(order.id),
+      customerName:  order.user?.name || '',
+      customerEmail: order.user?.email || '',
+      customerDoc:   CUIT_CF,
+      amount:        parseFloat(order.total_products || order.total) || 0,
+      currency:      'ARS',
+      orderDate:     order.created_at ? new Date(order.created_at) : undefined,
+    };
+  },
+  shopify(raw) {
+    const addr = raw.billing_address || raw.shipping_address || {};
+    const doc  = _cleanDoc(raw.note_attributes?.find(a => a.name === 'dni')?.value || '');
+    return {
+      externalId:    String(raw.id),
+      customerName:  `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+      customerEmail: raw.email || raw.customer?.email || '',
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price) || 0),
+      amount:        parseFloat(raw.total_price) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
+    };
+  },
+};
+
+function _cleanDoc(raw) { return String(raw || '').replace(/\D/g, ''); }
+function _resolveDoc(doc, amount) {
+  if (doc.length >= 7 && doc.length <= 11) return doc;
+  return amount >= ARCA_LIMIT ? null : CUIT_CF;
+}
+
+// ════════════════════════════════════════════════════════════
+//  UPSERT ENGINE + AUTO-FACTURACIÓN
+//
+//  Si el usuario tiene factAuto=true y arcaStatus='vinculado',
+//  emite el CAE automáticamente al guardar la orden.
+// ════════════════════════════════════════════════════════════
+async function upsertOrder(integration, canonical) {
+  if (!canonical) return;
+
+  const orderFilter = {
+    userId:    integration.userId,
+    platform:  integration.platform,
+    externalId: canonical.externalId,
+  };
+
+  if (canonical.customerDoc === null) {
+    await Order.findOneAndUpdate(
+      orderFilter,
+      {
+        $setOnInsert: {
+          userId: integration.userId, integrationId: integration._id,
+          platform: integration.platform, ...canonical,
+          customerDoc: '0', status: 'error_data',
+          errorLog: `Monto $${canonical.amount} ≥ $${ARCA_LIMIT} sin DNI válido`,
+        },
+      },
+      { upsert: true, new: false }
+    ).catch(() => {});
+    return;
+  }
+
+  const order = await Order.findOneAndUpdate(
+    orderFilter,
+    {
+      $setOnInsert: {
+        userId: integration.userId, integrationId: integration._id,
+        platform: integration.platform, ...canonical, status: 'pending_invoice',
+      },
+    },
+    { upsert: true, new: true }
+  ).catch(err => {
+    if (err.code !== 11000)
+      console.error(`❌ upsert [${integration.platform}#${canonical.externalId}]:`, err.message);
+    return null;
+  });
+
+  // ── Auto-facturación si el usuario tiene factAuto=true ──
+  if (order && order.status === 'pending_invoice') {
+    _intentarAutoFacturar(integration.userId, order);
+  }
+}
+
+/**
+ * Intenta emitir CAE automáticamente para una orden.
+ * Solo actúa si:
+ *  - El usuario tiene arcaStatus = 'vinculado'
+ *  - El usuario tiene factAuto = true
+ */
+async function _intentarAutoFacturar(userId, order) {
+  try {
+    const user = await User.findById(userId).select('settings').lean();
+    if (!user?.settings) return;
+
+    const { factAuto, arcaStatus, cuit, arcaPtoVta, categoria } = user.settings;
+
+    if (!factAuto || arcaStatus !== 'vinculado' || !cuit) return;
+
+    const cuitLimpio = cuit.replace(/\D/g, '');
+    const ptoVta     = arcaPtoVta || 1;
+    const cbTipo     = _tipoComprobante(categoria || 'C');
+
+    const resultado = await afip_emitirComprobante(cuitLimpio, ptoVta, {
+      tipoComprobante: cbTipo,
+      clienteDoc:      order.customerDoc || '0',
+      importeTotal:    order.amount,
+    });
+
+    await Order.findByIdAndUpdate(order._id, {
+      status:    'invoiced',
+      caeNumber: resultado.cae,
+      caeExpiry: resultado.caeFchVto,
+      errorLog:  '',
+    });
+
+    console.log(`✅ Auto-CAE: CUIT=${cuitLimpio} Orden=${order._id} CAE=${resultado.cae}`);
+
+    // ── Envío automático de mail si envioAuto=true ──
+    if (user.settings.envioAuto && order.customerEmail) {
+      _enviarMailFactura(order, resultado.cae).catch(console.warn);
     }
 
-    function toggleConfig() {
-      document.getElementById('cfgOverlay').classList.toggle('open');
-      document.getElementById('cfgPanel').classList.toggle('open');
-      if (document.getElementById('cfgPanel').classList.contains('open')) cargarPerfilEnForm();
-    }
+  } catch (e) {
+    console.error(`❌ Auto-facturación orden ${order._id}:`, e.message);
+    await Order.findByIdAndUpdate(order._id, {
+      status:   'error_afip',
+      errorLog: e.message,
+    });
+  }
+}
 
-    function toggleClave() {
-      const input = document.getElementById('arcaClave');
-      input.type = input.type === 'password' ? 'text' : 'password';
-    }
+/**
+ * Stub de envío de mail — implementar con nodemailer o Resend.
+ * Por ahora solo loguea; conectar con el proveedor de email preferido.
+ */
+async function _enviarMailFactura(order, cae) {
+  console.log(`📧 [TODO] Enviar factura CAE ${cae} a ${order.customerEmail}`);
+  // Ejemplo con Resend:
+  // await resend.emails.send({
+  //   from: 'facturas@koi.ar',
+  //   to: order.customerEmail,
+  //   subject: `Tu factura KOI — CAE ${cae}`,
+  //   html: `<p>Tu comprobante está disponible. CAE: ${cae}</p>`,
+  // });
+}
 
-    /* ── DASHBOARD ── */
-    let myChart = null;
-    async function _recargarDashConPeriodo() {
-      try {
-        const data = await api.get('/api/dashboard');
-        renderDashboard(data);
-      } catch (e) { console.error("Error dash", e); }
-    }
+// ════════════════════════════════════════════════════════════
+//  AUTH HELPERS
+// ════════════════════════════════════════════════════════════
+const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
 
-    function renderDashboard(data) {
-      document.getElementById('monoCat').innerText = `Categoría ${data.monoCategoria || 'C'}`;
-      document.getElementById('monoFact').innerText = `$ ${(data.monoFacturado || 0).toLocaleString()}`;
-      document.getElementById('valHoy').innerText = `$ ${(data.hoyFacturado || 0).toLocaleString()}`;
-      document.getElementById('valPend').innerText = data.pendientesCAE || 0;
-      document.getElementById('valMes').innerText = `$ ${(data.mesFacturado || 0).toLocaleString()}`;
-      
-      const tabla = document.getElementById('tablaHome');
-      tabla.innerHTML = '';
-      (data.ventas || []).forEach(v => {
-        const row = document.createElement('div');
-        row.className = 'comp-row';
-        row.innerHTML = `
-          <div class="cae-dot ${v.status === 'done' ? 'cae-ok' : 'cae-pend'}"></div>
-          <div class="comp-info"><div>${v.customer}</div><div class="comp-meta">$ ${v.total.toLocaleString()}</div></div>
-          <div class="comp-actions">
-            ${v.status !== 'done' ? `<button class="act-btn" onclick="emitir('${v._id}')">⚡</button>` : '✅'}
-          </div>
-        `;
-        tabla.appendChild(row);
+const setTokenCookie = (res, token) =>
+  res.cookie('koi_token', token, {
+    httpOnly: true, secure: PROD_MODE, sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+const requireAuth = (req, res, next) => {
+  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
+  catch { res.clearCookie('koi_token'); res.redirect('/login'); }
+};
+
+const requireAuthAPI = (req, res, next) => {
+  const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
+  try { req.userId = jwt.verify(token, JWT_SECRET).id; next(); }
+  catch { res.status(401).json({ error: 'No autenticado' }); }
+};
+
+// ════════════════════════════════════════════════════════════
+//  PASSPORT — Google OAuth 2.0
+// ════════════════════════════════════════════════════════════
+passport.use(new GoogleStrategy({
+  clientID:     process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL:  `${BASE}/auth/google/callback`,
+}, async (_, __, profile, done) => {
+  try {
+    const email = profile.emails?.[0]?.value?.toLowerCase();
+    if (!email) return done(new Error('Google no devolvió email'));
+    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
+    if (!user) {
+      user = await User.create({
+        googleId: profile.id, email,
+        nombre:   profile.name?.givenName  || '',
+        apellido: profile.name?.familyName || '',
+        avatar:   profile.photos?.[0]?.value || '',
       });
+    } else {
+      if (!user.googleId) user.googleId = profile.id;
+      user.avatar       = profile.photos?.[0]?.value || user.avatar;
+      user.ultimoAcceso = new Date();
+      await user.save();
     }
+    done(null, user);
+  } catch (e) { done(e); }
+}));
 
-    async function emitir(orderId) {
-      try {
-        toast('Emitiendo CAE...', 'info');
-        const res = await api.post(`/api/orders/${orderId}/emitir`, {});
-        if (res.ok) {
-          toast('Factura generada!', 'success');
-          _recargarDashConPeriodo();
-        }
-      } catch (e) { toast(e.message, 'error'); }
-    }
+passport.serializeUser((user, done)   => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  try { done(null, await User.findById(id).select('-password')); }
+  catch (e) { done(e); }
+});
 
-    /* ── CONFIG ── */
-    async function cargarPerfilEnForm() {
-      try {
-        const { user } = await api.get('/api/me');
-        document.getElementById('cfgNombre').value = user.name || '';
-        document.getElementById('arcaCuit').value = user.settings?.cuit || '';
-      } catch (e) {}
-    }
+// ════════════════════════════════════════════════════════════
+//  RUTAS AUTH
+// ════════════════════════════════════════════════════════════
 
-    async function guardarPerfil() {
-      try {
-        await api.patch('/api/me', { name: document.getElementById('cfgNombre').value });
-        toast('Perfil guardado');
-      } catch (e) { toast(e.message, 'error'); }
-    }
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
-    async function sincronizarARCA() {
-      try {
-        const cuit = document.getElementById('arcaCuit').value;
-        const clave = document.getElementById('arcaClave').value;
-        await api.post('/api/arca/vincular', { cuit, clave });
-        toast('AFIP Vinculado');
-        renderStatus(true);
-      } catch (e) { toast(e.message, 'error'); }
-    }
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
+  (req, res) => { setTokenCookie(res, signToken(req.user.id)); res.redirect('/dashboard'); }
+);
 
-    async function cargarConfigVista() {
-      try {
-        const { user } = await api.get('/api/me');
-        document.getElementById('swFactAuto').checked = !!user.settings?.factAuto;
-        document.getElementById('swEnvioEmail').checked = !!user.settings?.envioAuto;
-      } catch (e) {}
-    }
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { nombre, apellido, email, password } = req.body;
+    if (!nombre || !email || !password)
+      return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios.' });
+    if (password.length < 8)
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+    if (await User.findOne({ email: email.toLowerCase() }))
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese email.' });
+    const user = await User.create({ nombre, apellido, email, password });
+    setTokenCookie(res, signToken(user.id));
+    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+  } catch (e) {
+    console.error('Register:', e.message);
+    res.status(500).json({ error: 'Error interno. Intentá de nuevo.' });
+  }
+});
 
-    async function guardarSwitch(key, value) {
-      try {
-        await api.patch('/api/me/settings', { [key]: value });
-        toast('Guardado');
-      } catch (e) { toast('Error', 'error'); }
-    }
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos.' });
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    if (!user?.password) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    if (!await user.checkPassword(password)) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    user.ultimoAcceso = new Date();
+    await user.save();
+    setTokenCookie(res, signToken(user.id));
+    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+  } catch (e) {
+    console.error('Login:', e.message);
+    res.status(500).json({ error: 'Error interno.' });
+  }
+});
 
-    function renderStatus(online) {
-      const dot = document.querySelector('#arcaStatusBadge .status-dot');
-      const badge = document.getElementById('arcaStatusBadge');
-      if (online) {
-        dot.className = 'status-dot';
-        badge.innerText = 'ARCA Online';
+app.get('/auth/logout', (req, res) => {
+  req.logout?.(() => {});
+  res.clearCookie('koi_token');
+  res.redirect('/login');
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — USUARIO & CONFIGURACIÓN
+// ════════════════════════════════════════════════════════════
+
+app.get('/api/me', requireAuthAPI, async (req, res) => {
+  const user = await User.findById(req.userId).select('-password -settings.arcaClave').lean();
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  res.json({ ok: true, user });
+});
+
+// ── Guardar configuración general (factAuto, envioAuto, categoria, etc.) ──
+app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
+  try {
+    const { nombre, apellido, ...body } = req.body;
+    const update = {};
+
+    if (nombre)   update.nombre   = nombre;
+    if (apellido) update.apellido = apellido;
+
+    // Campos de settings permitidos — incluyendo factAuto y envioAuto
+    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit'];
+    for (const key of allowedSettings) {
+      if (body[key] !== undefined) {
+        update[`settings.${key}`] = body[key];
       }
     }
 
-    function toast(msg, type = 'success') {
-      const wrap = document.getElementById('toast-wrap');
-      const t = document.createElement('div');
-      t.className = `toast ${type === 'error' ? 'error' : ''}`;
-      t.innerText = msg;
-      wrap.appendChild(t);
-      setTimeout(() => t.remove(), 3000);
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { $set: update },
+      { new: true, select: '-password -settings.arcaClave' }
+    ).lean();
+
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al guardar configuración' });
+  }
+});
+
+// ── Vincular Carpeta Fiscal (ARCA) ────────────────────────
+app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
+  try {
+    const { cuit, arcaClave } = req.body;
+    if (!cuit || !arcaClave) return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
+
+    const cleanCuit = String(cuit).replace(/\D/g, '');
+
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        $set: {
+          'settings.cuit':       cleanCuit,
+          'settings.arcaUser':   cleanCuit,
+          'settings.arcaClave':  encrypt(arcaClave),
+          'settings.arcaStatus': 'pendiente',
+          'settings.arcaNotas':  'Datos recibidos. Validando vinculación con ARCA...',
+        },
+      },
+      { new: true, select: '-password -settings.arcaClave' }
+    ).lean();
+
+    res.json({ ok: true, message: 'Carpeta fiscal enviada. El proceso puede demorar hasta 24hs.', user });
+  } catch (e) {
+    console.error('Error ARCA Link:', e.message);
+    res.status(500).json({ error: 'No se pudo procesar la vinculación.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — AFIP/ARCA — EMISIÓN
+// ════════════════════════════════════════════════════════════
+
+app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const resultado = await afip_verificarDelegacion(req.arcaCuit);
+    res.json({ ok: resultado.ok, mensaje: resultado.mensaje, cuit: req.arcaCuit });
+  } catch (e) {
+    res.status(500).json({ error: 'Error verificando delegación: ' + e.message });
+  }
+});
+
+app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
+  try {
+    await new Promise((resolve, reject) => {
+      const r = https.get(WSFE_URL + '?wsdl', { timeout: 8000 }, resolve);
+      r.on('error', reject);
+      r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+    });
+    res.json({ ok: true, online: true });
+  } catch {
+    res.json({ ok: true, online: false });
+  }
+});
+
+// ── Emitir CAE para una orden específica ─────────────────
+app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const order = await Order.findOne({ _id: orderId, userId: req.userId });
+    if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    if (order.status === 'invoiced') {
+      return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
+    }
+    if (order.status === 'error_data') {
+      return res.status(400).json({ error: `No se puede emitir: ${order.errorLog}` });
     }
 
-    window.addEventListener('DOMContentLoaded', () => {
-      _recargarDashConPeriodo();
-      api.get('/api/me').then(res => {
-        if (res.user.settings?.arcaStatus === 'vinculado') renderStatus(true);
-      }).catch(() => {});
+    const resultado = await afip_emitirComprobante(
+      req.arcaCuit,
+      req.arcaPtoVta,
+      {
+        tipoComprobante: _tipoComprobante(req.arcaCategoria),
+        clienteDoc:      order.customerDoc || '0',
+        importeTotal:    order.amount,
+      }
+    );
+
+    await Order.findByIdAndUpdate(orderId, {
+      status:    'invoiced',
+      caeNumber: resultado.cae,
+      caeExpiry: resultado.caeFchVto,
+      errorLog:  '',
     });
 
-    function cerrarSesion() { window.location.href = '/api/auth/logout'; }
-  </script>
-</body>
-</html>
+    console.log(`✅ CAE: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
+
+    // Enviar mail si envioAuto=true
+    if (req.envioAuto && order.customerEmail) {
+      _enviarMailFactura(order, resultado.cae).catch(console.warn);
+    }
+
+    res.json({ ok: true, cae: resultado.cae, vto: resultado.caeFchVto, nroComp: resultado.nroComp });
+
+  } catch (e) {
+    console.error(`❌ Emitir CAE orden ${orderId}:`, e.message);
+    await Order.findOneAndUpdate(
+      { _id: orderId, userId: req.userId },
+      { status: 'error_afip', errorLog: e.message }
+    );
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Emitir en lote todas las órdenes pendientes ─────────
+app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const pendientes = await Order.find({ userId: req.userId, status: 'pending_invoice' })
+      .sort({ orderDate: 1, createdAt: 1 });
+
+    if (!pendientes.length) {
+      return res.json({ ok: true, mensaje: 'No hay órdenes pendientes de facturar.' });
+    }
+
+    res.json({ ok: true, mensaje: `Iniciando emisión de ${pendientes.length} comprobantes…`, total: pendientes.length });
+
+    const cuit      = req.arcaCuit;
+    const ptoVta    = req.arcaPtoVta;
+    const categoria = req.arcaCategoria;
+    const envioAuto = req.envioAuto;
+    let ok = 0, errores = 0;
+
+    for (const order of pendientes) {
+      try {
+        const r = await afip_emitirComprobante(cuit, ptoVta, {
+          tipoComprobante: _tipoComprobante(categoria),
+          clienteDoc:      order.customerDoc || '0',
+          importeTotal:    order.amount,
+        });
+        await Order.findByIdAndUpdate(order._id, {
+          status: 'invoiced', caeNumber: r.cae, caeExpiry: r.caeFchVto, errorLog: '',
+        });
+        if (envioAuto && order.customerEmail) {
+          _enviarMailFactura(order, r.cae).catch(console.warn);
+        }
+        ok++;
+        await new Promise(r => setTimeout(r, 350));
+      } catch (e) {
+        errores++;
+        await Order.findByIdAndUpdate(order._id, { status: 'error_afip', errorLog: e.message });
+        console.error(`❌ Lote CAE orden ${order._id}:`, e.message);
+      }
+    }
+    console.log(`📊 Lote finalizado CUIT=${cuit}: ${ok} emitidos, ${errores} errores`);
+  } catch (e) {
+    console.error('Emitir lote error:', e.message);
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — ÓRDENES MANUALES
+//
+//  POST /api/orders/manual — crea una venta manual y,
+//  si factAuto=true, emite el CAE automáticamente.
+// ════════════════════════════════════════════════════════════
+app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
+  try {
+    const { cliente, email, concepto, monto, tipo, dni } = req.body;
+
+    if (!cliente || !monto) {
+      return res.status(400).json({ error: 'Cliente y monto son obligatorios.' });
+    }
+    if (parseFloat(monto) <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0.' });
+    }
+
+    const user = await User.findById(req.userId).select('settings').lean();
+    const externalId = `MAN-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    const order = await Order.create({
+      userId:        req.userId,
+      platform:      'manual',
+      externalId,
+      customerName:  cliente,
+      customerEmail: email || '',
+      customerDoc:   dni   || CUIT_CF,
+      amount:        parseFloat(monto),
+      currency:      'ARS',
+      concepto:      concepto || '',
+      status:        'pending_invoice',
+      orderDate:     new Date(),
+    });
+
+    // ── Auto-facturación si corresponde ──
+    if (user?.settings?.factAuto !== false && user?.settings?.arcaStatus === 'vinculado') {
+      // Responder primero, facturar en background
+      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada. Emitiendo CAE...' });
+      _intentarAutoFacturar(req.userId, order);
+    } else {
+      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada como pendiente.' });
+    }
+
+  } catch (e) {
+    console.error('Manual order error:', e.message);
+    res.status(500).json({ error: 'Error al registrar la venta.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — INTEGRACIONES
+// ════════════════════════════════════════════════════════════
+
+app.get('/api/integrations', requireAuthAPI, async (req, res) => {
+  const list = await Integration.find({ userId: req.userId })
+    .select('-credentials -webhookSecret').lean();
+  res.json({ ok: true, integrations: list });
+});
+
+app.patch('/api/integrations/:id/status', requireAuthAPI, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['active', 'paused'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
+    const doc = await Integration.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId }, { status },
+      { new: true, select: '-credentials -webhookSecret' }
+    );
+    if (!doc) return res.status(404).json({ error: 'Integración no encontrada' });
+    res.json({ ok: true, integration: doc });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.delete('/api/integrations/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const doc = await Integration.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+    if (!doc) return res.status(404).json({ error: 'Integración no encontrada' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.get('/api/integrations/:id/webhook', requireAuthAPI, async (req, res) => {
+  const doc = await Integration.findOne({ _id: req.params.id, userId: req.userId })
+    .select('platform webhookSecret');
+  if (!doc) return res.status(404).json({ error: 'No encontrada' });
+  res.json({ ok: true, url: `${BASE}/webhook/${doc.platform}/${doc.webhookSecret}` });
+});
+
+app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
+  const { platform } = req.params;
+  const TOKEN_PLATFORMS = ['tiendanube', 'empretienda', 'rappi', 'vtex', 'shopify'];
+  if (!TOKEN_PLATFORMS.includes(platform))
+    return res.status(400).json({ error: `Plataforma ${platform} no soporta token directo` });
+
+  try {
+    const { storeId, storeName, storeUrl, apiToken, apiKey, apiSecret } = req.body;
+    if (!storeId) return res.status(400).json({ error: 'storeId requerido' });
+
+    const creds = {};
+    if (apiToken)  creds.apiToken  = encrypt(apiToken);
+    if (apiKey)    creds.apiKey    = encrypt(apiKey);
+    if (apiSecret) creds.apiSecret = encrypt(apiSecret);
+
+    const integration = await Integration.findOneAndUpdate(
+      { userId: req.userId, platform, storeId: String(storeId) },
+      {
+        $set: {
+          storeName: storeName || `${platform} ${storeId}`, storeUrl: storeUrl || '',
+          status: 'active', errorLog: '', credentials: creds,
+          updatedAt: new Date(), initialSyncDone: false,
+        },
+        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    if (platform === 'tiendanube' && apiToken) {
+      await _registerWebhookTiendaNube(integration, apiToken).catch(console.warn);
+    }
+
+    _dispararSyncHistorico(integration);
+    res.json({ ok: true, message: `${platform} conectado. Sincronizando historial...` });
+  } catch (e) {
+    console.error(`Connect ${platform}:`, e.message);
+    res.status(500).json({ error: 'Error al conectar. Verificá las credenciales.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  WOOCOMMERCE OAUTH
+// ════════════════════════════════════════════════════════════
+
+app.get('/auth/woo/connect', requireAuth, (req, res) => {
+  const { store_url } = req.query;
+  if (!store_url) return res.status(400).send('Falta store_url');
+  const clean   = store_url.replace(/\/$/, '').toLowerCase();
+  const state   = jwt.sign({ userId: req.userId, storeUrl: clean }, JWT_SECRET, { expiresIn: '15m' });
+  const authUrl = `${clean}/wc-auth/v1/authorize`
+    + `?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}`
+    + `&return_url=${encodeURIComponent(`${BASE}/dashboard?woo=connected`)}`
+    + `&callback_url=${encodeURIComponent(`${BASE}/auth/woo/callback?state=${encodeURIComponent(state)}`)}`;
+  res.redirect(authUrl);
+});
+
+app.post('/auth/woo/callback', async (req, res) => {
+  res.status(200).json({ status: 'ok' });
+  const { state } = req.query;
+  const { consumer_key, consumer_secret } = req.body;
+  try {
+    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'woocommerce', storeId: storeUrl },
+      {
+        $set: {
+          storeName: storeUrl.replace(/^https?:\/\//, ''), storeUrl,
+          status: 'active', errorLog: '',
+          credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) },
+          initialSyncDone: false, updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+    await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
+    _dispararSyncHistorico(integration);
+    console.log(`✅ WooCommerce conectado: ${storeUrl}`);
+  } catch (e) { console.error('WooCommerce callback:', e.message); }
+});
+
+async function _registerWebhookWoo(integration, key, secret, storeUrl) {
+  const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
+  try {
+    const { data: existing } = await axios.get(`${storeUrl}/wp-json/wc/v3/webhooks`, {
+      auth: { username: key, password: secret }, params: { per_page: 100 },
+    });
+    if (existing?.some(wh => wh.delivery_url === webhookUrl)) return;
+    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`,
+      { name: 'KOI-Factura', topic: 'order.created', delivery_url: webhookUrl, status: 'active' },
+      { auth: { username: key, password: secret } }
+    );
+    console.log(`🔌 WooCommerce webhook: ${storeUrl}`);
+  } catch (e) {
+    console.warn('WooCommerce webhook:', e.response?.data?.message || e.message);
+    await Integration.findByIdAndUpdate(integration._id, { errorLog: `Webhook: ${e.message}` });
+  }
+}
+
+async function _registerWebhookTiendaNube(integration, apiToken) {
+  const webhookUrl = `${BASE}/webhook/tiendanube/${integration.webhookSecret}`;
+  await axios.post(
+    `https://api.tiendanube.com/v1/${integration.storeId}/webhooks`,
+    { event: 'order/paid', url: webhookUrl },
+    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/3.2' } }
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  MERCADOLIBRE OAUTH
+// ════════════════════════════════════════════════════════════
+
+app.get('/auth/ml/connect', requireAuth, (req, res) => {
+  const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
+  res.redirect(
+    'https://auth.mercadolibre.com.ar/authorization'
+    + `?response_type=code&client_id=${process.env.ML_CLIENT_ID}`
+    + `&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}`
+    + `&state=${encodeURIComponent(state)}`
+  );
+});
+
+app.get('/auth/ml/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code) return res.redirect('/dashboard?error=ml_denied');
+  try {
+    const { userId } = jwt.verify(state, JWT_SECRET);
+    const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', {
+      grant_type: 'authorization_code', client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET, code, redirect_uri: `${BASE}/auth/ml/callback`,
+    });
+    const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me',
+      { headers: { Authorization: `Bearer ${token.access_token}` } }
+    );
+    const sellerId = String(token.user_id || seller.id);
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'mercadolibre', storeId: sellerId },
+      {
+        $set: {
+          storeName: seller.nickname || `ML ${sellerId}`, status: 'active', errorLog: '',
+          credentials: {
+            accessToken:  encrypt(token.access_token),
+            refreshToken: encrypt(token.refresh_token),
+            tokenExpiry:  new Date(Date.now() + token.expires_in * 1000).toISOString(),
+            sellerId,
+          },
+          initialSyncDone: false, updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'mercadolibre', storeId: sellerId, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+    _dispararSyncHistorico(integration);
+    res.redirect('/dashboard?ml=connected');
+  } catch (e) {
+    console.error('ML callback:', e.response?.data || e.message);
+    res.redirect('/dashboard?error=ml_failed');
+  }
+});
+
+async function _getMLToken(integration) {
+  const expiry = new Date(integration.credentials.tokenExpiry || 0);
+  if (expiry > new Date(Date.now() + 10 * 60 * 1000)) return decrypt(integration.credentials.accessToken);
+  const { data } = await axios.post('https://api.mercadolibre.com/oauth/token', {
+    grant_type: 'refresh_token', client_id: process.env.ML_CLIENT_ID,
+    client_secret: process.env.ML_CLIENT_SECRET, refresh_token: decrypt(integration.credentials.refreshToken),
+  });
+  await Integration.findByIdAndUpdate(integration._id, {
+    'credentials.accessToken':  encrypt(data.access_token),
+    'credentials.refreshToken': encrypt(data.refresh_token),
+    'credentials.tokenExpiry':  new Date(Date.now() + data.expires_in * 1000).toISOString(),
+  });
+  return data.access_token;
+}
+
+// ════════════════════════════════════════════════════════════
+//  BULK SYNC ENGINE
+// ════════════════════════════════════════════════════════════
+
+const BULK_SYNC = {
+  async woocommerce(integration) {
+    const key = integration.getKey('consumerKey'), secret = integration.getKey('consumerSecret');
+    let page = 1, total = 0;
+    while (true) {
+      const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
+        auth: { username: key, password: secret },
+        params: { per_page: 100, page, orderby: 'date', order: 'desc' },
+      });
+      if (!orders?.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.woocommerce(r))));
+      total += orders.length;
+      if (orders.length < 100) break;
+      page++;
+    }
+    return total;
+  },
+  async tiendanube(integration) {
+    const token = integration.getKey('apiToken');
+    let page = 1, total = 0;
+    while (true) {
+      const { data: orders } = await axios.get(
+        `https://api.tiendanube.com/v1/${integration.storeId}/orders`,
+        { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.2' }, params: { per_page: 200, page } }
+      );
+      if (!orders?.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.tiendanube(r))));
+      total += orders.length;
+      if (orders.length < 200) break;
+      page++;
+    }
+    return total;
+  },
+  async mercadolibre(integration) {
+    const accessToken = await _getMLToken(integration);
+    const sellerId    = integration.credentials.sellerId;
+    let offset = 0, total = 0;
+    while (true) {
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params:  { seller: sellerId, limit: 50, offset, sort: 'date_desc' },
+      });
+      const orders = data.results || [];
+      if (!orders.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.mercadolibre(r))));
+      total  += orders.length;
+      offset += 50;
+      if (offset >= (data.paging?.total || 0)) break;
+    }
+    return total;
+  },
+  async vtex(integration) {
+    const apiKey = integration.getKey('apiKey'), apiToken = integration.getKey('apiToken');
+    let page = 1, total = 0;
+    while (true) {
+      const { data } = await axios.get(`${integration.storeUrl}/api/oms/pvt/orders`, {
+        headers: { 'X-VTEX-API-AppKey': apiKey, 'X-VTEX-API-AppToken': apiToken },
+        params:  { page, per_page: 100 },
+      });
+      const orders = data.list || [];
+      if (!orders.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.vtex(r))));
+      total += orders.length;
+      if (orders.length < 100) break;
+      page++;
+    }
+    return total;
+  },
+};
+
+async function _dispararSyncHistorico(integration) {
+  const syncFn = BULK_SYNC[integration.platform];
+  if (!syncFn) return;
+  console.log(`🔄 Sync histórico: ${integration.platform} / ${integration.storeId}`);
+  try {
+    const count = await syncFn(integration);
+    await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '', initialSyncDone: true });
+    console.log(`✅ Sync ${integration.platform}: ${count} órdenes`);
+  } catch (err) {
+    console.error(`❌ Sync ${integration.platform}:`, err.message);
+    await Integration.findByIdAndUpdate(integration._id, { errorLog: `Sync: ${err.message}`, status: 'error' });
+  }
+}
+
+app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
+    if (!integration) return res.status(404).json({ error: 'No encontrada' });
+    if (integration.status !== 'active') return res.status(400).json({ error: 'Integración inactiva' });
+    const syncFn = BULK_SYNC[integration.platform];
+    if (!syncFn) return res.status(400).json({ error: `Sync no disponible para ${integration.platform}` });
+    res.json({ ok: true, message: 'Sincronización iniciada' });
+    syncFn(integration)
+      .then(count => Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '' }))
+      .catch(async err => Integration.findByIdAndUpdate(integration._id, { errorLog: err.message, status: 'error' }));
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  WEBHOOKS UNIVERSALES
+// ════════════════════════════════════════════════════════════
+
+async function handleWebhook(platform, secret, getCanonical) {
+  const integration = await Integration.findOne({ platform, webhookSecret: secret, status: 'active' });
+  if (!integration) return;
+  try {
+    const canonical = await getCanonical(integration);
+    if (canonical) await upsertOrder(integration, canonical);
+  } catch (e) { console.error(`❌ Webhook ${platform}:`, e.message); }
+}
+
+app.post('/webhook/woocommerce/:secret',  async (req, res) => { res.status(200).send('OK'); await handleWebhook('woocommerce',  req.params.secret, () => normalize.woocommerce(req.body)); });
+app.post('/webhook/tiendanube/:secret',   async (req, res) => {
+  res.status(200).send('OK');
+  await handleWebhook('tiendanube', req.params.secret, async (integration) => {
+    const { data } = await axios.get(
+      `https://api.tiendanube.com/v1/${integration.storeId}/orders/${req.body.id}`,
+      { headers: { Authentication: `bearer ${integration.getKey('apiToken')}`, 'User-Agent': 'KOI-Factura/3.2' } }
+    );
+    return normalize.tiendanube(data);
+  });
+});
+app.post('/webhook/mercadolibre/:secret', async (req, res) => {
+  res.status(200).send('OK');
+  const { topic, resource } = req.body;
+  if (!['orders_v2', 'orders'].includes(topic)) return;
+  await handleWebhook('mercadolibre', req.params.secret, async (integration) => {
+    const token    = await _getMLToken(integration);
+    const orderUrl = resource.startsWith('http') ? resource : `https://api.mercadolibre.com${resource}`;
+    const { data } = await axios.get(orderUrl, { headers: { Authorization: `Bearer ${token}` } });
+    return normalize.mercadolibre(data);
+  });
+});
+app.post('/webhook/vtex/:secret',        async (req, res) => { res.status(200).send('OK'); await handleWebhook('vtex',        req.params.secret, () => normalize.vtex(req.body)); });
+app.post('/webhook/empretienda/:secret', async (req, res) => { res.status(200).send('OK'); await handleWebhook('empretienda', req.params.secret, () => normalize.empretienda(req.body)); });
+app.post('/webhook/rappi/:secret',       async (req, res) => { res.status(200).send('OK'); await handleWebhook('rappi',       req.params.secret, () => normalize.rappi(req.body)); });
+app.post('/webhook/shopify/:secret',     async (req, res) => { res.status(200).send('OK'); await handleWebhook('shopify',     req.params.secret, () => normalize.shopify(req.body)); });
+
+// ════════════════════════════════════════════════════════════
+//  API — STATS CON FILTRO DE PERÍODO
+// ════════════════════════════════════════════════════════════
+
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+  try {
+    const { platform, desde, hasta } = req.query;
+    const match = { userId: new mongoose.Types.ObjectId(req.userId) };
+    if (platform) match.platform = platform;
+
+    if (desde || hasta) {
+      const df = {};
+      if (desde) df.$gte = new Date(desde);
+      if (hasta) { const h = new Date(hasta); h.setHours(23,59,59,999); df.$lte = h; }
+      match.$or = [
+        { orderDate: df },
+        { orderDate: { $exists: false }, createdAt: df },
+        { orderDate: null, createdAt: df },
+      ];
+    }
+
+    const hoyStart = new Date(); hoyStart.setHours(0,0,0,0);
+    const hoyEnd   = new Date(); hoyEnd.setHours(23,59,59,999);
+    const matchHoy = {
+      userId: new mongoose.Types.ObjectId(req.userId),
+      status: { $in: ['pending_invoice', 'invoiced'] },
+      $or: [
+        { orderDate: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: { $exists: false }, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: null, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+      ],
+    };
+    if (platform) matchHoy.platform = platform;
+
+    const [totals, facturado, recent, hoyAgg, pendientesCount, plataformas] = await Promise.all([
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.aggregate([{ $match: { ...match, status: 'invoiced' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.find({ ...match }).sort({ orderDate: -1, createdAt: -1 }).limit(100)
+        .select('platform externalId customerName amount currency status createdAt orderDate').lean(),
+      Order.aggregate([{ $match: matchHoy }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.countDocuments({ ...match, status: 'pending_invoice' }),
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
+    ]);
+
+    res.json({
+      ok:             true,
+      totalMonto:     totals[0]?.total    || 0,
+      totalOrden:     totals[0]?.count    || 0,
+      facturadoMonto: facturado[0]?.total || 0,
+      facturadoCount: facturado[0]?.count || 0,
+      hoyMonto:       hoyAgg[0]?.total   || 0,
+      hoyCount:       hoyAgg[0]?.count   || 0,
+      pendientes:     pendientesCount     || 0,
+      plataformas,
+      ultimas:        recent,
+    });
+  } catch (e) {
+    console.error('Stats:', e.message);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
+
+app.get('/api/orders', requireAuthAPI, async (req, res) => {
+  try {
+    const { platform, status, limit = 100 } = req.query;
+    const filter = { userId: req.userId };
+    if (platform) filter.platform = platform;
+    if (status)   filter.status   = status;
+    const orders = await Order.find(filter)
+      .sort({ orderDate: -1, createdAt: -1 })
+      .limit(Math.min(parseInt(limit), 500)).lean();
+    res.json({ ok: true, orders });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  PÁGINAS HTML
+// ════════════════════════════════════════════════════════════
+
+const isLoggedIn = (req) => {
+  try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
+};
+app.get('/',          (req, res) => res.redirect(isLoggedIn(req) ? '/dashboard' : '/login'));
+app.get('/login',     (req, res) => isLoggedIn(req) ? res.redirect('/dashboard') : res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ════════════════════════════════════════════════════════════
+//  KEEP-ALIVE
+// ════════════════════════════════════════════════════════════
+app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
+
+const selfPing = () => {
+  if (!process.env.BASE_URL) return;
+  axios.get(`${BASE}/health`, { timeout: 10_000 })
+    .then(() => console.log(`🏓 Ping OK [${new Date().toISOString()}]`))
+    .catch(err => console.warn(`⚠️  Ping: ${err.message}`));
+};
+
+app.listen(PORT, () => {
+  console.log(`🚀 KOI-Factura v3.2 — puerto ${PORT}`);
+  console.log(`📡 Base URL: ${BASE}`);
+  console.log(`🔐 CUIT Maestro AFIP: ${CUIT_MAESTRO}`);
+  console.log(`🌐 AFIP modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
+  setTimeout(() => { selfPing(); setInterval(selfPing, 10 * 60 * 1000); }, 30_000);
+});
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN PANEL — CONSERJERÍA MANUAL (SOLO VOS)
+// ════════════════════════════════════════════════════════════
+
+const ADMIN_EMAIL = 'koi.automatic@gmail.com';
+
+async function requireAdmin(req, res, next) {
+  const admin = await User.findById(req.userId).select('email').lean();
+  if (!admin || admin.email.trim() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: 'No tenés permisos de administrador.' });
+  }
+  next();
+}
+
+app.get('/api/admin/pendientes', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    const pendientes = await User.find({
+      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso', 'vinculado'] },
+    }).select('nombre apellido email settings').lean();
+
+    const lista = pendientes.map(u => {
+      const s = u.settings || {};
+      return {
+        id:          u._id,
+        cliente:     `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+        email:       u.email,
+        cuit:        s.cuit        || 'N/A',
+        claveFiscal: s.arcaClave   ? decrypt(s.arcaClave) : 'Sin clave',
+        status:      s.arcaStatus  || 'pendiente',
+        puntoVenta:  s.arcaPtoVta  || 1,
+        notas:       s.arcaNotas   || '',
+      };
+    });
+
+    res.json({ ok: true, total: lista.length, lista });
+  } catch (e) {
+    res.status(500).json({ error: 'Error en el panel de admin' });
+  }
+});
+
+app.post('/api/admin/update-status', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    const { userId, nuevoStatus, notas, puntoVenta } = req.body;
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'settings.arcaStatus': nuevoStatus,
+        'settings.arcaNotas':  notas,
+        'settings.arcaPtoVta': Number(puntoVenta) || 1,
+      },
+    });
+
+    // Si se vinculó → limpiar TA cacheado para forzar renovación
+    if (nuevoStatus === 'vinculado') {
+      const user = await User.findById(userId).select('settings.cuit').lean();
+      const cuit = user?.settings?.cuit?.replace(/\D/g, '');
+      if (cuit) {
+        try { fs.unlinkSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json')); } catch {}
+        console.log(`🔄 TA cache limpiado para CUIT ${cuit}`);
+      }
+    }
+
+    res.json({ ok: true, message: `Estado: "${nuevoStatus}". Punto de Venta: ${puntoVenta || 1}` });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo actualizar el estado.' });
+  }
+});
+
+app.get('/api/admin/delegaciones', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    if (!fs.existsSync(TA_CACHE_DIR)) return res.json({ ok: true, delegaciones: [], maestro: CUIT_MAESTRO });
+
+    const carpetas = fs.readdirSync(TA_CACHE_DIR).filter(d => /^\d+$/.test(d));
+    const delegaciones = carpetas.map(cuit => {
+      let estado = 'sin_ta', expiracion = null, valido = false;
+      try {
+        const ta   = JSON.parse(fs.readFileSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json'), 'utf8'));
+        expiracion = ta.expiracion;
+        valido     = expiracion ? new Date(expiracion).getTime() > Date.now() : false;
+        estado     = valido ? 'activo' : 'expirado';
+      } catch {}
+      return { cuit, estado, expiracion, valido };
+    });
+
+    res.json({ ok: true, delegaciones, maestro: CUIT_MAESTRO, modo: PROD_MODE ? 'produccion' : 'homologacion' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});

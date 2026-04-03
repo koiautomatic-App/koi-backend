@@ -251,8 +251,11 @@ const Order = mongoose.model('Order', OrderSchema);
 
 // --- FUNCIONES AUXILIARES (Deben ir arriba para evitar errores de "not defined") ---
 
-function _tipoComprobante() {
-  return 11; // Factura C para Monotributo
+function _tipoComprobante(categoria = 'C') {
+  // ARCA usa: 1 para Factura A, 6 para Factura B, 11 para Factura C
+  if (categoria === 'A') return 1;
+  if (categoria === 'B') return 6;
+  return 11; 
 }
 
 function _fechaAFIP(d) {

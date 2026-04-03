@@ -512,7 +512,12 @@ function _taEsValido(ta) {
 
 function _parseFechaAFIP(str) {
   if (!str || str.length !== 8) return null;
-  return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`);
+  const y = str.slice(0, 4);
+  const m = str.slice(4, 6);
+  const d = str.slice(6, 8);
+  // Al agregar T12:00:00, evitamos que cualquier desfase de zona horaria 
+  // cambie el día calendario.
+  return new Date(`${y}-${m}-${d}T12:00:00Z`);
 }
 
 // (Mantené tus funciones auxiliares _leerTACache, _guardarTACache, etc. igual)

@@ -346,16 +346,45 @@ function _taEsValido(ta) {
 }
 
 function _parsearTA(xml) {
+  // 1. Buscamos el nodo que contiene el ticket (en base64)
   const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
+  
+  if (!m) {
+    // Si no hay loginCmsReturn, AFIP mandó un error SOAP directo (ej. CUIT no autorizado)
+    const fault = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/)?.[1];
+    throw new Error(`AFIP Rechazó el Login: ${fault || 'Respuesta SOAP inválida'}`);
+  }
 
-  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
-  const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
-  const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
-  const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
+  try {
+    // 2. Decodificamos el Base64
+    const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+    
+    // 🔍 DEBUG CRÍTICO: Esto aparecerá en tus logs de Render
+    console.log("--- DEBUG AFIP DATA START ---");
+    console.log(taXml); 
+    console.log("--- DEBUG AFIP DATA END ---");
 
-  if (!token || !sign) throw new Error('WSAA: no se pudo extraer token/sign del TA');
-  return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
+    // 3. Intentamos extraer los campos
+    const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
+    const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
+    const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
+
+    if (!token || !sign) {
+      // Si el XML decodificado no tiene token/sign, es un error interno de AFIP (ej. "Certificado revocado")
+      // Buscamos si hay un mensaje de error dentro de ese XML decodificado
+      const innerErr = taXml.match(/<error>([\s\S]*?)<\/error>/)?.[1] || 'Contenido inesperado en el ticket';
+      throw new Error(`Ticket Inválido: ${innerErr}`);
+    }
+
+    return { 
+      token, 
+      sign, 
+      expiracion: exp, 
+      generadoEn: new Date().toISOString() 
+    };
+  } catch (e) {
+    throw new Error(`Fallo en parseo de ticket: ${e.message}`);
+  }
 }
 
 async function afip_obtenerTA(cuitUsuario) {

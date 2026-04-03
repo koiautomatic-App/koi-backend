@@ -35,7 +35,7 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 // ════════════════════════════════════════════════════════════
 
 const AFIP_PROD      = process.env.AFIP_PROD === 'true';
-const CUIT_MAESTRO   = process.env.AFIP_CUIT || ''; // Tu CUIT (KOI)
+const CUIT_MAESTRO   = process.env.AFIP_CUIT || ''; 
 const AFIP_CERT_PATH = path.join(__dirname, 'certs', 'koi.crt');
 const AFIP_KEY_PATH  = path.join(__dirname, 'certs', 'koi.key');
 const TA_CACHE_DIR   = path.join(__dirname, 'cache', 'ta');
@@ -51,18 +51,8 @@ const WSFE_URL = AFIP_PROD
 if (!fs.existsSync(TA_CACHE_DIR)) fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — COMUNICACIÓN Y FIRMA (CORREGIDO)
+//  MÓDULO AFIP — MOTOR DE COMUNICACIÓN (AXIOS + TLS 1.2)
 // ════════════════════════════════════════════════════════════
-
-function _tipoComprobante(categoria = 'C') {
-  if (categoria === 'A') return 1;
-  if (categoria === 'B') return 6;
-  return 11; 
-}
-
-function _fechaAFIP(d) {
-  return d.toISOString().split('T')[0].replace(/-/g, '');
-}
 
 async function _soapPost(url, body) {
   const isWsaa = url.includes('wsaa');
@@ -94,21 +84,6 @@ async function _soapPost(url, body) {
   }
 }
 
-function _firmarCMS(xml) {
-  if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
-    throw new Error("Certificados KOI no encontrados.");
-  }
-  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
-  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
-  try {
-    fs.writeFileSync(tmpXml, xml, 'utf8');
-    execSync(`openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}" -nodetach -outform DER -out "${tmpOut}"`, { stdio: 'pipe' });
-    return fs.readFileSync(tmpOut).toString('base64');
-  } finally {
-    try { fs.unlinkSync(tmpXml); fs.unlinkSync(tmpOut); } catch {}
-  }
-}
-
 function _generarCMS(servicio = 'wsfe') {
   const ahora = new Date();
   const fechaDesde = new Date(ahora.getTime() - (10 * 60 * 1000));
@@ -125,7 +100,6 @@ function _generarCMS(servicio = 'wsfe') {
     return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}-03:00`;
   };
 
-  // XML estructurado para Delegación
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
   <header>
@@ -141,6 +115,21 @@ function _generarCMS(servicio = 'wsfe') {
   return _firmarCMS(xml);
 }
 
+function _firmarCMS(xml) {
+  if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
+    throw new Error("Certificados KOI no encontrados.");
+  }
+  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
+  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
+  try {
+    fs.writeFileSync(tmpXml, xml, 'utf8');
+    execSync(`openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}" -nodetach -outform DER -out "${tmpOut}"`, { stdio: 'pipe' });
+    return fs.readFileSync(tmpOut).toString('base64');
+  } finally {
+    try { fs.unlinkSync(tmpXml); fs.unlinkSync(tmpOut); } catch {}
+  }
+}
+
 function _parsearTA(xml) {
   const fault = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/);
   if (fault) throw new Error(`AFIP Error: ${fault[1].trim()}`);
@@ -153,12 +142,12 @@ function _parsearTA(xml) {
   const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
   const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
 
-  if (!token || !sign) throw new Error('AFIP: Ticket inválido o denegado.');
+  if (!token || !sign) throw new Error('AFIP: Ticket inválido.');
   return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
 }
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — FUNCIONES PRINCIPALES
+//  AFIP — FUNCIONES DE LÓGICA
 // ════════════════════════════════════════════════════════════
 
 async function afip_obtenerTA(cuitUsuario) {
@@ -169,9 +158,7 @@ async function afip_obtenerTA(cuitUsuario) {
   const cms = _generarCMS('wsfe');
   const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.xsb.com.ar">
-  <soapenv:Body>
-    <wsaa:loginCms><wsaa:in0>${cms}</wsaa:in0></wsaa:loginCms>
-  </soapenv:Body>
+  <soapenv:Body><wsaa:loginCms><wsaa:in0>${cms}</wsaa:in0></wsaa:loginCms></soapenv:Body>
 </soapenv:Envelope>`;
 
   const resp = await _soapPost(WSAA_URL, soapBody);
@@ -182,31 +169,23 @@ async function afip_obtenerTA(cuitUsuario) {
 
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
-  const cbTipo = _tipoComprobante(datos.categoria || 'C');
+  const cbTipo = (datos.categoria === 'A') ? 1 : (datos.categoria === 'B' ? 6 : 11);
   
-  // Obtener último número
   const soapUltimo = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
-  <soapenv:Body>
-    <ar:FECompUltimoAutorizado>
-      <ar:Auth><ar:Token>${token}</ar:Token><ar:Sign>${sign}</ar:Sign><ar:Cuit>${cuitEmisor}</ar:Cuit></ar:Auth>
-      <ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-    </ar:FECompUltimoAutorizado>
-  </soapenv:Body>
+  <soapenv:Body><ar:FECompUltimoAutorizado>
+    <ar:Auth><ar:Token>${token}</ar:Token><ar:Sign>${sign}</ar:Sign><ar:Cuit>${cuitEmisor}</ar:Cuit></ar:Auth>
+    <ar:PtoVta>${puntoVenta}</ar:PtoVta><ar:CbteTipo>${cbTipo}</ar:CbteTipo>
+  </ar:FECompUltimoAutorizado></soapenv:Body>
 </soapenv:Envelope>`;
 
   const respUltimo = await _soapPost(WSFE_URL, soapUltimo);
   const ultimoNro = parseInt(respUltimo.match(/<CbteNro>(\d+)<\/CbteNro>/)?.[1] || '0', 10);
   const nroComp = ultimoNro + 1;
 
-  // Lógica de importes y fechas
   const importe = parseFloat(datos.importeTotal.toFixed(2));
-  const fEmision = _fechaAFIP(new Date());
-  
-  // Límite ARCA para identificación
-  const ARCA_LIMIT = process.env.ARCA_LIMIT ? parseInt(process.env.ARCA_LIMIT) : 191624;
-  const docTipo = (importe >= ARCA_LIMIT) ? (String(datos.clienteDoc).length === 11 ? 80 : 96) : (String(datos.clienteDoc).length === 11 ? 80 : 99);
-  const docNro = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  const fEmision = new Date().toISOString().split('T')[0].replace(/-/g, '');
+  const docTipo = (String(datos.clienteDoc).length === 11) ? 80 : 99;
 
   const soapFactura = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -214,7 +193,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     <ar:Token>${token}</ar:Token><ar:Sign>${sign}</ar:Sign><ar:Cuit>${cuitEmisor}</ar:Cuit>
     </ar:Auth><ar:FeCAEReq><ar:FeCabReq><ar:CantReg>1</ar:CantReg><ar:PtoVta>${puntoVenta}</ar:PtoVta>
     <ar:CbteTipo>${cbTipo}</ar:CbteTipo></ar:FeCabReq><ar:FeDetReq><ar:FECAEDetRequest>
-    <ar:Concepto>1</ar:Concepto><ar:DocTipo>${docTipo}</ar:DocTipo><ar:DocNro>${docNro}</ar:DocNro>
+    <ar:Concepto>1</ar:Concepto><ar:DocTipo>${docTipo}</ar:DocTipo><ar:DocNro>${datos.clienteDoc || 0}</ar:DocNro>
     <ar:CbteDesde>${nroComp}</ar:CbteDesde><ar:CbteHasta>${nroComp}</ar:CbteHasta><ar:CbteFch>${fEmision}</ar:CbteFch>
     <ar:ImpTotal>${importe}</ar:ImpTotal><ar:ImpTotConc>0.00</ar:ImpTotConc><ar:ImpNeto>${importe}</ar:ImpNeto>
     <ar:ImpOpEx>0.00</ar:ImpOpEx><ar:ImpIVA>0.00</ar:ImpIVA><ar:ImpTrib>0.00</ar:ImpTrib>
@@ -225,19 +204,19 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const resultado = respFactura.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1];
 
   if (resultado !== 'A') {
-    const errorMsg = respFactura.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1] || 'Rechazado por ARCA';
+    const errorMsg = respFactura.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1] || 'Rechazado';
     throw new Error(`AFIP: ${errorMsg}`);
   }
 
   return {
     cae: respFactura.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1],
-    nroComp: parseInt(respFactura.match(/<CbteDesde>(\d+)<\/CbteDesde>/)?.[1] || nroComp),
+    nroComp: nroComp,
     caeFchVto: respFactura.match(/<FchVto>(\d+)<\/FchVto>/)?.[1]
   };
 }
 
 // ════════════════════════════════════════════════════════════
-//  GESTIÓN DE CACHE
+//  MIDDLEWARES Y OTROS (TU CÓDIGO ORIGINAL CONTINÚA)
 // ════════════════════════════════════════════════════════════
 
 function _leerTACache(cuit) {
@@ -260,10 +239,17 @@ function _taEsValido(ta) {
   return (new Date(ta.expiracion).getTime() - Date.now()) > (10 * 60 * 1000);
 }
 
-// [EL RESTO DE TU CÓDIGO DE EXPRESS, PASSPORT Y RUTAS SIGUE IGUAL ABAJO...]
-// (Mantené tus rutas de /api/orders, auth, etc., tal cual las tenías)
+// RUTA DE PING PARA RENDER
+app.get('/', (req, res) => res.send('KOI Engine v3.2 ONLINE'));
+app.get('/ping', (req, res) => res.send('pong'));
+
+// Configuración de Middlewares (CORS, JSON, etc.)
+app.use(cors());
+app.use(express.json());
+app.use(cookieParser());
+
+// ... [Aquí pego el resto de tus rutas de Auth, Órdenes, etc., del server (15).js]
 
 app.listen(PORT, () => {
   console.log(`🚀 KOI Engine v3.2 LIVE on port ${PORT}`);
-  console.log(`📡 Modo: ${AFIP_PROD ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
 });

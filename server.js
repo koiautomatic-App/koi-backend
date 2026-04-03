@@ -252,7 +252,7 @@ const Order = mongoose.model('Order', OrderSchema);
 //  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT (PRODUCCIÓN OK)
 // ════════════════════════════════════════════════════════════
 
-// --- FUNCIONES AUXILIARES (Deben ir arriba para evitar errores de "not defined") ---
+// --- FUNCIONES AUXILIARES ---
 
 function _tipoComprobante(categoria = 'C') {
   // ARCA usa: 1 para Factura A, 6 para Factura B, 11 para Factura C
@@ -336,53 +336,39 @@ function _generarCMS(servicio = 'wsfe') {
 </loginTicketRequest>`);
 }
 
-function _soapPost(url, body) {
-  return new Promise((resolve, reject) => {
-    const parsed = new URL(url);
-    const postData = Buffer.from(body, 'utf8');
-    
-    const isWsaa = url.includes('wsaa');
+// --- COMUNICACIÓN ROBUSTA (Solución Ruido Binario) ---
 
-    const options = {
-      hostname: parsed.hostname,
-      port: 443,
-      path: parsed.pathname + (parsed.search || ''),
-      method: 'POST',
-      headers: {
-        'Content-Type': 'text/xml; charset=utf-8',
-        'Content-Length': postData.length,
-        // El secreto: comillas dobles dentro de las simples para cumplir el estándar estricto
-        'SOAPAction': isWsaa ? '""' : '"http://ar.gov.afip.dif.FEV1/FECAESolicitar"',
-        'Host': parsed.hostname,
-        'Connection': 'keep-alive',
-        'User-Agent': 'Koi-Fintech/1.0'
-      },
-    };
+async function _soapPost(url, body) {
+  const isWsaa = url.includes('wsaa');
+  const soapAction = isWsaa ? '""' : '"http://ar.gov.afip.dif.FEV1/FECAESolicitar"';
 
-    const req = https.request(options, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        // Log preventivo si ARCA responde algo que no es XML
-        if (res.statusCode !== 200 && !data.includes('Envelope')) {
-          console.error(`⚠️ ARCA HTTP ${res.statusCode}:`, data.substring(0, 100));
-        }
-        resolve(data);
-      });
-    });
+  const headers = {
+    'Content-Type': 'text/xml; charset=utf-8',
+    'SOAPAction': soapAction,
+    'Connection': 'keep-alive',
+    'User-Agent': 'Koi-Fintech/1.1'
+  };
 
-    req.on('error', (e) => reject(new Error(`Error de red ARCA: ${e.message}`)));
-    
-    // Timeout de 15 segundos para no dejar la petición colgada
-    req.setTimeout(15000, () => {
-      req.destroy();
-      reject(new Error('Timeout en la conexión con ARCA'));
-    });
-
-    req.write(postData);
-    req.end();
+  // Forzamos TLS 1.2 para servidores de ARCA
+  const agent = new https.Agent({
+    secureProtocol: 'TLSv1_2_method',
+    rejectUnauthorized: false
   });
+
+  try {
+    const resp = await axios.post(url, body, { 
+      headers, 
+      httpsAgent: agent,
+      timeout: 15000,
+      responseType: 'text' 
+    });
+    return resp.data;
+  } catch (err) {
+    if (err.response && err.response.data) {
+      return err.response.data; 
+    }
+    throw new Error(`Error de red ARCA: ${err.message}`);
+  }
 }
 
 function _parsearTA(xml) {
@@ -390,21 +376,17 @@ function _parsearTA(xml) {
   if (fault) throw new Error(`ARCA Error SOAP: ${fault[1].trim()}`);
 
   const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: No se encontró loginCmsReturn. Revisar vinculación de servicio en AFIP.');
+  if (!m) throw new Error('WSAA: No se encontró loginCmsReturn. Revisar vinculación en AFIP.');
 
-  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8').trim();
   
-  // 🔍 ESTO ES LO IMPORTANTE:
-  console.log("--- CONTENIDO DEL TICKET RECIBIDO ---");
-  console.log(taXml); 
-  console.log("-------------------------------------");
+  console.log("--- TICKET DE ACCESO PROCESADO ---");
 
   const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
   const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
   const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
 
   if (!token || !sign) {
-    // Si no hay token, buscamos el mensaje de error que manda AFIP adentro
     const msgError = taXml.match(/<error>([\s\S]*?)<\/error>/)?.[1] || 'Error interno de ARCA';
     throw new Error(`AFIP denegó el ticket: ${msgError}`);
   }
@@ -436,12 +418,8 @@ async function afip_obtenerTA(cuitUsuario) {
 
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
-  
-  // Punto 2: Pasamos la categoría para obtener el tipo correcto (A, B o C)
   const cbTipo = _tipoComprobante(datos.categoria || 'C');
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
-  
-  // Esta es la primera declaración de nroComp (el número estimado)
   const nroComp = ultimoNro + 1;
 
   const fechaVenta = datos.fechaOriginal ? new Date(datos.fechaOriginal) : new Date();
@@ -457,8 +435,6 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   }
 
   const importe = parseFloat(datos.importeTotal.toFixed(2));
-  
-  // Punto 5: Lógica de DNI según el límite actualizado (ARCA_LIMIT)
   const docTipo = (importe >= (typeof ARCA_LIMIT !== 'undefined' ? ARCA_LIMIT : 191624)) 
     ? (datos.clienteDoc && String(datos.clienteDoc).length === 11 ? 80 : 96) 
     : (datos.clienteDoc && String(datos.clienteDoc).length === 11 ? 80 : 99);
@@ -486,8 +462,6 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     throw new Error(`AFIP: ${err || 'Rechazado'}`);
   }
   
-  // Punto 3 & Solución al SyntaxError: 
-  // Extraemos los datos pero usamos nombres distintos para no repetir "const nroComp"
   const caeFinal = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1];
   const nroConfirmado = resp.match(/<CbteDesde>(\d+)<\/CbteDesde>/)?.[1];
   const caeFchVtoRaw = resp.match(/<FchVto>(\d+)<\/FchVto>/)?.[1];
@@ -498,17 +472,14 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     caeFchVto: _parseFechaAFIP(caeFchVtoRaw)
   };
 }
-// --- FUNCIONES DE CACHE (Faltaban estas) ---
+
+// --- GESTIÓN DE CACHE ---
 
 function _leerTACache(cuit) {
   try {
     const filePath = path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json');
-    if (fs.existsSync(filePath)) {
-      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
-    }
-  } catch (e) {
-    console.error("Error leyendo cache:", e);
-  }
+    if (fs.existsSync(filePath)) return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+  } catch (e) { console.error("Error cache:", e); }
   return null;
 }
 
@@ -517,29 +488,20 @@ function _guardarTACache(cuit, ta) {
     const dir = path.join(TA_CACHE_DIR, cuit);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(path.join(dir, 'ta-wsfe.json'), JSON.stringify(ta, null, 2), 'utf8');
-  } catch (e) {
-    console.error("Error guardando cache:", e);
-  }
+  } catch (e) { console.error("Error save cache:", e); }
 }
 
 function _taEsValido(ta) {
   if (!ta || !ta.expiracion) return false;
-  // Consideramos válido si falta más de 10 minutos para que venza
   const vto = new Date(ta.expiracion).getTime();
-  const ahora = Date.now();
-  return (vto - ahora) > (10 * 60 * 1000);
+  return (vto - Date.now()) > (10 * 60 * 1000);
 }
 
 function _parseFechaAFIP(str) {
   if (!str || str.length !== 8) return null;
-  const y = str.slice(0, 4);
-  const m = str.slice(4, 6);
-  const d = str.slice(6, 8);
-  // Al agregar T12:00:00, evitamos que cualquier desfase de zona horaria 
-  // cambie el día calendario.
+  const y = str.slice(0, 4), m = str.slice(4, 6), d = str.slice(6, 8);
   return new Date(`${y}-${m}-${d}T12:00:00Z`);
 }
-
 // (Mantené tus funciones auxiliares _leerTACache, _guardarTACache, etc. igual)
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto

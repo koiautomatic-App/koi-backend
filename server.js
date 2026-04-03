@@ -359,17 +359,28 @@ function _soapPost(url, body) {
 
 function _parsearTA(xml) {
   const fault = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/);
-  if (fault) throw new Error(`ARCA Error: ${fault[1].trim()}`);
+  if (fault) throw new Error(`ARCA Error SOAP: ${fault[1].trim()}`);
 
   const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: No se encontró loginCmsReturn.');
+  if (!m) throw new Error('WSAA: No se encontró loginCmsReturn. Revisar vinculación de servicio en AFIP.');
 
   const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+  
+  // 🔍 ESTO ES LO IMPORTANTE:
+  console.log("--- CONTENIDO DEL TICKET RECIBIDO ---");
+  console.log(taXml); 
+  console.log("-------------------------------------");
+
   const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
   const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
   const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
 
-  if (!token || !sign) throw new Error('WSAA: Ticket incompleto.');
+  if (!token || !sign) {
+    // Si no hay token, buscamos el mensaje de error que manda AFIP adentro
+    const msgError = taXml.match(/<error>([\s\S]*?)<\/error>/)?.[1] || 'Error interno de ARCA';
+    throw new Error(`AFIP denegó el ticket: ${msgError}`);
+  }
+  
   return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
 }
 

@@ -402,6 +402,10 @@ async function afip_obtenerTA(cuitUsuario) {
   if (cache && _taEsValido(cache)) return { token: cache.token, sign: cache.sign };
 
   const cms = _generarCMS('wsfe');
+  
+  // 🔍 EL CAMBIO ESTÁ ACÁ: 
+  // En la delegación, el CUIT que se envía al WSAA debe ser el dueño del certificado (CUIT_MAESTRO)
+  // No el cuitUsuario. AFIP sabe por la delegación interna que vos vas a actuar por otros.
   const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.xsb.com.ar">
   <soapenv:Header/>

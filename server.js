@@ -408,24 +408,24 @@ function _tipoComprobante(categoria) {
 
 async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
   const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+<soapenv:Envelope 
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+  xmlns:ser="http://ar.gov.afip.dif.fev1/">
   <soapenv:Header/>
   <soapenv:Body>
-    <ar:FECompUltimoAutorizado>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuit}</ar:Cuit>
-      </ar:Auth>
-      <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-      <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-    </ar:FECompUltimoAutorizado>
+    <ser:FECompUltimoAutorizado>
+      <ser:Auth>
+        <ser:Token>${token}</ser:Token>
+        <ser:Sign>${sign}</ser:Sign>
+        <ser:Cuit>${cuit}</ser:Cuit>
+      </ser:Auth>
+      <ser:PtoVta>${puntoVenta}</ser:PtoVta>
+      <ser:CbteTipo>${cbTipo}</ser:CbteTipo>
+    </ser:FECompUltimoAutorizado>
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const resp  = await _soapPost(WSFE_URL, soap);
+  const resp = await _soapPost(WSFE_URL, soap);
   const match = resp.match(/<CbteNro>(\d+)<\/CbteNro>/);
   return match ? parseInt(match[1], 10) : 0;
 }
@@ -441,53 +441,58 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const docTipo   = _docTipo(datos.clienteDoc);
   const docNro    = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
+  // ⚠️ CORRECCIÓN: Namespace correcto y estructura sin errores
   const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+<soapenv:Envelope 
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+  xmlns:ser="http://ar.gov.afip.dif.fev1/">
   <soapenv:Header/>
   <soapenv:Body>
-    <ar:FECAESolicitar>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuitEmisor}</ar:Cuit>
-      </ar:Auth>
-      <ar:FeCAEReq>
-        <ar:FeCabReq>
-          <ar:CantReg>1</ar:CantReg>
-          <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-          <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-        </ar:FeCabReq>
-        <ar:FeDetReq>
-          <ar:FECAEDetRequest>
-            <ar:Concepto>1</ar:Concepto>
-            <ar:DocTipo>${docTipo}</ar:DocTipo>
-            <ar:DocNro>${docNro}</ar:DocNro>
-            <ar:CbteDesde>${nroComp}</ar:CbteDesde>
-            <ar:CbteHasta>${nroComp}</ar:CbteHasta>
-            <ar:CbteFch>${fechaHoy}</ar:CbteFch>
-            <ar:ImpTotal>${importe}</ar:ImpTotal>
-            <ar:ImpTotConc>0.00</ar:ImpTotConc>
-            <ar:ImpNeto>${importe}</ar:ImpNeto>
-            <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>0.00</ar:ImpIVA>
-            <ar:ImpTrib>0.00</ar:ImpTrib>
-            <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>
-          </ar:FECAEDetRequest>
-        </ar:FeDetReq>
-      </ar:FeCAEReq>
-    </ar:FECAESolicitar>
+    <ser:FECAESolicitar>
+      <ser:Auth>
+        <ser:Token>${token}</ser:Token>
+        <ser:Sign>${sign}</ser:Sign>
+        <ser:Cuit>${cuitEmisor}</ser:Cuit>
+      </ser:Auth>
+      <ser:FeCAEReq>
+        <ser:FeCabReq>
+          <ser:CantReg>1</ser:CantReg>
+          <ser:PtoVta>${puntoVenta}</ser:PtoVta>
+          <ser:CbteTipo>${cbTipo}</ser:CbteTipo>
+        </ser:FeCabReq>
+        <ser:FeDetReq>
+          <ser:FECAEDetRequest>
+            <ser:Concepto>1</ser:Concepto>
+            <ser:DocTipo>${docTipo}</ser:DocTipo>
+            <ser:DocNro>${docNro}</ser:DocNro>
+            <ser:CbteDesde>${nroComp}</ser:CbteDesde>
+            <ser:CbteHasta>${nroComp}</ser:CbteHasta>
+            <ser:CbteFch>${fechaHoy}</ser:CbteFch>
+            <ser:ImpTotal>${importe}</ser:ImpTotal>
+            <ser:ImpTotConc>0</ser:ImpTotConc>
+            <ser:ImpNeto>${importe}</ser:ImpNeto>
+            <ser:ImpOpEx>0</ser:ImpOpEx>
+            <ser:ImpIVA>0</ser:ImpIVA>
+            <ser:ImpTrib>0</ser:ImpTrib>
+            <ser:MonId>PES</ser:MonId>
+            <ser:MonCotiz>1</ser:MonCotiz>
+          </ser:FECAEDetRequest>
+        </ser:FeDetReq>
+      </ser:FeCAEReq>
+    </ser:FECAESolicitar>
   </soapenv:Body>
 </soapenv:Envelope>`;
+
+  console.log(`📤 Enviando a AFIP: CUIT=${cuitEmisor}, PV=${puntoVenta}, Nro=${nroComp}, Monto=${importe}`);
 
   const resp      = await _soapPost(WSFE_URL, soap);
   const resultado = resp.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1]?.trim();
   const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
+  const obs       = resp.match(/<Obs>([\s\S]*?)<\/Obs>/)?.[1]?.trim();
 
   if (resultado !== 'A') {
-    throw new Error(`AFIP rechazó el comprobante: ${errMsg || 'Error desconocido'}`);
+    const detalle = errMsg || obs || 'Error desconocido';
+    throw new Error(`AFIP rechazó: ${detalle}`);
   }
 
   const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();
@@ -497,7 +502,6 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
 
   return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
 }
-
 async function afip_verificarDelegacion(cuitUsuario) {
   try {
     await afip_obtenerTA(cuitUsuario);

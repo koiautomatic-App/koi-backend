@@ -246,7 +246,7 @@ OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT (CORREGIDO)
+//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT (ZONA HORARIA ARG)
 // ════════════════════════════════════════════════════════════
 
 function _firmarCMS(xml) {
@@ -271,19 +271,39 @@ function _firmarCMS(xml) {
   }
 }
 
-// CORRECCIÓN: Ahora puede recibir el cuitRepresentado si fuera necesario en el XML
+/**
+ * Genera el Ticket de Requerimiento (LoginTicketRequest) 
+ * mirando directamente el reloj de Argentina para evitar el Error 500 de ARCA.
+ */
 function _generarCMS(servicio = 'wsfe') {
   const ahora = new Date();
-  const desde = new Date(ahora.getTime() - 600000); // 10 min atrás para evitar desfasaje
-  const hasta = new Date(ahora.getTime() + 600000); 
-  const toAFIP = d => d.toISOString().replace(/\.\d{3}Z$/, '-03:00');
+  
+  // Margen de 10 min atrás para evitar "xml.generationTime.invalid" (falla si el server está adelantado)
+  const fechaDesde = new Date(ahora.getTime() - (10 * 60 * 1000));
+  const fechaHasta = new Date(ahora.getTime() + (12 * 60 * 60 * 1000));
+
+  const toAFIP = (date) => {
+    // Forzamos la obtención de partes de la fecha en la zona horaria de Buenos Aires
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/Argentina/Buenos_Aires',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+      hour12: false
+    });
+    
+    const parts = fmt.formatToParts(date);
+    const get = (type) => parts.find(p => p.type === type).value;
+
+    // Formato exacto requerido por ARCA: YYYY-MM-DDTHH:mm:ss-03:00
+    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}-03:00`;
+  };
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
   <header>
     <uniqueId>${Math.floor(Date.now() / 1000)}</uniqueId>
-    <generationTime>${toAFIP(desde)}</generationTime>
-    <expirationTime>${toAFIP(hasta)}</expirationTime>
+    <generationTime>${toAFIP(fechaDesde)}</generationTime>
+    <expirationTime>${toAFIP(fechaHasta)}</expirationTime>
   </header>
   <service>${servicio}</service>
 </loginTicketRequest>`;
@@ -303,7 +323,7 @@ function _soapPost(url, body) {
       headers:  {
         'Content-Type':   'text/xml; charset=utf-8',
         'Content-Length': postData.length,
-        'SOAPAction':     url.includes('wsaa') ? "" : "http://ar.gov.afip.dif.FEV1/FECAESolicitar"
+        'SOAPAction':      url.includes('wsaa') ? "" : "http://ar.gov.afip.dif.FEV1/FECAESolicitar"
       },
     };
 
@@ -359,10 +379,8 @@ async function afip_obtenerTA(cuitUsuario) {
   const cache = _leerTACache(cuit);
   if (cache && _taEsValido(cache)) return { token: cache.token, sign: cache.sign };
 
-  // LA CLAVE: El CMS se firma con la llave del Maestro
   const cms = _generarCMS('wsfe');
 
-  // CORRECCIÓN: Namespace de producción (xsb.com.ar)
   const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.xsb.com.ar">
   <soapenv:Header/>
@@ -394,7 +412,6 @@ function _parseFechaAFIP(str) {
 
 function _docTipo(doc, importe) {
   const d = String(doc || '0').replace(/\D/g, '');
-  // Si supera el límite legal (~191k), forzamos DNI si existe, o fallará
   if (importe >= 191624) return (d.length >= 7) ? 96 : 80; 
   if (d === '0' || d.length < 7) return 99;
   if (d.length === 11) return 80;
@@ -430,13 +447,26 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
   const nroComp   = ultimoNro + 1;
 
-  // --- CORRECCIÓN: LÓGICA DE FECHAS (Regla 5 días) ---
+  // --- LÓGICA DE FECHAS PROTEGIDA (Regla 5 días + Mes corriente) ---
   const fechaVenta = datos.fechaOriginal ? new Date(datos.fechaOriginal) : new Date();
   const fechaHoy   = new Date();
   const diffDias   = Math.floor((fechaHoy - fechaVenta) / (1000 * 60 * 60 * 24));
   
-  // Si pasaron más de 5 días, usamos hoy para que AFIP no dé Error 500
-  const fechaEmision = (diffDias > 5) ? _fechaAFIP(fechaHoy) : _fechaAFIP(fechaVenta);
+  let fechaEmision;
+  if (diffDias <= 5) {
+    fechaEmision = _fechaAFIP(fechaVenta);
+  } else {
+    const mismoMes = (fechaVenta.getMonth() === fechaHoy.getMonth() && 
+                      fechaVenta.getFullYear() === fechaHoy.getFullYear());
+    if (mismoMes) {
+      fechaEmision = _fechaAFIP(fechaHoy);
+    } else {
+      // Caso Camila (Marzo): usamos el límite legal (Hoy - 5 días) para que ARCA acepte
+      const limite = new Date();
+      limite.setDate(fechaHoy.getDate() - 5);
+      fechaEmision = _fechaAFIP(limite);
+    }
+  }
 
   const importe = parseFloat(datos.importeTotal.toFixed(2));
   const docTipo = _docTipo(datos.clienteDoc, importe);
@@ -486,7 +516,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
 
   if (resultado !== 'A') {
-    throw new Error(`AFIP Error: ${errMsg || 'Comprobante rechazado por validación interna'}`);
+    throw new Error(`ARCA Error: ${errMsg || 'Rechazado por validación interna'}`);
   }
 
   const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();

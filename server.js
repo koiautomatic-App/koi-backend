@@ -437,8 +437,11 @@ async function afip_obtenerTA(cuitUsuario) {
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
   
-  const cbTipo = _tipoComprobante();
+  // Punto 2: Pasamos la categoría para obtener el tipo correcto (A, B o C)
+  const cbTipo = _tipoComprobante(datos.categoria || 'C');
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
+  
+  // Esta es la primera declaración de nroComp (el número estimado)
   const nroComp = ultimoNro + 1;
 
   const fechaVenta = datos.fechaOriginal ? new Date(datos.fechaOriginal) : new Date();
@@ -454,8 +457,13 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   }
 
   const importe = parseFloat(datos.importeTotal.toFixed(2));
-  const docTipo = (importe >= 191624) ? 96 : (String(datos.clienteDoc).length === 11 ? 80 : 99);
-  const docNro  = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  
+  // Punto 5: Lógica de DNI según el límite actualizado (ARCA_LIMIT)
+  const docTipo = (importe >= (typeof ARCA_LIMIT !== 'undefined' ? ARCA_LIMIT : 191624)) 
+    ? (datos.clienteDoc && String(datos.clienteDoc).length === 11 ? 80 : 96) 
+    : (datos.clienteDoc && String(datos.clienteDoc).length === 11 ? 80 : 99);
+    
+  const docNro = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
   const soap = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -478,16 +486,16 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     throw new Error(`AFIP: ${err || 'Rechazado'}`);
   }
   
- // 1. Capturamos los datos del XML de respuesta
-  const cae = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1];
-  const nroComp = resp.match(/<CbteDesde>(\d+)<\/CbteDesde>/)?.[1];
-  const caeFchVtoRaw = resp.match(/<FchVto>(\d+)<\/FchVto>/)?.[1]; // <-- CAPTURA EL VENCIMIENTO
+  // Punto 3 & Solución al SyntaxError: 
+  // Extraemos los datos pero usamos nombres distintos para no repetir "const nroComp"
+  const caeFinal = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1];
+  const nroConfirmado = resp.match(/<CbteDesde>(\d+)<\/CbteDesde>/)?.[1];
+  const caeFchVtoRaw = resp.match(/<FchVto>(\d+)<\/FchVto>/)?.[1];
 
-  // 2. Devolvemos el objeto completo procesado
   return { 
-    cae, 
-    nroComp: parseInt(nroComp),
-    caeFchVto: _parseFechaAFIP(caeFchVtoRaw) // <-- LO CONVIERTE A FECHA DE JS
+    cae: caeFinal, 
+    nroComp: parseInt(nroConfirmado || nroComp),
+    caeFchVto: _parseFechaAFIP(caeFchVtoRaw)
   };
 }
 // --- FUNCIONES DE CACHE (Faltaban estas) ---

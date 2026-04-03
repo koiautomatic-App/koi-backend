@@ -243,20 +243,44 @@ function _firmarCMS(xml) {
     );
   }
 
-  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
-  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
+  const tmpXml = path.join(os.tmpdir(), `koi_req_${Date.now()}.xml`);
+  const tmpP7s = path.join(os.tmpdir(), `koi_req_${Date.now()}.p7s`);
+  const tmpDer = path.join(os.tmpdir(), `koi_req_${Date.now()}.der`);
 
   try {
+    // Guardar el XML temporal
     fs.writeFileSync(tmpXml, xml, 'utf8');
+    
+    // PASO 1: Generar CMS/PKCS#7 firmado (formato PEM)
+    // Usamos -outform PEM para obtener el CMS en formato PEM
     execSync(
-      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}"` +
-      ` -nodetach -outform DER -out "${tmpOut}"`,
+      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}" ` +
+      `-nodetach -outform PEM -out "${tmpP7s}"`,
       { stdio: 'pipe' }
     );
-    return fs.readFileSync(tmpOut).toString('base64');
+    
+    // PASO 2: Leer el CMS firmado (que ya está en formato base64 dentro del PEM)
+    let cmsPem = fs.readFileSync(tmpP7s, 'utf8');
+    
+    // Extraer solo el contenido base64 entre BEGIN y END
+    const base64Match = cmsPem.match(/-----BEGIN CMS-----([\s\S]*?)-----END CMS-----/i);
+    if (!base64Match) {
+      throw new Error('No se pudo extraer el CMS del formato PEM');
+    }
+    
+    // Limpiar y obtener el base64 puro (sin saltos de línea)
+    const base64 = base64Match[1].replace(/\s/g, '');
+    
+    console.log(`✅ CMS generado correctamente (longitud: ${base64.length} chars)`);
+    return base64;
+    
+  } catch (err) {
+    console.error('❌ Error generando CMS:', err.message);
+    throw new Error(`Error al firmar CMS: ${err.message}`);
   } finally {
     try { fs.unlinkSync(tmpXml); } catch {}
-    try { fs.unlinkSync(tmpOut); } catch {}
+    try { fs.unlinkSync(tmpP7s); } catch {}
+    try { fs.unlinkSync(tmpDer); } catch {}
   }
 }
 
@@ -264,18 +288,29 @@ function _generarCMS(servicio = 'wsfe') {
   const ahora = new Date();
   const desde = new Date(ahora.getTime() - 60_000);
   const hasta = new Date(ahora.getTime() + 12 * 3600_000);
-  const toAFIP = d => d.toISOString().replace(/\.\d{3}Z$/, '-03:00');
+  
+  // Formato de fecha que AFIP espera: YYYY-MM-DDTHH:MM:SS-03:00
+  const formatAFIP = (d) => {
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    const hours = String(d.getHours()).padStart(2, '0');
+    const minutes = String(d.getMinutes()).padStart(2, '0');
+    const seconds = String(d.getSeconds()).padStart(2, '0');
+    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}-03:00`;
+  };
 
   const xml = `<?xml version="1.0" encoding="UTF-8"?>
 <loginTicketRequest version="1.0">
   <header>
     <uniqueId>${Date.now()}</uniqueId>
-    <generationTime>${toAFIP(desde)}</generationTime>
-    <expirationTime>${toAFIP(hasta)}</expirationTime>
+    <generationTime>${formatAFIP(desde)}</generationTime>
+    <expirationTime>${formatAFIP(hasta)}</expirationTime>
   </header>
   <service>${servicio}</service>
 </loginTicketRequest>`;
 
+  console.log(`📝 XML LoginTicketRequest generado (servicio: ${servicio})`);
   return _firmarCMS(xml);
 }
 
@@ -348,15 +383,32 @@ function _taEsValido(ta) {
 }
 
 function _parsearTA(xml) {
+  // Buscar el contenido de loginCmsReturn
   const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
+  if (!m) {
+    console.error('Respuesta WSAA sin loginCmsReturn:', xml.substring(0, 500));
+    throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
+  }
 
-  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+  // El contenido está en base64, decodificar
+  let taXml;
+  try {
+    taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+    console.log('📄 TA XML decodificado correctamente');
+  } catch (e) {
+    throw new Error(`Error decodificando base64 del TA: ${e.message}`);
+  }
+
+  // Extraer token, sign y expiration
   const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
   const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
   const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
 
-  if (!token || !sign) throw new Error('WSAA: no se pudo extraer token/sign del TA');
+  if (!token || !sign) {
+    console.error('TA XML no contiene token/sign:', taXml.substring(0, 500));
+    throw new Error('WSAA: no se pudo extraer token/sign del TA');
+  }
+
   return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
 }
 

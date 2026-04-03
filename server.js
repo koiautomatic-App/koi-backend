@@ -478,8 +478,17 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     throw new Error(`AFIP: ${err || 'Rechazado'}`);
   }
   
-  const cae = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)[1];
-  return { cae, nroComp };
+ // 1. Capturamos los datos del XML de respuesta
+  const cae = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1];
+  const nroComp = resp.match(/<CbteDesde>(\d+)<\/CbteDesde>/)?.[1];
+  const caeFchVtoRaw = resp.match(/<FchVto>(\d+)<\/FchVto>/)?.[1]; // <-- CAPTURA EL VENCIMIENTO
+
+  // 2. Devolvemos el objeto completo procesado
+  return { 
+    cae, 
+    nroComp: parseInt(nroComp),
+    caeFchVto: _parseFechaAFIP(caeFchVtoRaw) // <-- LO CONVIERTE A FECHA DE JS
+  };
 }
 // --- FUNCIONES DE CACHE (Faltaban estas) ---
 

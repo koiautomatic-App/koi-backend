@@ -1,39 +1,3 @@
-// 1. Agregá esto arriba de todo en tu archivo si no está:
-const https = require('https');
-
-// 2. Modificá la función _soapPost:
-async function _soapPost(url, xml) {
-  const soapAction = url.includes('wsfe') 
-    ? '"http://ar.gov.afip.dif.FEV1/FECAESolicitar"' 
-    : '"http://ar.gov.afip.dif.FEA1/FECAASolicitar"'; // Ajustar según corresponda
-
-  const headers = {
-    'Content-Type': 'text/xml; charset=utf-8',
-    'SOAPAction': soapAction,
-    'User-Agent': 'KoiFactura/3.2 (Node.js)'
-  };
-
-  // AGREGÁ ESTE AGENTE PARA FORZAR TLS 1.2
-  const agent = new https.Agent({
-    secureProtocol: 'TLSv1_2_method',
-    rejectUnauthorized: false // A veces necesario para los certificados intermedios de AFIP
-  });
-
-  try {
-    const resp = await axios.post(url, xml, { 
-      headers,
-      httpsAgent: agent // <-- USAMOS EL AGENTE AQUÍ
-    });
-    return resp.data;
-  } catch (err) {
-    // Si Axios explota, capturamos el cuerpo de la respuesta que suele traer el error de AFIP
-    if (err.response && err.response.data) {
-      console.error("--- ERROR RAW AFIP ---", err.response.data);
-      throw new Error(`AFIP Error: ${err.response.data}`);
-    }
-    throw err;
-  }
-}
 // ============================================================
 //  KOI-FACTURA · SaaS Multi-Tenant Engine v3.2
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT

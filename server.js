@@ -45,8 +45,11 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 //  Cache de Tickets de Acceso por usuario: /tmp/koi-ta/{cuit}/ta-wsfe.json
 //  (En Render el filesystem /tmp persiste durante la instancia)
 // ════════════════════════════════════════════════════════════
-const CUIT_MAESTRO = (process.env.AFIP_CUIT || process.env.CUIT_MAESTRO || '20309782489').replace(/\D/g, '');
-const PROD_MODE    = process.env.NODE_ENV === 'production';
+const CUIT_MAESTRO = (process.env.AFIP_CUIT || process.env.CUIT_MAESTRO).replace(/\D/g, '');
+
+if (!CUIT_MAESTRO) {
+  throw new Error("❌ ERROR CRÍTICO: No se definió AFIP_CUIT en las variables de entorno de Render.");
+}const PROD_MODE    = process.env.NODE_ENV === 'production';
 
 // Rutas de certs — primero env vars, luego Secret Files de Render como default
 const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || '/etc/secrets/koi.crt';

@@ -362,16 +362,41 @@ function _taEsValido(ta) {
 }
 
 function _parsearTA(xml) {
+  // 1. Verificamos si AFIP devolvió un error explícito (SOAP Fault)
+  const faultMatch = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/);
+  if (faultMatch) {
+    // Esto te va a decir exactamente POR QUÉ falló (ej: "Computador no autorizado")
+    throw new Error(`AFIP Rechazó el Login: ${faultMatch[1].trim()}`);
+  }
+
+  // 2. Buscamos el nodo de éxito
   const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: No se encontró loginCmsReturn. Verificá delegación del CUIT.');
+  if (!m) {
+    // Si no hay éxito ni error conocido, imprimimos un debug
+    console.error("DEBUG - Respuesta inesperada de WSAA:", xml);
+    throw new Error('WSAA: Respuesta inválida. Revisar logs de Render para ver el XML completo.');
+  }
 
-  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
-  const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
-  const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
-  const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
+  // 3. Decodificamos el Ticket de Acceso (TA)
+  try {
+    const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
+    const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
+    const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
+    const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
 
-  if (!token || !sign) throw new Error('WSAA: No se pudo extraer token/sign');
-  return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
+    if (!token || !sign) {
+      throw new Error('No se encontraron los campos token/sign dentro del ticket decodificado.');
+    }
+
+    return { 
+      token, 
+      sign, 
+      expiracion: exp, 
+      generadoEn: new Date().toISOString() 
+    };
+  } catch (e) {
+    throw new Error(`Error al decodificar el Ticket de AFIP: ${e.message}`);
+  }
 }
 
 async function afip_obtenerTA(cuitUsuario) {

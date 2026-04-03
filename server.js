@@ -1,7 +1,8 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.2
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.3
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
 //  AFIP/ARCA — Delegación Multi-Tenant integrada
+//  CORREGIDO: Namespaces, SOAPAction, manejo de errores
 // ============================================================
 
 'use strict';
@@ -32,27 +33,13 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
 // ════════════════════════════════════════════════════════════
 //  AFIP — CONFIGURACIÓN GLOBAL
-//
-//  Render Secret Files:
-//    /etc/secrets/koi.crt  ← certificado del CUIT Maestro
-//    /etc/secrets/koi.key  ← clave privada del CUIT Maestro
-//
-//  Variables de entorno en Render:
-//    AFIP_CUIT      → CUIT del maestro (ej: 20309782489)
-//    AFIP_CERT_PATH → ruta al .crt  (ej: /etc/secrets/koi.crt)
-//    AFIP_KEY_PATH  → ruta al .key  (ej: /etc/secrets/koi.key)
-//
-//  Cache de Tickets de Acceso por usuario: /tmp/koi-ta/{cuit}/ta-wsfe.json
-//  (En Render el filesystem /tmp persiste durante la instancia)
 // ════════════════════════════════════════════════════════════
 const CUIT_MAESTRO = (process.env.AFIP_CUIT || process.env.CUIT_MAESTRO || '20309782489').replace(/\D/g, '');
 const PROD_MODE    = process.env.NODE_ENV === 'production';
 
-// Rutas de certs — primero env vars, luego Secret Files de Render como default
 const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || '/etc/secrets/koi.crt';
 const AFIP_KEY_PATH  = process.env.AFIP_KEY_PATH  || '/etc/secrets/koi.key';
 
-// Directorio para cache de Tickets de Acceso por usuario
 const TA_CACHE_DIR = process.env.TA_CACHE_DIR || path.join(os.tmpdir(), 'koi-ta');
 fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
 
@@ -64,18 +51,17 @@ const WSFE_URL = PROD_MODE
   ? 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
   : 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx';
 
-// Verificación temprana de certs al arrancar
 function _verificarCertsMaestro() {
   const certOk = fs.existsSync(AFIP_CERT_PATH);
   const keyOk  = fs.existsSync(AFIP_KEY_PATH);
   if (certOk && keyOk) {
     console.log(`🔐 Certs AFIP listos: ${AFIP_CERT_PATH} / ${AFIP_KEY_PATH}`);
     console.log(`🔐 CUIT Maestro: ${CUIT_MAESTRO}`);
+    console.log(`🌐 AFIP modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
   } else {
     console.warn(`⚠️  Certs AFIP NO encontrados:`);
     if (!certOk) console.warn(`   Falta .crt en: ${AFIP_CERT_PATH}`);
     if (!keyOk)  console.warn(`   Falta .key en: ${AFIP_KEY_PATH}`);
-    console.warn(`   Configurá AFIP_CERT_PATH y AFIP_KEY_PATH en Render Environment`);
   }
 }
 _verificarCertsMaestro();
@@ -157,12 +143,12 @@ const UserSchema = new mongoose.Schema({
   plan:         { type: String, default: 'free', enum: ['free', 'pro'] },
 
   settings: {
-    factAuto:   { type: Boolean, default: true },   // Facturación automática
-    envioAuto:  { type: Boolean, default: true },   // Envío automático de mail
+    factAuto:   { type: Boolean, default: true },
+    envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
     cuit:       { type: String },
     arcaUser:   { type: String },
-    arcaClave:  { type: String },                   // encriptada
+    arcaClave:  { type: String },
     arcaPtoVta: { type: Number, default: 1 },
     arcaStatus: {
       type:    String,
@@ -226,7 +212,6 @@ const OrderSchema = new mongoose.Schema({
   customerDoc:   { type: String, default: '0' },
   amount:        { type: Number, required: true },
   currency:      { type: String, default: 'ARS' },
-  // Concepto — solo para ventas manuales
   concepto:      { type: String, default: '' },
   status: {
     type:    String,
@@ -246,17 +231,15 @@ OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT
+//  MÓDULO AFIP — CORREGIDO
 // ════════════════════════════════════════════════════════════
 
 function _firmarCMS(xml) {
-  // Usa los certs de Render Secret Files directamente
   if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
     throw new Error(
       `Certificados AFIP no encontrados.\n` +
       `  .key esperado en: ${AFIP_KEY_PATH}\n` +
-      `  .crt esperado en: ${AFIP_CERT_PATH}\n` +
-      `Verificá que los Secret Files "koi.key" y "koi.crt" estén cargados en Render.`
+      `  .crt esperado en: ${AFIP_CERT_PATH}`
     );
   }
 
@@ -296,33 +279,52 @@ function _generarCMS(servicio = 'wsfe') {
   return _firmarCMS(xml);
 }
 
-function _soapPost(url, body) {
+// ⚠️ FUNCIÓN CORREGIDA: SOAPAction y headers correctos
+function _soapPost(url, body, action = '') {
   return new Promise((resolve, reject) => {
     const parsed   = new URL(url);
     const postData = Buffer.from(body, 'utf8');
-    const options  = {
+    const headers = {
+      'Content-Type':   'text/xml; charset=utf-8',
+      'Content-Length': postData.length,
+    };
+    
+    if (action) {
+      headers['SOAPAction'] = action;
+    } else if (url.includes('wsfev1')) {
+      headers['SOAPAction'] = 'http://ar.gov.afip.dif.fev1/FECAESolicitar';
+    } else if (url.includes('LoginCms')) {
+      headers['SOAPAction'] = '';
+    }
+    
+    const options = {
       hostname: parsed.hostname,
       port:     parsed.port || 443,
       path:     parsed.pathname + (parsed.search || ''),
       method:   'POST',
-      headers:  {
-        'Content-Type':   'text/xml; charset=utf-8',
-        'Content-Length': postData.length,
-      },
+      headers:  headers,
+      timeout:  60000,
     };
+
+    console.log(`📤 SOAP Request a ${url}`);
+    console.log(`📤 SOAPAction: ${headers['SOAPAction']}`);
 
     const req = https.request(options, res => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', c => data += c);
       res.on('end', () => {
-        if (res.statusCode >= 400) reject(new Error(`AFIP HTTP ${res.statusCode}: ${data.slice(0, 300)}`));
-        else resolve(data);
+        console.log(`📥 SOAP Response status: ${res.statusCode}`);
+        if (res.statusCode >= 400) {
+          reject(new Error(`AFIP HTTP ${res.statusCode}: ${data.slice(0, 500)}`));
+        } else {
+          resolve(data);
+        }
       });
     });
 
     req.on('error', reject);
-    req.setTimeout(30_000, () => { req.destroy(); reject(new Error('Timeout AFIP')); });
+    req.on('timeout', () => { req.destroy(); reject(new Error('Timeout AFIP después de 60s')); });
     req.write(postData);
     req.end();
   });
@@ -365,8 +367,8 @@ async function afip_obtenerTA(cuitUsuario) {
   const cms = _generarCMS('wsfe');
 
   const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+<soapenv:Envelope 
+  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
   xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov/">
   <soapenv:Header/>
   <soapenv:Body>
@@ -376,7 +378,7 @@ async function afip_obtenerTA(cuitUsuario) {
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const resp = await _soapPost(WSAA_URL, soapBody);
+  const resp = await _soapPost(WSAA_URL, soapBody, '');
   const ta   = _parsearTA(resp);
   _guardarTACache(cuitUsuario, ta);
   return { token: ta.token, sign: ta.sign };
@@ -403,29 +405,30 @@ function _docTipo(doc) {
 }
 
 function _tipoComprobante(categoria) {
-  return 11; // Monotributistas A-K → siempre Factura C
+  return 11; // Monotributistas → Factura C
 }
 
 async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
+  // ⚠️ CORREGIDO: namespace y estructura
   const soap = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope 
   xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
-  xmlns:ser="http://ar.gov.afip.dif.fev1/">
+  xmlns:fev1="http://ar.gov.afip.dif.fev1/">
   <soapenv:Header/>
   <soapenv:Body>
-    <ser:FECompUltimoAutorizado>
-      <ser:Auth>
-        <ser:Token>${token}</ser:Token>
-        <ser:Sign>${sign}</ser:Sign>
-        <ser:Cuit>${cuit}</ser:Cuit>
-      </ser:Auth>
-      <ser:PtoVta>${puntoVenta}</ser:PtoVta>
-      <ser:CbteTipo>${cbTipo}</ser:CbteTipo>
-    </ser:FECompUltimoAutorizado>
+    <fev1:FECompUltimoAutorizado>
+      <fev1:Auth>
+        <fev1:Token>${token}</fev1:Token>
+        <fev1:Sign>${sign}</fev1:Sign>
+        <fev1:Cuit>${cuit}</fev1:Cuit>
+      </fev1:Auth>
+      <fev1:PtoVta>${puntoVenta}</fev1:PtoVta>
+      <fev1:CbteTipo>${cbTipo}</fev1:CbteTipo>
+    </fev1:FECompUltimoAutorizado>
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const resp = await _soapPost(WSFE_URL, soap);
+  const resp = await _soapPost(WSFE_URL, soap, 'http://ar.gov.afip.dif.fev1/FECompUltimoAutorizado');
   const match = resp.match(/<CbteNro>(\d+)<\/CbteNro>/);
   return match ? parseInt(match[1], 10) : 0;
 }
@@ -441,58 +444,58 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const docTipo   = _docTipo(datos.clienteDoc);
   const docNro    = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
-  // ⚠️ CORRECCIÓN: Namespace correcto y estructura sin errores
+  // ⚠️ CORREGIDO: namespace correcto, estructura completa
   const soap = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope 
   xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
-  xmlns:ser="http://ar.gov.afip.dif.fev1/">
+  xmlns:fev1="http://ar.gov.afip.dif.fev1/">
   <soapenv:Header/>
   <soapenv:Body>
-    <ser:FECAESolicitar>
-      <ser:Auth>
-        <ser:Token>${token}</ser:Token>
-        <ser:Sign>${sign}</ser:Sign>
-        <ser:Cuit>${cuitEmisor}</ser:Cuit>
-      </ser:Auth>
-      <ser:FeCAEReq>
-        <ser:FeCabReq>
-          <ser:CantReg>1</ser:CantReg>
-          <ser:PtoVta>${puntoVenta}</ser:PtoVta>
-          <ser:CbteTipo>${cbTipo}</ser:CbteTipo>
-        </ser:FeCabReq>
-        <ser:FeDetReq>
-          <ser:FECAEDetRequest>
-            <ser:Concepto>1</ser:Concepto>
-            <ser:DocTipo>${docTipo}</ser:DocTipo>
-            <ser:DocNro>${docNro}</ser:DocNro>
-            <ser:CbteDesde>${nroComp}</ser:CbteDesde>
-            <ser:CbteHasta>${nroComp}</ser:CbteHasta>
-            <ser:CbteFch>${fechaHoy}</ser:CbteFch>
-            <ser:ImpTotal>${importe}</ser:ImpTotal>
-            <ser:ImpTotConc>0</ser:ImpTotConc>
-            <ser:ImpNeto>${importe}</ser:ImpNeto>
-            <ser:ImpOpEx>0</ser:ImpOpEx>
-            <ser:ImpIVA>0</ser:ImpIVA>
-            <ser:ImpTrib>0</ser:ImpTrib>
-            <ser:MonId>PES</ser:MonId>
-            <ser:MonCotiz>1</ser:MonCotiz>
-          </ser:FECAEDetRequest>
-        </ser:FeDetReq>
-      </ser:FeCAEReq>
-    </ser:FECAESolicitar>
+    <fev1:FECAESolicitar>
+      <fev1:Auth>
+        <fev1:Token>${token}</fev1:Token>
+        <fev1:Sign>${sign}</fev1:Sign>
+        <fev1:Cuit>${cuitEmisor}</fev1:Cuit>
+      </fev1:Auth>
+      <fev1:FeCAEReq>
+        <fev1:FeCabReq>
+          <fev1:CantReg>1</fev1:CantReg>
+          <fev1:PtoVta>${puntoVenta}</fev1:PtoVta>
+          <fev1:CbteTipo>${cbTipo}</fev1:CbteTipo>
+        </fev1:FeCabReq>
+        <fev1:FeDetReq>
+          <fev1:FECAEDetRequest>
+            <fev1:Concepto>1</fev1:Concepto>
+            <fev1:DocTipo>${docTipo}</fev1:DocTipo>
+            <fev1:DocNro>${docNro}</fev1:DocNro>
+            <fev1:CbteDesde>${nroComp}</fev1:CbteDesde>
+            <fev1:CbteHasta>${nroComp}</fev1:CbteHasta>
+            <fev1:CbteFch>${fechaHoy}</fev1:CbteFch>
+            <fev1:ImpTotal>${importe}</fev1:ImpTotal>
+            <fev1:ImpTotConc>0</fev1:ImpTotConc>
+            <fev1:ImpNeto>${importe}</fev1:ImpNeto>
+            <fev1:ImpOpEx>0</fev1:ImpOpEx>
+            <fev1:ImpIVA>0</fev1:ImpIVA>
+            <fev1:ImpTrib>0</fev1:ImpTrib>
+            <fev1:MonId>PES</fev1:MonId>
+            <fev1:MonCotiz>1</fev1:MonCotiz>
+          </fev1:FECAEDetRequest>
+        </fev1:FeDetReq>
+      </fev1:FeCAEReq>
+    </fev1:FECAESolicitar>
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  console.log(`📤 Enviando a AFIP: CUIT=${cuitEmisor}, PV=${puntoVenta}, Nro=${nroComp}, Monto=${importe}`);
+  console.log(`📤 AFIP: CUIT=${cuitEmisor}, PV=${puntoVenta}, Nro=${nroComp}, Monto=${importe}`);
 
-  const resp      = await _soapPost(WSFE_URL, soap);
+  const resp = await _soapPost(WSFE_URL, soap, 'http://ar.gov.afip.dif.fev1/FECAESolicitar');
+  
   const resultado = resp.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1]?.trim();
   const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
   const obs       = resp.match(/<Obs>([\s\S]*?)<\/Obs>/)?.[1]?.trim();
 
   if (resultado !== 'A') {
-    const detalle = errMsg || obs || 'Error desconocido';
-    throw new Error(`AFIP rechazó: ${detalle}`);
+    throw new Error(`AFIP rechazó: ${errMsg || obs || 'Error sin mensaje'}`);
   }
 
   const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();
@@ -500,8 +503,11 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
 
   if (!cae) throw new Error('AFIP: respuesta aprobada pero sin CAE');
 
+  console.log(`✅ CAE obtenido: ${cae}`);
+
   return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
 }
+
 async function afip_verificarDelegacion(cuitUsuario) {
   try {
     await afip_obtenerTA(cuitUsuario);
@@ -520,7 +526,7 @@ async function afip_verificarDelegacion(cuitUsuario) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto
+//  MIDDLEWARE requireArcaCuit
 // ════════════════════════════════════════════════════════════
 async function requireArcaCuit(req, res, next) {
   const user = await User.findById(req.userId).select('settings').lean();
@@ -540,8 +546,8 @@ async function requireArcaCuit(req, res, next) {
   req.arcaCuit      = user.settings.cuit.replace(/\D/g, '');
   req.arcaPtoVta    = user.settings.arcaPtoVta  || 1;
   req.arcaCategoria = user.settings.categoria   || 'C';
-  req.factAuto      = user.settings.factAuto    !== false; // default true
-  req.envioAuto     = user.settings.envioAuto   !== false; // default true
+  req.factAuto      = user.settings.factAuto    !== false;
+  req.envioAuto     = user.settings.envioAuto   !== false;
   next();
 }
 
@@ -649,9 +655,6 @@ function _resolveDoc(doc, amount) {
 
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE + AUTO-FACTURACIÓN
-//
-//  Si el usuario tiene factAuto=true y arcaStatus='vinculado',
-//  emite el CAE automáticamente al guardar la orden.
 // ════════════════════════════════════════════════════════════
 async function upsertOrder(integration, canonical) {
   if (!canonical) return;
@@ -693,18 +696,11 @@ async function upsertOrder(integration, canonical) {
     return null;
   });
 
-  // ── Auto-facturación si el usuario tiene factAuto=true ──
   if (order && order.status === 'pending_invoice') {
     _intentarAutoFacturar(integration.userId, order);
   }
 }
 
-/**
- * Intenta emitir CAE automáticamente para una orden.
- * Solo actúa si:
- *  - El usuario tiene arcaStatus = 'vinculado'
- *  - El usuario tiene factAuto = true
- */
 async function _intentarAutoFacturar(userId, order) {
   try {
     const user = await User.findById(userId).select('settings').lean();
@@ -733,7 +729,6 @@ async function _intentarAutoFacturar(userId, order) {
 
     console.log(`✅ Auto-CAE: CUIT=${cuitLimpio} Orden=${order._id} CAE=${resultado.cae}`);
 
-    // ── Envío automático de mail si envioAuto=true ──
     if (user.settings.envioAuto && order.customerEmail) {
       _enviarMailFactura(order, resultado.cae).catch(console.warn);
     }
@@ -747,26 +742,15 @@ async function _intentarAutoFacturar(userId, order) {
   }
 }
 
-/**
- * Stub de envío de mail — implementar con nodemailer o Resend.
- * Por ahora solo loguea; conectar con el proveedor de email preferido.
- */
 async function _enviarMailFactura(order, cae) {
   console.log(`📧 [TODO] Enviar factura CAE ${cae} a ${order.customerEmail}`);
-  // Ejemplo con Resend:
-  // await resend.emails.send({
-  //   from: 'facturas@koi.ar',
-  //   to: order.customerEmail,
-  //   subject: `Tu factura KOI — CAE ${cae}`,
-  //   html: `<p>Tu comprobante está disponible. CAE: ${cae}</p>`,
-  // });
+  // Implementar con nodemailer o Resend según necesidad
 }
 
 // ════════════════════════════════════════════════════════════
 //  AUTH HELPERS
 // ════════════════════════════════════════════════════════════
 const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
-
 const setTokenCookie = (res, token) =>
   res.cookie('koi_token', token, {
     httpOnly: true, secure: PROD_MODE, sameSite: 'lax',
@@ -822,9 +806,7 @@ passport.deserializeUser(async (id, done) => {
 // ════════════════════════════════════════════════════════════
 //  RUTAS AUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
   (req, res) => { setTokenCookie(res, signToken(req.user.id)); res.redirect('/dashboard'); }
@@ -874,50 +856,40 @@ app.get('/auth/logout', (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  API — USUARIO & CONFIGURACIÓN
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/me', requireAuthAPI, async (req, res) => {
   const user = await User.findById(req.userId).select('-password -settings.arcaClave').lean();
   if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
   res.json({ ok: true, user });
 });
 
-// ── Guardar configuración general (factAuto, envioAuto, categoria, etc.) ──
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
     const { nombre, apellido, ...body } = req.body;
     const update = {};
-
     if (nombre)   update.nombre   = nombre;
     if (apellido) update.apellido = apellido;
-
-    // Campos de settings permitidos — incluyendo factAuto y envioAuto
     const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit'];
     for (const key of allowedSettings) {
       if (body[key] !== undefined) {
         update[`settings.${key}`] = body[key];
       }
     }
-
     const user = await User.findByIdAndUpdate(
       req.userId,
       { $set: update },
       { new: true, select: '-password -settings.arcaClave' }
     ).lean();
-
     res.json({ ok: true, user });
   } catch (e) {
     res.status(500).json({ error: 'Error al guardar configuración' });
   }
 });
 
-// ── Vincular Carpeta Fiscal (ARCA) ────────────────────────
 app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
   try {
     const { cuit, arcaClave } = req.body;
     if (!cuit || !arcaClave) return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
-
     const cleanCuit = String(cuit).replace(/\D/g, '');
-
     const user = await User.findByIdAndUpdate(
       req.userId,
       {
@@ -931,7 +903,6 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
       },
       { new: true, select: '-password -settings.arcaClave' }
     ).lean();
-
     res.json({ ok: true, message: 'Carpeta fiscal enviada. El proceso puede demorar hasta 24hs.', user });
   } catch (e) {
     console.error('Error ARCA Link:', e.message);
@@ -942,7 +913,6 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  API — AFIP/ARCA — EMISIÓN
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
   try {
     const resultado = await afip_verificarDelegacion(req.arcaCuit);
@@ -965,13 +935,11 @@ app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
   }
 });
 
-// ── Emitir CAE para una orden específica ─────────────────
 app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
   const { orderId } = req.params;
   try {
     const order = await Order.findOne({ _id: orderId, userId: req.userId });
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
-
     if (order.status === 'invoiced') {
       return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
     }
@@ -998,7 +966,6 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
 
     console.log(`✅ CAE: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
 
-    // Enviar mail si envioAuto=true
     if (req.envioAuto && order.customerEmail) {
       _enviarMailFactura(order, resultado.cae).catch(console.warn);
     }
@@ -1015,24 +982,19 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
   }
 });
 
-// ── Emitir en lote todas las órdenes pendientes ─────────
 app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, res) => {
   try {
     const pendientes = await Order.find({ userId: req.userId, status: 'pending_invoice' })
       .sort({ orderDate: 1, createdAt: 1 });
-
     if (!pendientes.length) {
       return res.json({ ok: true, mensaje: 'No hay órdenes pendientes de facturar.' });
     }
-
     res.json({ ok: true, mensaje: `Iniciando emisión de ${pendientes.length} comprobantes…`, total: pendientes.length });
-
     const cuit      = req.arcaCuit;
     const ptoVta    = req.arcaPtoVta;
     const categoria = req.arcaCategoria;
     const envioAuto = req.envioAuto;
     let ok = 0, errores = 0;
-
     for (const order of pendientes) {
       try {
         const r = await afip_emitirComprobante(cuit, ptoVta, {
@@ -1062,14 +1024,10 @@ app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, r
 
 // ════════════════════════════════════════════════════════════
 //  API — ÓRDENES MANUALES
-//
-//  POST /api/orders/manual — crea una venta manual y,
-//  si factAuto=true, emite el CAE automáticamente.
 // ════════════════════════════════════════════════════════════
 app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
   try {
     const { cliente, email, concepto, monto, tipo, dni } = req.body;
-
     if (!cliente || !monto) {
       return res.status(400).json({ error: 'Cliente y monto son obligatorios.' });
     }
@@ -1094,9 +1052,7 @@ app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
       orderDate:     new Date(),
     });
 
-    // ── Auto-facturación si corresponde ──
     if (user?.settings?.factAuto !== false && user?.settings?.arcaStatus === 'vinculado') {
-      // Responder primero, facturar en background
       res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada. Emitiendo CAE...' });
       _intentarAutoFacturar(req.userId, order);
     } else {
@@ -1112,7 +1068,6 @@ app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/integrations', requireAuthAPI, async (req, res) => {
   const list = await Integration.find({ userId: req.userId })
     .select('-credentials -webhookSecret').lean();
@@ -1190,7 +1145,6 @@ app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  WOOCOMMERCE OAUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/woo/connect', requireAuth, (req, res) => {
   const { store_url } = req.query;
   if (!store_url) return res.status(400).send('Falta store_url');
@@ -1258,7 +1212,6 @@ async function _registerWebhookTiendaNube(integration, apiToken) {
 // ════════════════════════════════════════════════════════════
 //  MERCADOLIBRE OAUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/ml/connect', requireAuth, (req, res) => {
   const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
   res.redirect(
@@ -1325,7 +1278,6 @@ async function _getMLToken(integration) {
 // ════════════════════════════════════════════════════════════
 //  BULK SYNC ENGINE
 // ════════════════════════════════════════════════════════════
-
 const BULK_SYNC = {
   async woocommerce(integration) {
     const key = integration.getKey('consumerKey'), secret = integration.getKey('consumerSecret');
@@ -1427,7 +1379,6 @@ app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  WEBHOOKS UNIVERSALES
 // ════════════════════════════════════════════════════════════
-
 async function handleWebhook(platform, secret, getCanonical) {
   const integration = await Integration.findOne({ platform, webhookSecret: secret, status: 'active' });
   if (!integration) return;
@@ -1467,7 +1418,6 @@ app.post('/webhook/shopify/:secret',     async (req, res) => { res.status(200).s
 // ════════════════════════════════════════════════════════════
 //  API — STATS CON FILTRO DE PERÍODO
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
     const { platform, desde, hasta } = req.query;
@@ -1542,7 +1492,6 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
-
 const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
@@ -1563,7 +1512,7 @@ const selfPing = () => {
 };
 
 app.listen(PORT, () => {
-  console.log(`🚀 KOI-Factura v3.2 — puerto ${PORT}`);
+  console.log(`🚀 KOI-Factura v3.3 — puerto ${PORT}`);
   console.log(`📡 Base URL: ${BASE}`);
   console.log(`🔐 CUIT Maestro AFIP: ${CUIT_MAESTRO}`);
   console.log(`🌐 AFIP modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
@@ -1571,9 +1520,8 @@ app.listen(PORT, () => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  ADMIN PANEL — CONSERJERÍA MANUAL (SOLO VOS)
+//  ADMIN PANEL — CONSERJERÍA MANUAL
 // ════════════════════════════════════════════════════════════
-
 const ADMIN_EMAIL = 'koi.automatic@gmail.com';
 
 async function requireAdmin(req, res, next) {
@@ -1622,7 +1570,6 @@ app.post('/api/admin/update-status', requireAuthAPI, requireAdmin, async (req, r
       },
     });
 
-    // Si se vinculó → limpiar TA cacheado para forzar renovación
     if (nuevoStatus === 'vinculado') {
       const user = await User.findById(userId).select('settings.cuit').lean();
       const cuit = user?.settings?.cuit?.replace(/\D/g, '');

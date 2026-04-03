@@ -334,6 +334,9 @@ function _soapPost(url, body) {
   return new Promise((resolve, reject) => {
     const parsed = new URL(url);
     const postData = Buffer.from(body, 'utf8');
+    
+    const isWsaa = url.includes('wsaa');
+
     const options = {
       hostname: parsed.hostname,
       port: 443,
@@ -342,16 +345,35 @@ function _soapPost(url, body) {
       headers: {
         'Content-Type': 'text/xml; charset=utf-8',
         'Content-Length': postData.length,
-        'SOAPAction': url.includes('wsaa') ? "" : "http://ar.gov.afip.dif.FEV1/FECAESolicitar"
+        // El secreto: comillas dobles dentro de las simples para cumplir el estándar estricto
+        'SOAPAction': isWsaa ? '""' : '"http://ar.gov.afip.dif.FEV1/FECAESolicitar"',
+        'Host': parsed.hostname,
+        'Connection': 'keep-alive',
+        'User-Agent': 'Koi-Fintech/1.0'
       },
     };
+
     const req = https.request(options, res => {
       let data = '';
       res.setEncoding('utf8');
       res.on('data', c => data += c);
-      res.on('end', () => resolve(data));
+      res.on('end', () => {
+        // Log preventivo si ARCA responde algo que no es XML
+        if (res.statusCode !== 200 && !data.includes('Envelope')) {
+          console.error(`⚠️ ARCA HTTP ${res.statusCode}:`, data.substring(0, 100));
+        }
+        resolve(data);
+      });
     });
-    req.on('error', reject);
+
+    req.on('error', (e) => reject(new Error(`Error de red ARCA: ${e.message}`)));
+    
+    // Timeout de 15 segundos para no dejar la petición colgada
+    req.setTimeout(15000, () => {
+      req.destroy();
+      reject(new Error('Timeout en la conexión con ARCA'));
+    });
+
     req.write(postData);
     req.end();
   });

@@ -234,6 +234,7 @@ const Order = mongoose.model('Order', OrderSchema);
 //  MÓDULO AFIP — CORREGIDO
 // ════════════════════════════════════════════════════════════
 
+// ⚠️ VERSIÓN CORREGIDA - Usa smime en lugar de cms
 function _firmarCMS(xml) {
   if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
     throw new Error(
@@ -244,32 +245,25 @@ function _firmarCMS(xml) {
   }
 
   const tmpXml = path.join(os.tmpdir(), `koi_req_${Date.now()}.xml`);
-  const tmpP7s = path.join(os.tmpdir(), `koi_req_${Date.now()}.p7s`);
-  const tmpDer = path.join(os.tmpdir(), `koi_req_${Date.now()}.der`);
+  const tmpSigned = path.join(os.tmpdir(), `koi_req_${Date.now()}.signed`);
 
   try {
     // Guardar el XML temporal
     fs.writeFileSync(tmpXml, xml, 'utf8');
     
-    // PASO 1: Generar CMS/PKCS#7 firmado (formato PEM)
-    // Usamos -outform PEM para obtener el CMS en formato PEM
+    // Usar smime en lugar de cms (formato que AFIP acepta)
+    // -sign: firmar
+    // -nodetach: incluir el contenido en el mensaje firmado
+    // -outform DER: salida en formato binario DER (no PEM)
     execSync(
-      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}" ` +
-      `-nodetach -outform PEM -out "${tmpP7s}"`,
+      `openssl smime -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}" ` +
+      `-nodetach -outform DER -out "${tmpSigned}"`,
       { stdio: 'pipe' }
     );
     
-    // PASO 2: Leer el CMS firmado (que ya está en formato base64 dentro del PEM)
-    let cmsPem = fs.readFileSync(tmpP7s, 'utf8');
-    
-    // Extraer solo el contenido base64 entre BEGIN y END
-    const base64Match = cmsPem.match(/-----BEGIN CMS-----([\s\S]*?)-----END CMS-----/i);
-    if (!base64Match) {
-      throw new Error('No se pudo extraer el CMS del formato PEM');
-    }
-    
-    // Limpiar y obtener el base64 puro (sin saltos de línea)
-    const base64 = base64Match[1].replace(/\s/g, '');
+    // Leer el archivo firmado y convertirlo a base64
+    const signedDer = fs.readFileSync(tmpSigned);
+    const base64 = signedDer.toString('base64');
     
     console.log(`✅ CMS generado correctamente (longitud: ${base64.length} chars)`);
     return base64;
@@ -279,8 +273,7 @@ function _firmarCMS(xml) {
     throw new Error(`Error al firmar CMS: ${err.message}`);
   } finally {
     try { fs.unlinkSync(tmpXml); } catch {}
-    try { fs.unlinkSync(tmpP7s); } catch {}
-    try { fs.unlinkSync(tmpDer); } catch {}
+    try { fs.unlinkSync(tmpSigned); } catch {}
   }
 }
 

@@ -442,6 +442,43 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const cae = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)[1];
   return { cae, nroComp };
 }
+// --- FUNCIONES DE CACHE (Faltaban estas) ---
+
+function _leerTACache(cuit) {
+  try {
+    const filePath = path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json');
+    if (fs.existsSync(filePath)) {
+      return JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    }
+  } catch (e) {
+    console.error("Error leyendo cache:", e);
+  }
+  return null;
+}
+
+function _guardarTACache(cuit, ta) {
+  try {
+    const dir = path.join(TA_CACHE_DIR, cuit);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(path.join(dir, 'ta-wsfe.json'), JSON.stringify(ta, null, 2), 'utf8');
+  } catch (e) {
+    console.error("Error guardando cache:", e);
+  }
+}
+
+function _taEsValido(ta) {
+  if (!ta || !ta.expiracion) return false;
+  // Consideramos válido si falta más de 10 minutos para que venza
+  const vto = new Date(ta.expiracion).getTime();
+  const ahora = Date.now();
+  return (vto - ahora) > (10 * 60 * 1000);
+}
+
+function _parseFechaAFIP(str) {
+  if (!str || str.length !== 8) return null;
+  return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`);
+}
+
 // (Mantené tus funciones auxiliares _leerTACache, _guardarTACache, etc. igual)
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto

@@ -246,312 +246,140 @@ OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT (ZONA HORARIA ARG)
+//  API — AFIP/ARCA — EMISIÓN (CORREGIDO)
 // ════════════════════════════════════════════════════════════
 
-function _firmarCMS(xml) {
-  if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
-    throw new Error(`Certificados AFIP no encontrados en Render Secrets.`);
-  }
-
-  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
-  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
-
-  try {
-    fs.writeFileSync(tmpXml, xml, 'utf8');
-    execSync(
-      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}"` +
-      ` -nodetach -outform DER -out "${tmpOut}"`,
-      { stdio: 'pipe' }
-    );
-    return fs.readFileSync(tmpOut).toString('base64');
-  } finally {
-    try { fs.unlinkSync(tmpXml); } catch {}
-    try { fs.unlinkSync(tmpOut); } catch {}
-  }
-}
-
 /**
- * Genera el Ticket de Requerimiento (LoginTicketRequest) 
- * mirando directamente el reloj de Argentina para evitar el Error 500 de ARCA.
+ * Función de soporte para determinar el tipo de comprobante.
+ * Como el motor está diseñado para Monotributistas, siempre devuelve 11 (Factura C).
  */
-function _generarCMS(servicio = 'wsfe') {
-  const ahora = new Date();
-  
-  // Margen de 10 min atrás para evitar "xml.generationTime.invalid" (falla si el server está adelantado)
-  const fechaDesde = new Date(ahora.getTime() - (10 * 60 * 1000));
-  const fechaHasta = new Date(ahora.getTime() + (12 * 60 * 60 * 1000));
-
-  const toAFIP = (date) => {
-    // Forzamos la obtención de partes de la fecha en la zona horaria de Buenos Aires
-    const fmt = new Intl.DateTimeFormat('en-US', {
-      timeZone: 'America/Argentina/Buenos_Aires',
-      year: 'numeric', month: '2-digit', day: '2-digit',
-      hour: '2-digit', minute: '2-digit', second: '2-digit',
-      hour12: false
-    });
-    
-    const parts = fmt.formatToParts(date);
-    const get = (type) => parts.find(p => p.type === type).value;
-
-    // Formato exacto requerido por ARCA: YYYY-MM-DDTHH:mm:ss-03:00
-    return `${get('year')}-${get('month')}-${get('day')}T${get('hour')}:${get('minute')}:${get('second')}-03:00`;
-  };
-
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<loginTicketRequest version="1.0">
-  <header>
-    <uniqueId>${Math.floor(Date.now() / 1000)}</uniqueId>
-    <generationTime>${toAFIP(fechaDesde)}</generationTime>
-    <expirationTime>${toAFIP(fechaHasta)}</expirationTime>
-  </header>
-  <service>${servicio}</service>
-</loginTicketRequest>`;
-
-  return _firmarCMS(xml);
+function _tipoComprobante(categoria) {
+  return 11; 
 }
 
-function _soapPost(url, body) {
-  return new Promise((resolve, reject) => {
-    const parsed   = new URL(url);
-    const postData = Buffer.from(body, 'utf8');
-    const options  = {
-      hostname: parsed.hostname,
-      port:      443,
-      path:      parsed.pathname + (parsed.search || ''),
-      method:    'POST',
-      headers:  {
-        'Content-Type':   'text/xml; charset=utf-8',
-        'Content-Length': postData.length,
-        'SOAPAction':      url.includes('wsaa') ? "" : "http://ar.gov.afip.dif.FEV1/FECAESolicitar"
-      },
-    };
-
-    const req = https.request(options, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        if (res.statusCode >= 500) reject(new Error(`AFIP Error 500: ${data}`));
-        else resolve(data);
-      });
-    });
-
-    req.on('error', reject);
-    req.setTimeout(20000, () => { req.destroy(); reject(new Error('Timeout AFIP')); });
-    req.write(postData);
-    req.end();
-  });
-}
-
-function _leerTACache(cuit) {
+app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
   try {
-    return JSON.parse(fs.readFileSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json'), 'utf8'));
-  } catch { return null; }
-}
-
-function _guardarTACache(cuit, ta) {
-  const dir = path.join(TA_CACHE_DIR, cuit);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'ta-wsfe.json'), JSON.stringify(ta, null, 2), 'utf8');
-}
-
-function _taEsValido(ta) {
-  if (!ta?.expiracion) return false;
-  return Date.now() < new Date(ta.expiracion).getTime() - 10 * 60 * 1000;
-}
-
-function _parsearTA(xml) {
-  // 1. Buscamos el nodo que contiene el ticket (en base64)
-  const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  
-  if (!m) {
-    // Si no hay loginCmsReturn, AFIP mandó un error SOAP directo (ej. CUIT no autorizado)
-    const fault = xml.match(/<faultstring>([\s\S]*?)<\/faultstring>/)?.[1];
-    throw new Error(`AFIP Rechazó el Login: ${fault || 'Respuesta SOAP inválida'}`);
-  }
-
-  try {
-    // 2. Decodificamos el Base64
-    const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
-    
-    // 🔍 DEBUG CRÍTICO: Esto aparecerá en tus logs de Render
-    console.log("--- DEBUG AFIP DATA START ---");
-    console.log(taXml); 
-    console.log("--- DEBUG AFIP DATA END ---");
-
-    // 3. Intentamos extraer los campos
-    const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
-    const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
-    const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
-
-    if (!token || !sign) {
-      // Si el XML decodificado no tiene token/sign, es un error interno de AFIP (ej. "Certificado revocado")
-      // Buscamos si hay un mensaje de error dentro de ese XML decodificado
-      const innerErr = taXml.match(/<error>([\s\S]*?)<\/error>/)?.[1] || 'Contenido inesperado en el ticket';
-      throw new Error(`Ticket Inválido: ${innerErr}`);
-    }
-
-    return { 
-      token, 
-      sign, 
-      expiracion: exp, 
-      generadoEn: new Date().toISOString() 
-    };
+    const resultado = await afip_verificarDelegacion(req.arcaCuit);
+    res.json({ ok: resultado.ok, mensaje: resultado.mensaje, cuit: req.arcaCuit });
   } catch (e) {
-    throw new Error(`Fallo en parseo de ticket: ${e.message}`);
+    res.status(500).json({ error: 'Error verificando delegación: ' + e.message });
   }
-}
-async function afip_obtenerTA(cuitUsuario) {
-  const cuit = String(cuitUsuario).replace(/\D/g, '');
-  const cache = _leerTACache(cuit);
-  if (cache && _taEsValido(cache)) return { token: cache.token, sign: cache.sign };
+});
 
-  const cms = _generarCMS('wsfe');
+app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
+  try {
+    await new Promise((resolve, reject) => {
+      const r = https.get(WSFE_URL + '?wsdl', { timeout: 8000 }, resolve);
+      r.on('error', reject);
+      r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+    });
+    res.json({ ok: true, online: true });
+  } catch {
+    res.json({ ok: true, online: false });
+  }
+});
 
-  const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:wsaa="http://wsaa.view.xsb.com.ar">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <wsaa:loginCms>
-      <wsaa:in0>${cms}</wsaa:in0>
-    </wsaa:loginCms>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+// ── Emitir CAE para una orden específica ─────────────────
+app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const order = await Order.findOne({ _id: orderId, userId: req.userId });
+    if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
 
-  const resp = await _soapPost(WSAA_URL, soapBody);
-  const ta   = _parsearTA(resp);
-  _guardarTACache(cuit, ta);
-  return { token: ta.token, sign: ta.sign };
-}
-
-function _fechaAFIP(d) {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('');
-}
-
-function _parseFechaAFIP(str) {
-  if (!str || str.length !== 8) return null;
-  return new Date(`${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}`);
-}
-
-function _docTipo(doc, importe) {
-  const d = String(doc || '0').replace(/\D/g, '');
-  if (importe >= 191624) return (d.length >= 7) ? 96 : 80; 
-  if (d === '0' || d.length < 7) return 99;
-  if (d.length === 11) return 80;
-  return 96;
-}
-
-async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
-  const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ar:FECompUltimoAutorizado>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuit}</ar:Cuit>
-      </ar:Auth>
-      <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-      <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-    </ar:FECompUltimoAutorizado>
-  </soapenv:Body>
-</soapenv:Envelope>`;
-
-  const resp  = await _soapPost(WSFE_URL, soap);
-  const match = resp.match(/<CbteNro>(\d+)<\/CbteNro>/);
-  return match ? parseInt(match[1], 10) : 0;
-}
-
-async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
-  const { token, sign } = await afip_obtenerTA(cuitEmisor);
-
-  const cbTipo    = datos.tipoComprobante || 11;
-  const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
-  const nroComp   = ultimoNro + 1;
-
-  // --- LÓGICA DE FECHAS PROTEGIDA (Regla 5 días + Mes corriente) ---
-  const fechaVenta = datos.fechaOriginal ? new Date(datos.fechaOriginal) : new Date();
-  const fechaHoy   = new Date();
-  const diffDias   = Math.floor((fechaHoy - fechaVenta) / (1000 * 60 * 60 * 24));
-  
-  let fechaEmision;
-  if (diffDias <= 5) {
-    fechaEmision = _fechaAFIP(fechaVenta);
-  } else {
-    const mismoMes = (fechaVenta.getMonth() === fechaHoy.getMonth() && 
-                      fechaVenta.getFullYear() === fechaHoy.getFullYear());
-    if (mismoMes) {
-      fechaEmision = _fechaAFIP(fechaHoy);
-    } else {
-      // Caso Camila (Marzo): usamos el límite legal (Hoy - 5 días) para que ARCA acepte
-      const limite = new Date();
-      limite.setDate(fechaHoy.getDate() - 5);
-      fechaEmision = _fechaAFIP(limite);
+    if (order.status === 'invoiced') {
+      return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
     }
+
+    // Enviamos la fecha original de la orden para que afip_emitirComprobante aplique la lógica de fechas
+    const resultado = await afip_emitirComprobante(
+      req.arcaCuit,
+      req.arcaPtoVta,
+      {
+        tipoComprobante: _tipoComprobante(req.arcaCategoria),
+        clienteDoc:      order.customerDoc || '0',
+        importeTotal:    order.amount,
+        fechaOriginal:   order.orderDate || order.createdAt 
+      }
+    );
+
+    await Order.findByIdAndUpdate(orderId, {
+      status:    'invoiced',
+      caeNumber: resultado.cae,
+      caeExpiry: resultado.caeFchVto,
+      errorLog:  '',
+    });
+
+    console.log(`✅ CAE EXITOSO: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
+
+    if (req.envioAuto && order.customerEmail) {
+      _enviarMailFactura(order, resultado.cae).catch(console.warn);
+    }
+
+    res.json({ ok: true, cae: resultado.cae, vto: resultado.caeFchVto, nroComp: resultado.nroComp });
+
+  } catch (e) {
+    console.error(`❌ Error al emitir CAE (Orden ${orderId}):`, e.message);
+    await Order.findOneAndUpdate(
+      { _id: orderId, userId: req.userId },
+      { status: 'error_afip', errorLog: e.message }
+    );
+    res.status(500).json({ error: e.message });
   }
+});
 
-  const importe = parseFloat(datos.importeTotal.toFixed(2));
-  const docTipo = _docTipo(datos.clienteDoc, importe);
-  const docNro  = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+// ── Emitir en lote todas las órdenes pendientes ─────────
+app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const pendientes = await Order.find({ userId: req.userId, status: 'pending_invoice' })
+      .sort({ orderDate: 1, createdAt: 1 });
 
-  const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ar:FECAESolicitar>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuitEmisor}</ar:Cuit>
-      </ar:Auth>
-      <ar:FeCAEReq>
-        <ar:FeCabReq>
-          <ar:CantReg>1</ar:CantReg>
-          <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-          <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-        </ar:FeCabReq>
-        <ar:FeDetReq>
-          <ar:FECAEDetRequest>
-            <ar:Concepto>1</ar:Concepto>
-            <ar:DocTipo>${docTipo}</ar:DocTipo>
-            <ar:DocNro>${docNro}</ar:DocNro>
-            <ar:CbteDesde>${nroComp}</ar:CbteDesde>
-            <ar:CbteHasta>${nroComp}</ar:CbteHasta>
-            <ar:CbteFch>${fechaEmision}</ar:CbteFch>
-            <ar:ImpTotal>${importe}</ar:ImpTotal>
-            <ar:ImpTotConc>0.00</ar:ImpTotConc>
-            <ar:ImpNeto>${importe}</ar:ImpNeto>
-            <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>0.00</ar:ImpIVA>
-            <ar:ImpTrib>0.00</ar:ImpTrib>
-            <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>
-          </ar:FECAEDetRequest>
-        </ar:FeDetReq>
-      </ar:FeCAEReq>
-    </ar:FECAESolicitar>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+    if (!pendientes.length) {
+      return res.json({ ok: true, mensaje: 'No hay órdenes pendientes de facturar.' });
+    }
 
-  const resp      = await _soapPost(WSFE_URL, soap);
-  const resultado = resp.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1]?.trim();
-  const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
+    res.json({ ok: true, mensaje: `Iniciando lote de ${pendientes.length} comprobantes…` });
 
-  if (resultado !== 'A') {
-    throw new Error(`ARCA Error: ${errMsg || 'Rechazado por validación interna'}`);
+    const cuit      = req.arcaCuit;
+    const ptoVta    = req.arcaPtoVta;
+    const categoria = req.arcaCategoria;
+    const envioAuto = req.envioAuto;
+
+    // Procesamiento asíncrono en segundo plano para no bloquear el request
+    (async () => {
+      let ok = 0, errores = 0;
+      for (const order of pendientes) {
+        try {
+          const r = await afip_emitirComprobante(cuit, ptoVta, {
+            tipoComprobante: _tipoComprobante(categoria),
+            clienteDoc:      order.customerDoc || '0',
+            importeTotal:    order.amount,
+            fechaOriginal:   order.orderDate || order.createdAt
+          });
+
+          await Order.findByIdAndUpdate(order._id, {
+            status: 'invoiced', caeNumber: r.cae, caeExpiry: r.caeFchVto, errorLog: '',
+          });
+
+          if (envioAuto && order.customerEmail) {
+            _enviarMailFactura(order, r.cae).catch(console.warn);
+          }
+          ok++;
+          // Pequeño delay para no saturar el Web Service de AFIP
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          errores++;
+          await Order.findByIdAndUpdate(order._id, { status: 'error_afip', errorLog: e.message });
+          console.error(`❌ Error en Lote (Orden ${order._id}):`, e.message);
+        }
+      }
+      console.log(`📊 Informe de Lote finalizado: ${ok} exitosas, ${errores} fallidas.`);
+    })();
+
+  } catch (e) {
+    console.error('Error crítico en proceso de lote:', e.message);
+    res.status(500).json({ error: e.message });
   }
-
-  const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();
-  const caeVto = resp.match(/<CAEFchVto>([\s\S]*?)<\/CAEFchVto>/)?.[1]?.trim();
-
-  return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
-}
+});
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto
 // ════════════════════════════════════════════════════════════

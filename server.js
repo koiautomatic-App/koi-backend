@@ -915,8 +915,13 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — AFIP/ARCA — EMISIÓN
+//  API — AFIP/ARCA — EMISIÓN (CORREGIDO)
 // ════════════════════════════════════════════════════════════
+
+// Funciones de soporte necesarias para las rutas
+function _tipoComprobante(categoria) {
+  return 11; // Siempre Factura C para Monotributistas
+}
 
 app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
   try {
@@ -950,10 +955,8 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
     if (order.status === 'invoiced') {
       return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
     }
-    if (order.status === 'error_data') {
-      return res.status(400).json({ error: `No se puede emitir: ${order.errorLog}` });
-    }
-
+    
+    // Pasamos la fecha original de la orden para que el motor decida si la adelanta (regla 5 días)
     const resultado = await afip_emitirComprobante(
       req.arcaCuit,
       req.arcaPtoVta,
@@ -961,6 +964,7 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
         tipoComprobante: _tipoComprobante(req.arcaCategoria),
         clienteDoc:      order.customerDoc || '0',
         importeTotal:    order.amount,
+        fechaOriginal:   order.orderDate || order.createdAt // Clave para destrabar órdenes viejas
       }
     );
 
@@ -973,7 +977,6 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
 
     console.log(`✅ CAE: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
 
-    // Enviar mail si envioAuto=true
     if (req.envioAuto && order.customerEmail) {
       _enviarMailFactura(order, resultado.cae).catch(console.warn);
     }
@@ -1014,6 +1017,7 @@ app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, r
           tipoComprobante: _tipoComprobante(categoria),
           clienteDoc:      order.customerDoc || '0',
           importeTotal:    order.amount,
+          fechaOriginal:   order.orderDate || order.createdAt // También para el lote
         });
         await Order.findByIdAndUpdate(order._id, {
           status: 'invoiced', caeNumber: r.cae, caeExpiry: r.caeFchVto, errorLog: '',
@@ -1029,9 +1033,144 @@ app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, r
         console.error(`❌ Lote CAE orden ${order._id}:`, e.message);
       }
     }
-    console.log(`📊 Lote finalizado CUIT=${cuit}: ${ok} emitidos, ${errores} errores`);
   } catch (e) {
     console.error('Emitir lote error:', e.message);
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — AFIP/ARCA — EMISIÓN (CORREGIDO)
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Función de soporte para determinar el tipo de comprobante.
+ * Como el motor está diseñado para Monotributistas, siempre devuelve 11 (Factura C).
+ */
+function _tipoComprobante(categoria) {
+  return 11; 
+}
+
+app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const resultado = await afip_verificarDelegacion(req.arcaCuit);
+    res.json({ ok: resultado.ok, mensaje: resultado.mensaje, cuit: req.arcaCuit });
+  } catch (e) {
+    res.status(500).json({ error: 'Error verificando delegación: ' + e.message });
+  }
+});
+
+app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
+  try {
+    await new Promise((resolve, reject) => {
+      const r = https.get(WSFE_URL + '?wsdl', { timeout: 8000 }, resolve);
+      r.on('error', reject);
+      r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+    });
+    res.json({ ok: true, online: true });
+  } catch {
+    res.json({ ok: true, online: false });
+  }
+});
+
+// ── Emitir CAE para una orden específica ─────────────────
+app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const order = await Order.findOne({ _id: orderId, userId: req.userId });
+    if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    if (order.status === 'invoiced') {
+      return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
+    }
+
+    // Enviamos la fecha original de la orden para que afip_emitirComprobante aplique la lógica de fechas
+    const resultado = await afip_emitirComprobante(
+      req.arcaCuit,
+      req.arcaPtoVta,
+      {
+        tipoComprobante: _tipoComprobante(req.arcaCategoria),
+        clienteDoc:      order.customerDoc || '0',
+        importeTotal:    order.amount,
+        fechaOriginal:   order.orderDate || order.createdAt 
+      }
+    );
+
+    await Order.findByIdAndUpdate(orderId, {
+      status:    'invoiced',
+      caeNumber: resultado.cae,
+      caeExpiry: resultado.caeFchVto,
+      errorLog:  '',
+    });
+
+    console.log(`✅ CAE EXITOSO: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
+
+    if (req.envioAuto && order.customerEmail) {
+      _enviarMailFactura(order, resultado.cae).catch(console.warn);
+    }
+
+    res.json({ ok: true, cae: resultado.cae, vto: resultado.caeFchVto, nroComp: resultado.nroComp });
+
+  } catch (e) {
+    console.error(`❌ Error al emitir CAE (Orden ${orderId}):`, e.message);
+    await Order.findOneAndUpdate(
+      { _id: orderId, userId: req.userId },
+      { status: 'error_afip', errorLog: e.message }
+    );
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── Emitir en lote todas las órdenes pendientes ─────────
+app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const pendientes = await Order.find({ userId: req.userId, status: 'pending_invoice' })
+      .sort({ orderDate: 1, createdAt: 1 });
+
+    if (!pendientes.length) {
+      return res.json({ ok: true, mensaje: 'No hay órdenes pendientes de facturar.' });
+    }
+
+    res.json({ ok: true, mensaje: `Iniciando lote de ${pendientes.length} comprobantes…` });
+
+    const cuit      = req.arcaCuit;
+    const ptoVta    = req.arcaPtoVta;
+    const categoria = req.arcaCategoria;
+    const envioAuto = req.envioAuto;
+
+    // Procesamiento asíncrono en segundo plano para no bloquear el request
+    (async () => {
+      let ok = 0, errores = 0;
+      for (const order of pendientes) {
+        try {
+          const r = await afip_emitirComprobante(cuit, ptoVta, {
+            tipoComprobante: _tipoComprobante(categoria),
+            clienteDoc:      order.customerDoc || '0',
+            importeTotal:    order.amount,
+            fechaOriginal:   order.orderDate || order.createdAt
+          });
+
+          await Order.findByIdAndUpdate(order._id, {
+            status: 'invoiced', caeNumber: r.cae, caeExpiry: r.caeFchVto, errorLog: '',
+          });
+
+          if (envioAuto && order.customerEmail) {
+            _enviarMailFactura(order, r.cae).catch(console.warn);
+          }
+          ok++;
+          // Pequeño delay para no saturar el Web Service de AFIP
+          await new Promise(resolve => setTimeout(resolve, 500));
+        } catch (e) {
+          errores++;
+          await Order.findByIdAndUpdate(order._id, { status: 'error_afip', errorLog: e.message });
+          console.error(`❌ Error en Lote (Orden ${order._id}):`, e.message);
+        }
+      }
+      console.log(`📊 Informe de Lote finalizado: ${ok} exitosas, ${errores} fallidas.`);
+    })();
+
+  } catch (e) {
+    console.error('Error crítico en proceso de lote:', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 

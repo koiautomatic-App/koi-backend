@@ -331,18 +331,27 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   // 1. Obtención de credenciales (TA)
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
   
-  // 2. Preparación de datos
+  // 2. Lógica interna de tipo de comprobante (Evita el error 'not defined')
+  // 11 es Factura C (Monotributo). 1 es Factura A, 6 es Factura B.
   const cbTipo = datos.tipoComprobante || 11;
+  
+  // 3. Obtener el próximo número a emitir
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
   const nroComp = ultimoNro + 1;
   
-  // Importante: AFIP requiere 2 decimales fijos y punto como separador
+  // 4. Preparación de strings para el XML (AFIP es estricto con los 2 decimales)
   const importe = datos.importeTotal.toFixed(2); 
-  const docTipo  = _docTipo(datos.clienteDoc);
-  const docNro   = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  
+  // Lógica de tipo de documento interna
+  const docLimpio = String(datos.clienteDoc || '0').replace(/\D/g, '');
+  let docTipo = 96; // DNI por defecto
+  if (docLimpio.length === 11) docTipo = 80; // CUIT
+  if (docLimpio === '0' || docLimpio.startsWith('9999')) docTipo = 99; // Consumidor Final
+  
+  const docNro   = docLimpio || '0';
   const fechaHoy = _fechaAFIP(new Date());
 
-  // 3. Construcción del XML con xmlbuilder
+  // 5. Construcción del XML
   const soap = xmlbuilder.create('soapenv:Envelope')
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
     .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
@@ -362,7 +371,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
           .up()
           .ele('ar:FeDetReq')
             .ele('ar:FECAEDetRequest')
-              .ele('ar:Concepto').txt(1).up() // 1 = Productos
+              .ele('ar:Concepto').txt(1).up()
               .ele('ar:DocTipo').txt(docTipo).up()
               .ele('ar:DocNro').txt(docNro).up()
               .ele('ar:CbteDesde').txt(nroComp).up()
@@ -381,32 +390,25 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
         .up()
       .up().up().end();
 
-  // 4. Envío y Procesamiento de Respuesta
+  // 6. Envío y Procesamiento
   const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
   const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (resultado !== 'A') {
-    // Buscamos errores en el nodo <Err> y advertencias en <Obs>
     const errNodes = xmlDoc.getElementsByTagName('Err');
     const obsNodes = xmlDoc.getElementsByTagName('Obs');
     let fallos = [];
 
     for (let i = 0; i < errNodes.length; i++) {
-      const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
-      const msg = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
-      fallos.push(`[Error ${code}] ${msg}`);
+      fallos.push(`[Err ${errNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${errNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
-    
     for (let i = 0; i < obsNodes.length; i++) {
-      const code = obsNodes[i].getElementsByTagName('Code')[0]?.textContent;
-      const msg = obsNodes[i].getElementsByTagName('Msg')[0]?.textContent;
-      fallos.push(`[Obs ${code}] ${msg}`);
+      fallos.push(`[Obs ${obsNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${obsNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
 
-    throw new Error(`AFIP rechazó: ${fallos.join(' | ') || 'Error de validación desconocido'}`);
+    throw new Error(`AFIP rechazó: ${fallos.join(' | ') || 'Error desconocido'}`);
   }
 
-  // 5. Extracción de CAE y Vencimiento
   const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
   const cae = detResp.getElementsByTagName('CAE')[0]?.textContent;
   const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;

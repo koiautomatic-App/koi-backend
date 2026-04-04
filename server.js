@@ -31,6 +31,25 @@ const PORT = process.env.PORT || 10000;
 const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
+// ... después de const https = require('https');
+
+// ════════════════════════════════════════════════════════════
+//  FIX: AFIP usa claves DH pequeñas (1024 bits)
+//  OpenSSL 3.x las rechaza, esta configuración las permite
+// ════════════════════════════════════════════════════════════
+process.env.NODE_OPTIONS = '--tls-min-v1.0 --openssl-legacy-provider';
+
+const httpsAgent = new https.Agent({
+  secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
+  ciphers: 'DEFAULT:!DH:!aNULL:!eNULL:!LOW:!MEDIUM:!EXP:!RC4',
+  minVersion: 'TLSv1',
+  maxVersion: 'TLSv1.2',
+  keepAlive: true
+});
+
+// Aplicar a todas las peticiones axios
+axios.defaults.httpsAgent = httpsAgent;
+
 // ════════════════════════════════════════════════════════════
 //  AFIP — CONFIGURACIÓN GLOBAL (URLs FIJAS DE PRODUCCIÓN)
 //  Estas son las que funcionaban sin errores

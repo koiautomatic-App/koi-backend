@@ -20,7 +20,8 @@ const passport       = require('passport');
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto         = require('crypto');
 const path           = require('path');
-const fs             = require('fs');
+const fs             = require('fs'); 
+const fsp            = require('fs').promises; // <-- AGREGÁ ESTA LÍNEA
 const { execSync }   = require('child_process');
 const os             = require('os');
 const https          = require('https');
@@ -351,13 +352,6 @@ function _parseFechaAFIP(str) {
 //  AFIP — MÓDULO DE EMISIÓN v4.1 (COMPLETO & UNIFICADO)
 // ════════════════════════════════════════════════════════════
 
-const fs = require('fs').promises;
-const { execSync } = require('child_process');
-const path = require('path');
-const axios = require('axios');
-const xmlbuilder = require('xmlbuilder');
-const { DOMParser } = require('xmldom');
-
 // --- CONFIGURACIÓN DE URLS ---
 const AFIP_URLS = {
   wsaa: process.env.WSAA_URL || "https://wsaa.afip.gov.ar/ws/services/LoginCms",
@@ -452,11 +446,12 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
  * Obtiene el Ticket de Acceso (Token y Sign) con caché en /tmp.
  */
 async function afip_obtenerTA(cuitEmisor) {
-  const TA_PATH = path.join('/tmp', `ta-${cuitEmisor}.xml`);
+  const TA_PATH = path.join('/tmp', `ta-${
+    cuitEmisor}.xml`);
 
   // Intentar leer caché para no saturar WSAA
   try {
-    const cachedXML = await fs.readFile(TA_PATH, 'utf-8');
+    const cachedXML = await fsp.readFile(TA_PATH, 'utf-8');
     const xml = new DOMParser().parseFromString(cachedXML, 'text/xml');
     const expTime = xml.getElementsByTagName('expirationTime')[0]?.textContent;
     if (expTime && new Date(expTime) > new Date(Date.now() + 600000)) {
@@ -490,8 +485,7 @@ async function afip_obtenerTA(cuitEmisor) {
   try {
     // Firmar con OpenSSL
     execSync(`openssl cms -sign -in ${traPath} -out ${cmsPath} -signer ${crtPath} -inkey ${keyPath} -nodetach -outform DER`);
-    const cmsBase64 = (await fs.readFile(cmsPath)).toString('base64');
-
+    const cmsBase64 = (await fsp.readFile(cmsPath)).toString('base64');
     const soapWsaa = xmlbuilder.create('soapenv:Envelope')
       .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
       .att('xmlns:wsaa', 'http://wsaa.view.sua.diah.afip.gov.ar/ws/services/LoginCms')
@@ -501,7 +495,7 @@ async function afip_obtenerTA(cuitEmisor) {
     const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
     const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
     
-    await fs.writeFile(TA_PATH, loginReturn);
+    await fsp.writeFile(TA_PATH, loginReturn);
     const finalXml = new DOMParser().parseFromString(loginReturn, 'text/xml');
     
     return {
@@ -509,8 +503,8 @@ async function afip_obtenerTA(cuitEmisor) {
       sign: finalXml.getElementsByTagName('sign')[0].textContent
     };
   } finally {
-    await fs.unlink(traPath).catch(() => {});
-    await fs.unlink(cmsPath).catch(() => {});
+    await fsp.unlink(traPath).catch(() => {});
+    await fsp.unlink(cmsPath).catch(() => {});
   }
 }
 

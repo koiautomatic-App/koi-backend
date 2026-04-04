@@ -328,16 +328,21 @@ async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
 }
 
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
+  // 1. Obtención de credenciales (TA)
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
   
+  // 2. Preparación de datos
   const cbTipo = datos.tipoComprobante || 11;
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
   const nroComp = ultimoNro + 1;
   
-  const importe = parseFloat(datos.importeTotal.toFixed(2));
-  const docTipo = _docTipo(datos.clienteDoc);
-  const docNro = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  // Importante: AFIP requiere 2 decimales fijos y punto como separador
+  const importe = datos.importeTotal.toFixed(2); 
+  const docTipo  = _docTipo(datos.clienteDoc);
+  const docNro   = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  const fechaHoy = _fechaAFIP(new Date());
 
+  // 3. Construcción del XML con xmlbuilder
   const soap = xmlbuilder.create('soapenv:Envelope')
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
     .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
@@ -357,18 +362,18 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
           .up()
           .ele('ar:FeDetReq')
             .ele('ar:FECAEDetRequest')
-              .ele('ar:Concepto').txt(1).up()
+              .ele('ar:Concepto').txt(1).up() // 1 = Productos
               .ele('ar:DocTipo').txt(docTipo).up()
               .ele('ar:DocNro').txt(docNro).up()
               .ele('ar:CbteDesde').txt(nroComp).up()
               .ele('ar:CbteHasta').txt(nroComp).up()
-              .ele('ar:CbteFch').txt(_fechaAFIP(new Date())).up()
+              .ele('ar:CbteFch').txt(fechaHoy).up()
               .ele('ar:ImpTotal').txt(importe).up()
-              .ele('ar:ImpTotConc').txt(0).up()
+              .ele('ar:ImpTotConc').txt("0.00").up()
               .ele('ar:ImpNeto').txt(importe).up()
-              .ele('ar:ImpOpEx').txt(0).up()
-              .ele('ar:ImpIVA').txt(0).up()
-              .ele('ar:ImpTrib').txt(0).up()
+              .ele('ar:ImpOpEx').txt("0.00").up()
+              .ele('ar:ImpIVA').txt("0.00").up()
+              .ele('ar:ImpTrib').txt("0.00").up()
               .ele('ar:MonId').txt('PES').up()
               .ele('ar:MonCotiz').txt(1).up()
             .up()
@@ -376,25 +381,41 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
         .up()
       .up().up().end();
 
+  // 4. Envío y Procesamiento de Respuesta
   const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
-  const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
   const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (resultado !== 'A') {
+    // Buscamos errores en el nodo <Err> y advertencias en <Obs>
     const errNodes = xmlDoc.getElementsByTagName('Err');
-    let errores = [];
+    const obsNodes = xmlDoc.getElementsByTagName('Obs');
+    let fallos = [];
+
     for (let i = 0; i < errNodes.length; i++) {
       const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
       const msg = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
-      errores.push(`[${code}] ${msg}`);
+      fallos.push(`[Error ${code}] ${msg}`);
     }
-    throw new Error(`AFIP rechazó: ${errores.join(' | ') || 'Error desconocido'}`);
+    
+    for (let i = 0; i < obsNodes.length; i++) {
+      const code = obsNodes[i].getElementsByTagName('Code')[0]?.textContent;
+      const msg = obsNodes[i].getElementsByTagName('Msg')[0]?.textContent;
+      fallos.push(`[Obs ${code}] ${msg}`);
+    }
+
+    throw new Error(`AFIP rechazó: ${fallos.join(' | ') || 'Error de validación desconocido'}`);
   }
 
+  // 5. Extracción de CAE y Vencimiento
+  const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
   const cae = detResp.getElementsByTagName('CAE')[0]?.textContent;
   const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;
 
-  return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
+  return { 
+    cae, 
+    caeFchVto: _parseFechaAFIP(caeVto), 
+    nroComp 
+  };
 }
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto

@@ -1,5 +1,5 @@
 // ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v3.2
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.1
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
 //  AFIP/ARCA — Delegación Multi-Tenant integrada
 // ============================================================
@@ -25,6 +25,10 @@ const { execSync }   = require('child_process');
 const os             = require('os');
 const https          = require('https');
 
+// --- NUEVAS DEPENDENCIAS v4.1 ---
+const xmlbuilder     = require('xmlbuilder');
+const { DOMParser }  = require('@xmldom/xmldom');
+
 const app  = express();
 const PORT = process.env.PORT || 10000;
 const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
@@ -32,18 +36,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
 // ════════════════════════════════════════════════════════════
 //  AFIP — CONFIGURACIÓN GLOBAL
-//
-//  Render Secret Files:
-//    /etc/secrets/koi.crt  ← certificado del CUIT Maestro
-//    /etc/secrets/koi.key  ← clave privada del CUIT Maestro
-//
-//  Variables de entorno en Render:
-//    AFIP_CUIT      → CUIT del maestro (ej: 20309782489)
-//    AFIP_CERT_PATH → ruta al .crt  (ej: /etc/secrets/koi.crt)
-//    AFIP_KEY_PATH  → ruta al .key  (ej: /etc/secrets/koi.key)
-//
-//  Cache de Tickets de Acceso por usuario: /tmp/koi-ta/{cuit}/ta-wsfe.json
-//  (En Render el filesystem /tmp persiste durante la instancia)
 // ════════════════════════════════════════════════════════════
 const CUIT_MAESTRO = (process.env.AFIP_CUIT || process.env.CUIT_MAESTRO || '20309782489').replace(/\D/g, '');
 const PROD_MODE    = process.env.NODE_ENV === 'production';
@@ -54,97 +46,150 @@ const AFIP_KEY_PATH  = process.env.AFIP_KEY_PATH  || '/etc/secrets/koi.key';
 
 // Directorio para cache de Tickets de Acceso por usuario
 const TA_CACHE_DIR = process.env.TA_CACHE_DIR || path.join(os.tmpdir(), 'koi-ta');
-fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
+if (!fs.existsSync(TA_CACHE_DIR)) {
+    fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
+}
 
-const WSAA_URL = PROD_MODE
-  ? 'https://wsaa.afip.gov.ar/ws/services/LoginCms'
-  : 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms';
-
-const WSFE_URL = PROD_MODE
-  ? 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
-  : 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx';
+// URLs unificadas en un objeto para mejor gestión
+const AFIP_URLS = {
+    wsaa: PROD_MODE 
+        ? 'https://wsaa.afip.gov.ar/ws/services/LoginCms' 
+        : 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms',
+    wsfe: PROD_MODE 
+        ? 'https://servicios1.afip.gov.ar/wsfev1/service.asmx' 
+        : 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx'
+};
 
 // Verificación temprana de certs al arrancar
 function _verificarCertsMaestro() {
-  const certOk = fs.existsSync(AFIP_CERT_PATH);
-  const keyOk  = fs.existsSync(AFIP_KEY_PATH);
-  if (certOk && keyOk) {
-    console.log(`🔐 Certs AFIP listos: ${AFIP_CERT_PATH} / ${AFIP_KEY_PATH}`);
-    console.log(`🔐 CUIT Maestro: ${CUIT_MAESTRO}`);
-  } else {
-    console.warn(`⚠️  Certs AFIP NO encontrados:`);
-    if (!certOk) console.warn(`   Falta .crt en: ${AFIP_CERT_PATH}`);
-    if (!keyOk)  console.warn(`   Falta .key en: ${AFIP_KEY_PATH}`);
-    console.warn(`   Configurá AFIP_CERT_PATH y AFIP_KEY_PATH en Render Environment`);
-  }
+    const certOk = fs.existsSync(AFIP_CERT_PATH);
+    const keyOk  = fs.existsSync(AFIP_KEY_PATH);
+    if (certOk && keyOk) {
+        console.log(`🔐 Certs AFIP listos: ${AFIP_CERT_PATH} / ${AFIP_KEY_PATH}`);
+        console.log(`🔐 CUIT Maestro: ${CUIT_MAESTRO}`);
+        console.log(`🌐 Modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
+    } else {
+        console.warn(`⚠️  Certs AFIP NO encontrados:`);
+        if (!certOk) console.warn(`   Falta .crt en: ${AFIP_CERT_PATH}`);
+        if (!keyOk)  console.warn(`   Falta .key en: ${AFIP_KEY_PATH}`);
+        console.warn(`   Configurá AFIP_CERT_PATH y AFIP_KEY_PATH en Render Environment`);
+    }
 }
 _verificarCertsMaestro();
 
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARES
 // ════════════════════════════════════════════════════════════
+
+// Soporte para JSON y formularios (Límite de 1mb es correcto para facturación)
 app.use(express.json({ limit: '1mb' }));
 app.use(express.urlencoded({ extended: true }));
-app.use(cors({ origin: BASE, credentials: true }));
-app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
-  secret:            process.env.SESSION_SECRET || 'koi-session-dev',
-  resave:            false,
-  saveUninitialized: false,
-  cookie: { secure: PROD_MODE, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
+
+// Configuración de CORS Robusta
+const allowedOrigins = [BASE, 'http://localhost:3000', 'http://localhost:10000']; 
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permitir peticiones sin origen (como apps móviles o curl) o las de la lista
+    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes('render.com')) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true
 }));
+
+app.use(cookieParser());
+
+// Servir archivos estáticos (asegúrate de tener la carpeta 'public' creada)
+app.use(express.static(path.join(__dirname, 'public')));
+
+// Configuración de Sesión para Passport/Google Auth
+app.use(session({
+  secret: process.env.SESSION_SECRET || 'koi-session-dev-secret-key',
+  resave: false,
+  saveUninitialized: false,
+  cookie: { 
+    secure: PROD_MODE, // true en producción (HTTPS)
+    sameSite: PROD_MODE ? 'none' : 'lax', // Necesario para cross-domain en Render
+    httpOnly: true, 
+    maxAge: 7 * 24 * 60 * 60 * 1000 // 1 semana
+  },
+}));
+
 app.use(passport.initialize());
 app.use(passport.session());
-
 // ════════════════════════════════════════════════════════════
-//  MONGODB
+//  MONGODB (CONEXIÓN & MONITOREO)
 // ════════════════════════════════════════════════════════════
 const connectDB = async () => {
   try {
     await mongoose.connect(process.env.MONGO_URI, {
-      maxPoolSize: 10, serverSelectionTimeoutMS: 5000,
+      maxPoolSize: 10, 
+      serverSelectionTimeoutMS: 5000,
     });
     console.log('🐟 KOI: MongoDB conectado');
   } catch (err) {
-    console.error('❌ MongoDB error:', err.message);
+    console.error('❌ MongoDB error inicial:', err.message);
+    // Reintento automático cada 5 segundos
     setTimeout(connectDB, 5000);
   }
 };
-connectDB();
 
+// Monitoreo de eventos una vez conectado
+mongoose.connection.on('error', err => {
+  console.error('🔴 MongoDB error en ejecución:', err);
+});
+
+mongoose.connection.on('disconnected', () => {
+  console.warn('🟡 MongoDB desconectado. Intentando reconectar...');
+});
+
+connectDB();
 // ════════════════════════════════════════════════════════════
-//  ENCRYPTION — AES-256-GCM
+//  ENCRYPTION — AES-256-GCM (ROBUSTO)
 // ════════════════════════════════════════════════════════════
-const ENC_KEY = Buffer.from(
-  (process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').padEnd(32, '0').slice(0, 32),
-  'utf8'
-);
+
+// Aseguramos que la llave tenga 32 bytes exactos para aes-256
+const rawKey = process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k';
+const ENC_KEY = Buffer.alloc(32, rawKey).slice(0, 32);
 
 const encrypt = (text) => {
   if (!text) return null;
-  const iv     = crypto.randomBytes(12);
-  const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-  const enc    = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
-  const tag    = cipher.getAuthTag();
-  return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+  try {
+    const iv     = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+    const enc    = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
+    const tag    = cipher.getAuthTag();
+    return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
+  } catch (e) {
+    console.error('❌ Error en encriptación:', e.message);
+    return null;
+  }
 };
 
 const decrypt = (payload) => {
-  if (!payload) return null;
+  if (!payload || typeof payload !== 'string' || !payload.includes(':')) return null;
   try {
-    const [ivHex, tagHex, encHex] = payload.split(':');
+    const parts = payload.split(':');
+    if (parts.length !== 3) return null;
+
+    const [ivHex, tagHex, encHex] = parts;
     const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
     decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
+    
     return Buffer.concat([
       decipher.update(Buffer.from(encHex, 'hex')),
       decipher.final(),
     ]).toString('utf8');
-  } catch { return null; }
+  } catch (e) { 
+    // No logueamos el error aquí para no llenar la consola si hay datos viejos sin encriptar
+    return null; 
+  }
 };
 
 // ════════════════════════════════════════════════════════════
-//  SCHEMAS
+//  SCHEMAS (REVISADOS & OPTIMIZADOS v4.1)
 // ════════════════════════════════════════════════════════════
 
 const UserSchema = new mongoose.Schema({
@@ -157,12 +202,12 @@ const UserSchema = new mongoose.Schema({
   plan:         { type: String, default: 'free', enum: ['free', 'pro'] },
 
   settings: {
-    factAuto:   { type: Boolean, default: true },   // Facturación automática
-    envioAuto:  { type: Boolean, default: true },   // Envío automático de mail
+    factAuto:   { type: Boolean, default: true }, 
+    envioAuto:  { type: Boolean, default: true }, 
     categoria:  { type: String, default: 'C' },
-    cuit:       { type: String },
+    cuit:       { type: String, trim: true, set: v => v ? v.replace(/\D/g, '') : v }, // Limpia guiones auto
     arcaUser:   { type: String },
-    arcaClave:  { type: String },                   // encriptada
+    arcaClave:  { type: String }, // Encriptada vía middleware o manual
     arcaPtoVta: { type: Number, default: 1 },
     arcaStatus: {
       type:    String,
@@ -176,16 +221,20 @@ const UserSchema = new mongoose.Schema({
   creadoEn:     { type: Date, default: Date.now },
 }, { timestamps: false });
 
+// Middleware de Password
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
+
 UserSchema.methods.checkPassword = function(plain) {
   return bcrypt.compare(plain, this.password);
 };
+
 const User = mongoose.model('User', UserSchema);
 
+// --- INTEGRACIONES ---
 const IntegrationSchema = new mongoose.Schema({
   userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   platform: {
@@ -208,14 +257,21 @@ const IntegrationSchema = new mongoose.Schema({
 }, { timestamps: false });
 
 IntegrationSchema.index({ userId: 1, platform: 1, storeId: 1 }, { unique: true });
+
+// Métodos de encriptación integrados
 IntegrationSchema.methods.setKey = function(field, value) {
-  this.credentials = { ...this.credentials, [field]: encrypt(value) };
+  if (!this.credentials) this.credentials = {};
+  this.credentials[field] = encrypt(value);
+  this.markModified('credentials');
 };
+
 IntegrationSchema.methods.getKey = function(field) {
   return decrypt(this.credentials?.[field]);
 };
+
 const Integration = mongoose.model('Integration', IntegrationSchema);
 
+// --- ÓRDENES ---
 const OrderSchema = new mongoose.Schema({
   userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
@@ -226,7 +282,6 @@ const OrderSchema = new mongoose.Schema({
   customerDoc:   { type: String, default: '0' },
   amount:        { type: Number, required: true },
   currency:      { type: String, default: 'ARS' },
-  // Concepto — solo para ventas manuales
   concepto:      { type: String, default: '' },
   status: {
     type:    String,
@@ -234,6 +289,8 @@ const OrderSchema = new mongoose.Schema({
     enum:    ['pending_invoice', 'invoiced', 'error_data', 'error_afip', 'skipped'],
   },
   orderDate:  { type: Date },
+  // Datos AFIP
+  nroComp:    { type: Number }, // Nuevo: Para guardar el nro de factura real
   caeNumber:  { type: String },
   caeExpiry:  { type: Date },
   errorLog:   { type: String },
@@ -241,117 +298,92 @@ const OrderSchema = new mongoose.Schema({
 }, { timestamps: false });
 
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
-OrderSchema.index({ userId: 1, platform: 1, orderDate: -1 });
-OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
+OrderSchema.index({ userId: 1, orderDate: -1 });
+
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT v4.1 (Ajustado)
+//  AFIP — FUNCIONES AUXILIARES GLOBALES (v4.1)
 // ════════════════════════════════════════════════════════════
 
-const forge = require('node-forge'); // Usaremos forge para evitar dependencia de OpenSSL binario si es posible, o mantenemos execSync si prefieres.
+// (Nota: AFIP_URLS ya fue definido arriba con soporte PROD_MODE)
 
-function _firmarCMS(xml) {
-  if (!AFIP_CERT || !AFIP_KEY) {
-    throw new Error('Certificados AFIP no cargados en el servidor.');
-  }
-
-  try {
-    const cert = forge.pki.certificateFromPem(AFIP_CERT);
-    const privKey = forge.pki.privateKeyFromPem(AFIP_KEY);
-    const p7 = forge.pkcs7.createSignedData();
-    p7.content = forge.util.createBuffer(xml, 'utf8');
-    p7.addCertificate(cert);
-    p7.addSigner({
-      key: privKey,
-      certificate: cert,
-      digestAlgorithm: forge.pki.oids.sha256,
-      authenticatedAttributes: [
-        { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
-        { type: forge.pki.oids.messageDigest },
-        { type: forge.pki.oids.signingTime, value: new Date() },
-      ],
-    });
-    p7.sign({ detached: false });
-    return Buffer.from(forge.asn1.toDer(p7.toAsn1()).getBytes(), 'binary').toString('base64');
-  } catch (err) {
-    throw new Error(`Error al firmar CMS: ${err.message}`);
-  }
+/**
+ * _docTipo: Clasifica el documento para AFIP
+ */
+function _docTipo(doc) {
+  const d = String(doc || '0').replace(/\D/g, '');
+  if (d.length === 11) return 80; // CUIT
+  if (d === '0' || d.startsWith('9999') || d === '') return 99; // Consumidor Final / Sin identificar
+  return 96; // DNI
 }
 
-function _generarCMS(servicio = 'wsfe') {
-  const ahora = new Date();
-  const desde = new Date(ahora.getTime() - 60000).toISOString().replace('Z', '-03:00');
-  const hasta = new Date(ahora.getTime() + 12 * 3600000).toISOString().replace('Z', '-03:00');
-
-  const tra = xmlbuilder.create('loginTicketRequest', { version: '1.0', encoding: 'UTF-8' })
-    .ele('header')
-      .ele('uniqueId').txt(Math.floor(Date.now() / 1000)).up()
-      .ele('generationTime').txt(desde).up()
-      .ele('expirationTime').txt(hasta).up()
-    .up()
-    .ele('service').txt(servicio)
-    .end();
-
-  return _firmarCMS(tra);
+/**
+ * _tipoComprobante: Define el tipo de factura (11 = Factura C)
+ */
+function _tipoComprobante(categoria) {
+  // Lógica preparada para expandirse a A o B en el futuro
+  return 11; 
 }
 
-async function _soapPost(url, body, action = '""') {
-  const res = await axios.post(url, body, {
-    headers: { 
-      'Content-Type': 'text/xml; charset=utf-8', 
-      'SOAPAction': action 
-    },
-    timeout: 30000,
-  });
-  return new DOMParser().parseFromString(res.data, 'text/xml');
+/**
+ * _fechaAFIP: Formatea fecha a AAAAMMDD
+ */
+function _fechaAFIP(d) {
+  const date = d instanceof Date ? d : new Date();
+  return [
+    date.getFullYear(),
+    String(date.getMonth() + 1).padStart(2, '0'),
+    String(date.getDate()).padStart(2, '0')
+  ].join('');
 }
 
-async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
-  const soap = xmlbuilder.create('soapenv:Envelope')
-    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
-    .ele('soapenv:Header').up()
-    .ele('soapenv:Body')
-      .ele('ar:FECompUltimoAutorizado')
-        .ele('ar:Auth')
-          .ele('ar:Token').txt(token).up()
-          .ele('ar:Sign').txt(sign).up()
-          .ele('ar:Cuit').txt(cuit).up()
-        .up()
-        .ele('ar:PtoVta').txt(puntoVenta).up()
-        .ele('ar:CbteTipo').txt(cbTipo).up()
-      .up().up().end();
-
-  const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
-  return parseInt(xmlDoc.getElementsByTagName('CbteNro')[0]?.textContent || '0');
+/**
+ * _parseFechaAFIP: Convierte AAAAMMDD a objeto Date de JS
+ */
+function _parseFechaAFIP(str) {
+  if (!str || str.length !== 8) return null;
+  // Usamos el formato ISO para evitar confusiones de zona horaria
+  return new Date(`${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}T12:00:00Z`);
 }
 
+// ════════════════════════════════════════════════════════════
+//  AFIP — MÓDULO DE EMISIÓN v4.1 (COMPLETO & UNIFICADO)
+// ════════════════════════════════════════════════════════════
+
+const fs = require('fs').promises;
+const { execSync } = require('child_process');
+const path = require('path');
+const axios = require('axios');
+const xmlbuilder = require('xmlbuilder');
+const { DOMParser } = require('xmldom');
+
+// --- CONFIGURACIÓN DE URLS ---
+const AFIP_URLS = {
+  wsaa: process.env.WSAA_URL || "https://wsaa.afip.gov.ar/ws/services/LoginCms",
+  wsfe: process.env.WSFE_URL || "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
+};
+
+/**
+ * Emite un comprobante electrónico en AFIP utilizando delegación.
+ */
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
-  // 1. Obtención de credenciales (TA)
+  // 1. Obtener credenciales (Token y Sign) vía WSAA
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
   
-  // 2. Lógica interna de tipo de comprobante (Evita el error 'not defined')
-  // 11 es Factura C (Monotributo). 1 es Factura A, 6 es Factura B.
-  const cbTipo = datos.tipoComprobante || 11;
+  // 2. Determinar tipo de comprobante (C=11, B=6, A=1)
+  const cbTipo = datos.tipoComprobante || _tipoComprobante(datos.categoria);
   
-  // 3. Obtener el próximo número a emitir
+  // 3. Sincronizar número de factura con AFIP
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
   const nroComp = ultimoNro + 1;
   
-  // 4. Preparación de strings para el XML (AFIP es estricto con los 2 decimales)
-  const importe = datos.importeTotal.toFixed(2); 
-  
-  // Lógica de tipo de documento interna
-  const docLimpio = String(datos.clienteDoc || '0').replace(/\D/g, '');
-  let docTipo = 96; // DNI por defecto
-  if (docLimpio.length === 11) docTipo = 80; // CUIT
-  if (docLimpio === '0' || docLimpio.startsWith('9999')) docTipo = 99; // Consumidor Final
-  
-  const docNro   = docLimpio || '0';
-  const fechaHoy = _fechaAFIP(new Date());
+  // 4. Preparar datos comerciales
+  const importe = datos.importeTotal.toFixed(2);
+  const docTipo = _docTipo(datos.clienteDoc);
+  const docNro  = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
-  // 5. Construcción del XML
+  // 5. Construir el XML SOAP
   const soap = xmlbuilder.create('soapenv:Envelope')
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
     .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
@@ -361,7 +393,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
         .ele('ar:Auth')
           .ele('ar:Token').txt(token).up()
           .ele('ar:Sign').txt(sign).up()
-          .ele('ar:Cuit').txt(cuitEmisor).up()
+          .ele('ar:Cuit').txt(cuitEmisor).up() 
         .up()
         .ele('ar:FeCAEReq')
           .ele('ar:FeCabReq')
@@ -371,12 +403,12 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
           .up()
           .ele('ar:FeDetReq')
             .ele('ar:FECAEDetRequest')
-              .ele('ar:Concepto').txt(1).up()
+              .ele('ar:Concepto').txt(1).up() // 1 = Productos
               .ele('ar:DocTipo').txt(docTipo).up()
               .ele('ar:DocNro').txt(docNro).up()
               .ele('ar:CbteDesde').txt(nroComp).up()
               .ele('ar:CbteHasta').txt(nroComp).up()
-              .ele('ar:CbteFch').txt(fechaHoy).up()
+              .ele('ar:CbteFch').txt(_fechaAFIP()).up()
               .ele('ar:ImpTotal').txt(importe).up()
               .ele('ar:ImpTotConc').txt("0.00").up()
               .ele('ar:ImpNeto').txt(importe).up()
@@ -390,7 +422,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
         .up()
       .up().up().end();
 
-  // 6. Envío y Procesamiento
+  // 6. Enviar a AFIP y procesar respuesta
   const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
   const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
 
@@ -400,49 +432,333 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     let fallos = [];
 
     for (let i = 0; i < errNodes.length; i++) {
-      fallos.push(`[Err ${errNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${errNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
+      fallos.push(`[Error ${errNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${errNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
     for (let i = 0; i < obsNodes.length; i++) {
       fallos.push(`[Obs ${obsNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${obsNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
-
-    throw new Error(`AFIP rechazó: ${fallos.join(' | ') || 'Error desconocido'}`);
+    throw new Error(`AFIP rechazó la factura: ${fallos.join(' | ') || 'Causa desconocida'}`);
   }
 
   const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
-  const cae = detResp.getElementsByTagName('CAE')[0]?.textContent;
-  const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;
-
   return { 
-    cae, 
-    caeFchVto: _parseFechaAFIP(caeVto), 
+    cae: detResp.getElementsByTagName('CAE')[0]?.textContent, 
+    caeFchVto: _parseFechaAFIP(detResp.getElementsByTagName('CAEFchVto')[0]?.textContent), 
     nroComp 
   };
 }
+
+/**
+ * Obtiene el Ticket de Acceso (Token y Sign) con caché en /tmp.
+ */
+async function afip_obtenerTA(cuitEmisor) {
+  const TA_PATH = path.join('/tmp', `ta-${cuitEmisor}.xml`);
+
+  // Intentar leer caché para no saturar WSAA
+  try {
+    const cachedXML = await fs.readFile(TA_PATH, 'utf-8');
+    const xml = new DOMParser().parseFromString(cachedXML, 'text/xml');
+    const expTime = xml.getElementsByTagName('expirationTime')[0]?.textContent;
+    if (expTime && new Date(expTime) > new Date(Date.now() + 600000)) {
+      return {
+        token: xml.getElementsByTagName('token')[0].textContent,
+        sign: xml.getElementsByTagName('sign')[0].textContent
+      };
+    }
+  } catch (e) {}
+
+  const ahora = new Date();
+  const expira = new Date(ahora.getTime() + 12 * 60 * 60 * 1000);
+  const tra = xmlbuilder.create('loginTicketRequest').att('version', '1.0')
+    .ele('header')
+      .ele('uniqueId').txt(Math.floor(ahora.getTime() / 1000)).up()
+      .ele('generationTime').txt(ahora.toISOString()).up()
+      .ele('expirationTime').txt(expira.toISOString()).up()
+    .up()
+    .ele('service').txt('wsfe').up()
+    .end();
+
+  const traPath = path.join('/tmp', `tra-${cuitEmisor}.xml`);
+  const cmsPath = path.join('/tmp', `tra-${cuitEmisor}.cms`);
+  
+  // Rutas a Secret Files de Render
+  const keyPath = process.env.AFIP_KEY_PATH || path.resolve(__dirname, './certs/private.key');
+  const crtPath = process.env.AFIP_CERT_PATH || path.resolve(__dirname, './certs/maestro.crt');
+
+  await fs.writeFile(traPath, tra);
+
+  try {
+    // Firmar con OpenSSL
+    execSync(`openssl cms -sign -in ${traPath} -out ${cmsPath} -signer ${crtPath} -inkey ${keyPath} -nodetach -outform DER`);
+    const cmsBase64 = (await fs.readFile(cmsPath)).toString('base64');
+
+    const soapWsaa = xmlbuilder.create('soapenv:Envelope')
+      .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+      .att('xmlns:wsaa', 'http://wsaa.view.sua.diah.afip.gov.ar/ws/services/LoginCms')
+      .ele('soapenv:Body').ele('wsaa:loginCms').ele('wsaa:in0').txt(cmsBase64).up().up().up().end();
+
+    const resp = await axios.post(AFIP_URLS.wsaa, soapWsaa, { headers: { 'Content-Type': 'text/xml' } });
+    const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
+    const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
+    
+    await fs.writeFile(TA_PATH, loginReturn);
+    const finalXml = new DOMParser().parseFromString(loginReturn, 'text/xml');
+    
+    return {
+      token: finalXml.getElementsByTagName('token')[0].textContent,
+      sign: finalXml.getElementsByTagName('sign')[0].textContent
+    };
+  } finally {
+    await fs.unlink(traPath).catch(() => {});
+    await fs.unlink(cmsPath).catch(() => {});
+  }
+}
+
 // ════════════════════════════════════════════════════════════
-//  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto
+//  FUNCIONES DE APOYO (HELPERS)
 // ════════════════════════════════════════════════════════════
+
+async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Body').ele('ar:FECompUltimoAutorizado')
+      .ele('ar:Auth')
+        .ele('ar:Token').txt(token).up()
+        .ele('ar:Sign').txt(sign).up()
+        .ele('ar:Cuit').txt(cuit).up()
+      .up()
+      .ele('ar:PtoVta').txt(ptoVta).up()
+      .ele('ar:CbteTipo').txt(tipo).up()
+    .up().up().end();
+
+  const res = await _soapPost(AFIP_URLS.wsfe, soap);
+  const nro = res.getElementsByTagName('CbteNro')[0]?.textContent;
+  return parseInt(nro || '0');
+}
+
+async function _soapPost(url, xml) {
+  const res = await axios.post(url, xml, { headers: { 'Content-Type': 'text/xml; charset=utf-8' }, timeout: 12000 });
+  return new DOMParser().parseFromString(res.data, 'text/xml');
+}
+
+function _tipoComprobante(cat) {
+  const c = String(cat).toUpperCase();
+  if (c === 'A') return 1;
+  if (c === 'B') return 6;
+  return 11; 
+}
+
+function _docTipo(doc) {
+  const d = String(doc || '').replace(/\D/g, '');
+  if (d.length === 11) return 80; // CUIT
+  if (d.length >= 7 && d.length <= 8) return 96; // DNI
+  return 99; // Sin identificar
+}
+
+function _fechaAFIP() {
+  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function _parseFechaAFIP(f) {
+  return f ? new Date(`${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`) : null;
+}
+
+module.exports = { afip_emitirComprobante };
+
+  // ════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DE RUTAS DE CERTIFICADOS (RENDER FRIENDLY)
+// ════════════════════════════════════════════════════════════
+
+// 1. Prioridad: Secret Files de Render (Definidos en tus Env Vars)
+// 2. Backup: Carpeta local (Para cuando testeás en tu PC)
+const keyPath = process.env.AFIP_KEY_PATH || path.resolve(__dirname, './certs/private.key');
+const crtPath = process.env.AFIP_CERT_PATH || path.resolve(__dirname, './certs/maestro.crt');
+
+// Tip de Debugging: Agregá esto antes de firmar para estar 100% seguro
+if (!require('fs').existsSync(keyPath)) {
+  console.error(`❌ ERROR CRÍTICO: No se encontró la llave privada en ${keyPath}`);
+}
+
+  await fs.writeFile(traPath, tra);
+
+  try {
+    execSync(`openssl cms -sign -in ${traPath} -out ${cmsPath} -signer ${crtPath} -inkey ${keyPath} -nodetach -outform DER`);
+    const cmsBase64 = (await fs.readFile(cmsPath)).toString('base64');
+
+    const soapWsaa = xmlbuilder.create('soapenv:Envelope')
+      .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+      .att('xmlns:wsaa', 'http://wsaa.view.sua.diah.afip.gov.ar/ws/services/LoginCms')
+      .ele('soapenv:Body').ele('wsaa:loginCms').ele('wsaa:in0').txt(cmsBase64).up().up().up().end();
+
+    const resp = await axios.post(AFIP_URLS.wsaa, soapWsaa, { headers: { 'Content-Type': 'text/xml' } });
+    const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
+    const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
+    
+    await fs.writeFile(TA_PATH, loginReturn);
+    const finalXml = new DOMParser().parseFromString(loginReturn, 'text/xml');
+    
+    return {
+      token: finalXml.getElementsByTagName('token')[0].textContent,
+      sign: finalXml.getElementsByTagName('sign')[0].textContent
+    };
+  } finally {
+    await fs.unlink(traPath).catch(() => {});
+    await fs.unlink(cmsPath).catch(() => {});
+  }
+}
+
+// --- HELPERS INTERNOS ---
+
+async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Body').ele('ar:FEParamGetUltCompl')
+      .ele('ar:Auth')
+        .ele('ar:Token').txt(token).up()
+        .ele('ar:Sign').txt(sign).up()
+        .ele('ar:Cuit').txt(cuit
+
+// ════════════════════════════════════════════════════════════
+//  FUNCIONES DE APOYO (REQUERIDAS POR EL MÓDULO)
+// ════════════════════════════════════════════════════════════
+
+/**
+ * Consulta en AFIP cuál fue el último número de comprobante autorizado
+ * para un punto de venta y tipo específicos.
+ */
+async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Header').up()
+    .ele('soapenv:Body')
+      .ele('ar:FECompUltimoAutorizado') // Nombre exacto del método WSFE
+        .ele('ar:Auth')
+          .ele('ar:Token').txt(token).up()
+          .ele('ar:Sign').txt(sign).up()
+          .ele('ar:Cuit').txt(cuit).up()
+        .up()
+        .ele('ar:PtoVta').txt(ptoVta).up()
+        .ele('ar:CbteTipo').txt(tipo).up()
+      .up()
+    .up().end();
+
+  try {
+    const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
+    const nro = xmlDoc.getElementsByTagName('CbteNro')[0]?.textContent;
+    
+    if (nro === undefined) {
+      // Si no hay número, verificamos si AFIP devolvió un error de Auth
+      const errorMsg = xmlDoc.getElementsByTagName('Msg')[0]?.textContent;
+      throw new Error(errorMsg || "No se pudo recuperar el último número de AFIP.");
+    }
+
+    return parseInt(nro || '0');
+  } catch (e) {
+    throw new Error(`Error sincronizando correlativo: ${e.message}`);
+  }
+}
+
+/**
+ * Realiza el POST HTTP al Web Service de AFIP y parsea el XML de respuesta.
+ */
+async function _soapPost(url, xml) {
+  try {
+    const resp = await axios.post(url, xml, {
+      headers: { 
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': url.includes('wsfe') ? 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado' : ''
+      },
+      timeout: 12000 // Aumentamos a 12s por la latencia típica de AFIP
+    });
+    
+    return new DOMParser().parseFromString(resp.data, 'text/xml');
+  } catch (error) {
+    const msg = error.response 
+      ? `AFIP respondió con error HTTP ${error.response.status}` 
+      : `No se pudo conectar con los servidores de AFIP (Timeout/Red)`;
+    
+    throw new Error(msg);
+  }
+}
+
+// --- HELPERS MENORES ---
+
+function _tipoComprobante(cat) {
+  // 11: Factura C (Monotributo), 6: Factura B, 1: Factura A
+  const c = String(cat).toUpperCase();
+  if (c === 'A') return 1;
+  if (c === 'B') return 6;
+  return 11; 
+}
+
+function _docTipo(doc) {
+  // 80: CUIT, 96: DNI, 99: Sin identificar (Consumidor Final)
+  const d = String(doc || '').replace(/\D/g, '');
+  if (d.length === 11) return 80;
+  if (d.length >= 7 && d.length <= 8) return 96;
+  return 99;
+}
+
+function _fechaAFIP() {
+  // Formato AAAAMMDD requerido por AFIP
+  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
+}
+
+function _parseFechaAFIP(f) {
+  if (!f || f.length !== 8) return null;
+  return new Date(`${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`);
+}
+
+// ════════════════════════════════════════════════════════════
+//  MIDDLEWARE — VALIDACIÓN DE CUIT Y ESTADO ARCA (v4.1)
+// ════════════════════════════════════════════════════════════
+
 async function requireArcaCuit(req, res, next) {
-  const user = await User.findById(req.userId).select('settings').lean();
+  try {
+    // Buscamos el ID en req.userId (JWT) o req.user._id (Passport)
+    const userId = req.userId || req.user?._id;
+    
+    if (!userId) {
+      return res.status(401).json({ error: 'Sesión no válida o expirada.' });
+    }
 
-  if (!user?.settings?.cuit) {
-    return res.status(400).json({
-      error: 'No tenés un CUIT configurado. Ingresalo en la sección ARCA antes de facturar.',
-    });
-  }
-  if (user.settings.arcaStatus !== 'vinculado') {
-    return res.status(400).json({
-      error: `Tu CUIT está en estado "${user.settings.arcaStatus}". ` +
-             `La facturación se habilita cuando el admin confirme tu vinculación.`,
-    });
-  }
+    const user = await User.findById(userId).select('settings').lean();
 
-  req.arcaCuit      = user.settings.cuit.replace(/\D/g, '');
-  req.arcaPtoVta    = user.settings.arcaPtoVta  || 1;
-  req.arcaCategoria = user.settings.categoria   || 'C';
-  req.factAuto      = user.settings.factAuto    !== false; // default true
-  req.envioAuto     = user.settings.envioAuto   !== false; // default true
-  next();
+    if (!user) {
+      return res.status(404).json({ error: 'Usuario no encontrado.' });
+    }
+
+    // 1. Verificación de CUIT existente
+    const cuitLimpio = user.settings?.cuit ? user.settings.cuit.replace(/\D/g, '') : null;
+    if (!cuitLimpio || cuitLimpio.length !== 11) {
+      return res.status(400).json({
+        error: 'CUIT no configurado o inválido. Completalo en la sección ARCA.',
+      });
+    }
+
+    // 2. Verificación de Vinculación (Seguridad SaaS)
+    if (user.settings.arcaStatus !== 'vinculado') {
+      const statusActual = user.settings.arcaStatus || 'sin_vincular';
+      return res.status(403).json({
+        error: `Estado: ${statusActual}. La facturación requiere vinculación confirmada.`,
+      });
+    }
+
+    // 3. Inyección de datos en el objeto Request para los controladores
+    req.arcaCuit      = cuitLimpio;
+    req.arcaPtoVta    = parseInt(user.settings.arcaPtoVta) || 1;
+    req.arcaCategoria = user.settings.categoria || 'C';
+    req.factAuto      = user.settings.factAuto !== false;  // default true
+    req.envioAuto     = user.settings.envioAuto !== false; // default true
+
+    next();
+  } catch (error) {
+    console.error('❌ Error en Middleware requireArcaCuit:', error.message);
+    res.status(500).json({ error: 'Error interno al validar credenciales de facturación.' });
+  }
 }
 
 // ════════════════════════════════════════════════════════════
@@ -548,42 +864,54 @@ function _resolveDoc(doc, amount) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  UPSERT ENGINE + AUTO-FACTURACIÓN
-//
-//  Si el usuario tiene factAuto=true y arcaStatus='vinculado',
-//  emite el CAE automáticamente al guardar la orden.
+//  UPSERT ENGINE + AUTO-FACTURACIÓN (v4.1)
 // ════════════════════════════════════════════════════════════
+
+// Límite AFIP para Consumidor Final sin identificar (Actualizar según ARCA)
+const ARCA_LIMIT_SIN_DNI = 191624; 
+
 async function upsertOrder(integration, canonical) {
   if (!canonical) return;
 
   const orderFilter = {
-    userId:    integration.userId,
-    platform:  integration.platform,
+    userId:     integration.userId,
+    platform:   integration.platform,
     externalId: canonical.externalId,
   };
 
-  if (canonical.customerDoc === null) {
+  // 1. Validación de Monto vs DNI (Consumidor Final)
+  const requiereDNI = canonical.amount >= ARCA_LIMIT_SIN_DNI;
+  const tieneDNI = canonical.customerDoc && canonical.customerDoc !== '0';
+
+  if (requiereDNI && !tieneDNI) {
     await Order.findOneAndUpdate(
       orderFilter,
       {
         $setOnInsert: {
-          userId: integration.userId, integrationId: integration._id,
-          platform: integration.platform, ...canonical,
-          customerDoc: '0', status: 'error_data',
-          errorLog: `Monto $${canonical.amount} ≥ $${ARCA_LIMIT} sin DNI válido`,
+          userId: integration.userId, 
+          integrationId: integration._id,
+          platform: integration.platform, 
+          ...canonical,
+          customerDoc: '0', 
+          status: 'error_data',
+          errorLog: `Monto $${canonical.amount.toLocaleString()} supera límite sin DNI`,
         },
       },
-      { upsert: true, new: false }
+      { upsert: true }
     ).catch(() => {});
     return;
   }
 
+  // 2. Upsert de la Orden
   const order = await Order.findOneAndUpdate(
     orderFilter,
     {
       $setOnInsert: {
-        userId: integration.userId, integrationId: integration._id,
-        platform: integration.platform, ...canonical, status: 'pending_invoice',
+        userId: integration.userId, 
+        integrationId: integration._id,
+        platform: integration.platform, 
+        ...canonical, 
+        status: 'pending_invoice',
       },
     },
     { upsert: true, new: true }
@@ -593,18 +921,15 @@ async function upsertOrder(integration, canonical) {
     return null;
   });
 
-  // ── Auto-facturación si el usuario tiene factAuto=true ──
+  // 3. Disparo de Auto-facturación (Background task)
   if (order && order.status === 'pending_invoice') {
-    _intentarAutoFacturar(integration.userId, order);
+    // No usamos await para no bloquear el webhook de la plataforma
+    _intentarAutoFacturar(integration.userId, order).catch(e => 
+      console.error(`Critical background error: ${e.message}`)
+    );
   }
 }
 
-/**
- * Intenta emitir CAE automáticamente para una orden.
- * Solo actúa si:
- *  - El usuario tiene arcaStatus = 'vinculado'
- *  - El usuario tiene factAuto = true
- */
 async function _intentarAutoFacturar(userId, order) {
   try {
     const user = await User.findById(userId).select('settings').lean();
@@ -612,34 +937,37 @@ async function _intentarAutoFacturar(userId, order) {
 
     const { factAuto, arcaStatus, cuit, arcaPtoVta, categoria } = user.settings;
 
+    // Solo facturamos si está vinculado y tiene el switch activado
     if (!factAuto || arcaStatus !== 'vinculado' || !cuit) return;
 
     const cuitLimpio = cuit.replace(/\D/g, '');
-    const ptoVta     = arcaPtoVta || 1;
-    const cbTipo     = _tipoComprobante(categoria || 'C');
-
+    const ptoVta     = parseInt(arcaPtoVta) || 1;
+    
+    // Llamada al motor AFIP v4.1
     const resultado = await afip_emitirComprobante(cuitLimpio, ptoVta, {
-      tipoComprobante: cbTipo,
-      clienteDoc:      order.customerDoc || '0',
-      importeTotal:    order.amount,
+      categoria:    categoria || 'C',
+      clienteDoc:   order.customerDoc || '0',
+      importeTotal: order.amount,
     });
 
+    // Actualizamos la orden con CAE y Nro de Comprobante
     await Order.findByIdAndUpdate(order._id, {
       status:    'invoiced',
+      nroComp:   resultado.nroComp,
       caeNumber: resultado.cae,
       caeExpiry: resultado.caeFchVto,
       errorLog:  '',
     });
 
-    console.log(`✅ Auto-CAE: CUIT=${cuitLimpio} Orden=${order._id} CAE=${resultado.cae}`);
+    console.log(`✅ Facturado: CUIT ${cuitLimpio} | Nro ${resultado.nroComp} | CAE ${resultado.cae}`);
 
-    // ── Envío automático de mail si envioAuto=true ──
+    // Envío de mail (Opcional)
     if (user.settings.envioAuto && order.customerEmail) {
-      _enviarMailFactura(order, resultado.cae).catch(console.warn);
+      _enviarMailFactura(order, resultado.cae, resultado.nroComp).catch(console.warn);
     }
 
   } catch (e) {
-    console.error(`❌ Auto-facturación orden ${order._id}:`, e.message);
+    console.error(`❌ Error Auto-Factura [ID: ${order._id}]:`, e.message);
     await Order.findByIdAndUpdate(order._id, {
       status:   'error_afip',
       errorLog: e.message,
@@ -647,154 +975,268 @@ async function _intentarAutoFacturar(userId, order) {
   }
 }
 
-/**
- * Stub de envío de mail — implementar con nodemailer o Resend.
- * Por ahora solo loguea; conectar con el proveedor de email preferido.
- */
-async function _enviarMailFactura(order, cae) {
-  console.log(`📧 [TODO] Enviar factura CAE ${cae} a ${order.customerEmail}`);
-  // Ejemplo con Resend:
-  // await resend.emails.send({
-  //   from: 'facturas@koi.ar',
-  //   to: order.customerEmail,
-  //   subject: `Tu factura KOI — CAE ${cae}`,
-  //   html: `<p>Tu comprobante está disponible. CAE: ${cae}</p>`,
-  // });
+async function _enviarMailFactura(order, cae, nroComp) {
+  // Aquí integrarás Nodemailer / Resend / Sendgrid
+  console.log(`📧 [EMAIL QUEUE] Enviar Factura ${nroComp} (CAE: ${cae}) a ${order.customerEmail}`);
 }
 
 // ════════════════════════════════════════════════════════════
-//  AUTH HELPERS
+//  AUTH HELPERS (SEGURIDAD REFORZADA v4.1)
 // ════════════════════════════════════════════════════════════
+
 const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
 
-const setTokenCookie = (res, token) =>
+const setTokenCookie = (res, token) => {
   res.cookie('koi_token', token, {
-    httpOnly: true, secure: PROD_MODE, sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
+    httpOnly: true,
+    secure: PROD_MODE, 
+    // 'none' permite que la cookie viaje entre dominios de Render/Frontend
+    sameSite: PROD_MODE ? 'none' : 'lax', 
+    maxAge: 7 * 24 * 60 * 60 * 1000, // 7 días
   });
-
-const requireAuth = (req, res, next) => {
-  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
-  catch { res.clearCookie('koi_token'); res.redirect('/login'); }
 };
 
+// Middleware para rutas de navegación (Redirecciona)
+const requireAuth = (req, res, next) => {
+  const token = req.cookies.koi_token;
+  if (!token) return res.redirect('/login');
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch (err) {
+    res.clearCookie('koi_token');
+    res.redirect('/login');
+  }
+};
+
+// Middleware para rutas de API (JSON response)
 const requireAuthAPI = (req, res, next) => {
   const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
-  try { req.userId = jwt.verify(token, JWT_SECRET).id; next(); }
-  catch { res.status(401).json({ error: 'No autenticado' }); }
+  
+  if (!token) {
+    return res.status(401).json({ error: 'Sesión expirada o no encontrada' });
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    next();
+  } catch (err) {
+    // Si el token es inválido, limpiamos la cookie y avisamos al front
+    res.clearCookie('koi_token');
+    res.status(401).json({ error: 'Token inválido o expirado' });
+  }
 };
 
 // ════════════════════════════════════════════════════════════
-//  PASSPORT — Google OAuth 2.0
+//  PASSPORT — GOOGLE OAUTH 2.0 (v4.1)
 // ════════════════════════════════════════════════════════════
-passport.use(new GoogleStrategy({
-  clientID:     process.env.GOOGLE_CLIENT_ID,
-  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-  callbackURL:  `${BASE}/auth/google/callback`,
-}, async (_, __, profile, done) => {
-  try {
-    const email = profile.emails?.[0]?.value?.toLowerCase();
-    if (!email) return done(new Error('Google no devolvió email'));
-    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
-    if (!user) {
-      user = await User.create({
-        googleId: profile.id, email,
-        nombre:   profile.name?.givenName  || '',
-        apellido: profile.name?.familyName || '',
-        avatar:   profile.photos?.[0]?.value || '',
-      });
-    } else {
-      if (!user.googleId) user.googleId = profile.id;
-      user.avatar       = profile.photos?.[0]?.value || user.avatar;
-      user.ultimoAcceso = new Date();
-      await user.save();
-    }
-    done(null, user);
-  } catch (e) { done(e); }
-}));
 
-passport.serializeUser((user, done)   => done(null, user.id));
+passport.use(new GoogleStrategy({
+    clientID:     process.env.GOOGLE_CLIENT_ID,
+    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+    callbackURL:  `${BASE}/auth/google/callback`,
+    proxy: true // Vital para que funcione correctamente tras el proxy de Render
+  }, 
+  async (accessToken, refreshToken, profile, done) => {
+    try {
+      const email = profile.emails?.[0]?.value?.toLowerCase();
+      if (!email) return done(new Error('Google no devolvió una dirección de correo válida.'));
+
+      // Buscamos por GoogleID o por Email para evitar duplicados
+      let user = await User.findOne({ 
+        $or: [ { googleId: profile.id }, { email: email } ] 
+      });
+
+      if (!user) {
+        // Crear usuario nuevo si no existe
+        user = await User.create({
+          googleId: profile.id,
+          email:    email,
+          nombre:   profile.name?.givenName  || '',
+          apellido: profile.name?.familyName || '',
+          avatar:   profile.photos?.[0]?.value || '',
+          ultimoAcceso: new Date()
+        });
+        console.log(`🆕 Nuevo usuario via Google: ${email}`);
+      } else {
+        // Actualizar usuario existente
+        let changed = false;
+        if (!user.googleId) { user.googleId = profile.id; changed = true; }
+        
+        // Actualizamos avatar y último acceso
+        const newAvatar = profile.photos?.[0]?.value;
+        if (newAvatar && user.avatar !== newAvatar) { user.avatar = newAvatar; changed = true; }
+        
+        user.ultimoAcceso = new Date();
+        if (changed) await user.save();
+      }
+
+      return done(null, user);
+    } catch (e) {
+      console.error('❌ Error en GoogleStrategy:', e.message);
+      return done(e);
+    }
+  }
+));
+
+// Serialización liviana (solo el ID)
+passport.serializeUser((user, done) => done(null, user.id || user._id));
+
 passport.deserializeUser(async (id, done) => {
-  try { done(null, await User.findById(id).select('-password')); }
-  catch (e) { done(e); }
+  try {
+    const user = await User.findById(id).select('-password').lean();
+    done(null, user);
+  } catch (e) {
+    done(e);
+  }
 });
 
 // ════════════════════════════════════════════════════════════
-//  RUTAS AUTH
+//  RUTAS AUTH (REVISADAS v4.1)
 // ════════════════════════════════════════════════════════════
 
+// --- GOOGLE OAUTH ---
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
 
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
-  (req, res) => { setTokenCookie(res, signToken(req.user.id)); res.redirect('/dashboard'); }
+  (req, res) => {
+    const token = signToken(req.user.id || req.user._id);
+    setTokenCookie(res, token);
+    // Redirigimos al dashboard del frontend
+    res.redirect('/dashboard');
+  }
 );
 
+// --- REGISTRO MANUAL ---
 app.post('/auth/register', async (req, res) => {
   try {
-    const { nombre, apellido, email, password } = req.body;
-    if (!nombre || !email || !password)
+    let { nombre, apellido, email, password } = req.body;
+    
+    if (!nombre || !email || !password) {
       return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios.' });
-    if (password.length < 8)
+    }
+
+    const emailLimpio = email.trim().toLowerCase();
+
+    if (password.length < 8) {
       return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
-    if (await User.findOne({ email: email.toLowerCase() }))
-      return res.status(409).json({ error: 'Ya existe una cuenta con ese email.' });
-    const user = await User.create({ nombre, apellido, email, password });
-    setTokenCookie(res, signToken(user.id));
-    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+    }
+
+    const existe = await User.findOne({ email: emailLimpio });
+    if (existe) {
+      return res.status(409).json({ error: 'Este email ya está registrado. Intentá iniciar sesión.' });
+    }
+
+    const user = await User.create({ 
+      nombre: nombre.trim(), 
+      apellido: apellido ? apellido.trim() : '', 
+      email: emailLimpio, 
+      password 
+    });
+
+    const token = signToken(user._id);
+    setTokenCookie(res, token);
+
+    res.status(201).json({ 
+      ok: true, 
+      user: { nombre: user.nombre, email: user.email, plan: user.plan } 
+    });
   } catch (e) {
-    console.error('Register:', e.message);
-    res.status(500).json({ error: 'Error interno. Intentá de nuevo.' });
+    console.error('❌ Error Register:', e.message);
+    res.status(500).json({ error: 'No se pudo crear la cuenta. Reintentá en unos instantes.' });
   }
 });
 
+// --- LOGIN MANUAL ---
 app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos.' });
-    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
-    if (!user?.password) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
-    if (!await user.checkPassword(password)) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+
+    const emailLimpio = email.trim().toLowerCase();
+    const user = await User.findOne({ email: emailLimpio }).select('+password');
+
+    if (!user || !user.password) {
+      return res.status(401).json({ error: 'Credenciales inválidas.' });
+    }
+
+    const passOk = await user.checkPassword(password);
+    if (!passOk) {
+      return res.status(401).json({ error: 'Credenciales inválidas.' });
+    }
+
     user.ultimoAcceso = new Date();
     await user.save();
-    setTokenCookie(res, signToken(user.id));
-    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+
+    const token = signToken(user._id);
+    setTokenCookie(res, token);
+
+    res.json({ 
+      ok: true, 
+      user: { id: user._id, nombre: user.nombre, email: user.email, plan: user.plan } 
+    });
   } catch (e) {
-    console.error('Login:', e.message);
-    res.status(500).json({ error: 'Error interno.' });
+    console.error('❌ Error Login:', e.message);
+    res.status(500).json({ error: 'Error interno en el servidor.' });
   }
 });
 
+// --- LOGOUT ---
 app.get('/auth/logout', (req, res) => {
-  req.logout?.(() => {});
-  res.clearCookie('koi_token');
-  res.redirect('/login');
+  req.logout((err) => {
+    res.clearCookie('koi_token', {
+      httpOnly: true,
+      secure: PROD_MODE,
+      sameSite: PROD_MODE ? 'none' : 'lax'
+    });
+    return res.redirect('/login');
+  });
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — USUARIO & CONFIGURACIÓN
+//  API — USUARIO & CONFIGURACIÓN (v4.1)
 // ════════════════════════════════════════════════════════════
 
+// --- OBTENER PERFIL ---
 app.get('/api/me', requireAuthAPI, async (req, res) => {
-  const user = await User.findById(req.userId).select('-password -settings.arcaClave').lean();
-  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-  res.json({ ok: true, user });
+  try {
+    const user = await User.findById(req.userId)
+      .select('-password -settings.arcaClave')
+      .lean();
+    
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al obtener perfil' });
+  }
 });
 
-// ── Guardar configuración general (factAuto, envioAuto, categoria, etc.) ──
+// --- GUARDAR CONFIGURACIÓN GENERAL ---
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
     const { nombre, apellido, ...body } = req.body;
     const update = {};
 
-    if (nombre)   update.nombre   = nombre;
-    if (apellido) update.apellido = apellido;
+    if (nombre)   update.nombre   = nombre.trim();
+    if (apellido) update.apellido = apellido.trim();
 
-    // Campos de settings permitidos — incluyendo factAuto y envioAuto
-    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit'];
+    // Campos permitidos en settings
+    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit', 'arcaPtoVta'];
+    
     for (const key of allowedSettings) {
       if (body[key] !== undefined) {
-        update[`settings.${key}`] = body[key];
+        let value = body[key];
+        // Limpieza específica si es CUIT
+        if (key === 'cuit') value = String(value).replace(/\D/g, '');
+        // Conversión si es Punto de Venta
+        if (key === 'arcaPtoVta') value = parseInt(value) || 1;
+        
+        update[`settings.${key}`] = value;
       }
     }
 
@@ -806,17 +1248,24 @@ app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
 
     res.json({ ok: true, user });
   } catch (e) {
-    res.status(500).json({ error: 'Error al guardar configuración' });
+    console.error('❌ Update Settings:', e.message);
+    res.status(500).json({ error: 'No se pudo actualizar la configuración.' });
   }
 });
 
-// ── Vincular Carpeta Fiscal (ARCA) ────────────────────────
+// --- VINCULAR CARPETA FISCAL (ARCA) ---
 app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
   try {
     const { cuit, arcaClave } = req.body;
-    if (!cuit || !arcaClave) return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
+    
+    if (!cuit || !arcaClave) {
+      return res.status(400).json({ error: 'El CUIT y la Clave Fiscal son obligatorios.' });
+    }
 
     const cleanCuit = String(cuit).replace(/\D/g, '');
+    if (cleanCuit.length !== 11) {
+      return res.status(400).json({ error: 'El CUIT ingresado no es válido (debe tener 11 dígitos).' });
+    }
 
     const user = await User.findByIdAndUpdate(
       req.userId,
@@ -824,38 +1273,36 @@ app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
         $set: {
           'settings.cuit':       cleanCuit,
           'settings.arcaUser':   cleanCuit,
-          'settings.arcaClave':  encrypt(arcaClave),
+          'settings.arcaClave':  encrypt(arcaClave), // AES-256-GCM
           'settings.arcaStatus': 'pendiente',
-          'settings.arcaNotas':  'Datos recibidos. Validando vinculación con ARCA...',
+          'settings.arcaNotas':  'Datos recibidos. El administrador validará la delegación en ARCA.',
         },
       },
       { new: true, select: '-password -settings.arcaClave' }
     ).lean();
 
-    res.json({ ok: true, message: 'Carpeta fiscal enviada. El proceso puede demorar hasta 24hs.', user });
+    res.json({ 
+      ok: true, 
+      message: 'Datos enviados con éxito. La vinculación puede demorar hasta 24hs hábiles.', 
+      user 
+    });
   } catch (e) {
-    console.error('Error ARCA Link:', e.message);
-    res.status(500).json({ error: 'No se pudo procesar la vinculación.' });
+    console.error('❌ Error ARCA Link:', e.message);
+    res.status(500).json({ error: 'Error al procesar la vinculación fiscal.' });
   }
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — AFIP/ARCA — EMISIÓN
+//  API — AFIP/ARCA — EMISIÓN (v4.1)
 // ════════════════════════════════════════════════════════════
 
-app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
-  try {
-    const resultado = await afip_verificarDelegacion(req.arcaCuit);
-    res.json({ ok: resultado.ok, mensaje: resultado.mensaje, cuit: req.arcaCuit });
-  } catch (e) {
-    res.status(500).json({ error: 'Error verificando delegación: ' + e.message });
-  }
-});
-
+// --- VERIFICAR ESTADO DEL WSFE (AFIP) ---
 app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
   try {
+    // Usamos el objeto AFIP_URLS que definimos al inicio
+    const urlCheck = AFIP_URLS.wsfe + '?wsdl';
     await new Promise((resolve, reject) => {
-      const r = https.get(WSFE_URL + '?wsdl', { timeout: 8000 }, resolve);
+      const r = https.get(urlCheck, { timeout: 5000 }, resolve);
       r.on('error', reject);
       r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
     });
@@ -865,7 +1312,7 @@ app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
   }
 });
 
-// ── Emitir CAE para una orden específica ─────────────────
+// --- EMITIR CAE INDIVIDUAL ---
 app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
   const { orderId } = req.params;
   try {
@@ -873,139 +1320,187 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
 
     if (order.status === 'invoiced') {
-      return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
+      return res.status(409).json({ error: 'Esta orden ya fue facturada.', cae: order.caeNumber });
     }
-    if (order.status === 'error_data') {
-      return res.status(400).json({ error: `No se puede emitir: ${order.errorLog}` });
+    
+    // Validación de seguridad por si el frontend saltó el bloqueo de DNI
+    if (order.amount >= ARCA_LIMIT_SIN_DNI && (!order.customerDoc || order.customerDoc === '0')) {
+      return res.status(400).json({ error: 'Esta orden supera el límite legal y requiere DNI del cliente.' });
     }
 
     const resultado = await afip_emitirComprobante(
       req.arcaCuit,
       req.arcaPtoVta,
       {
-        tipoComprobante: _tipoComprobante(req.arcaCategoria),
+        categoria:       req.arcaCategoria,
         clienteDoc:      order.customerDoc || '0',
         importeTotal:    order.amount,
       }
     );
 
-    await Order.findByIdAndUpdate(orderId, {
+    // Actualizamos con TODOS los datos devueltos por AFIP
+    const updatedOrder = await Order.findByIdAndUpdate(orderId, {
       status:    'invoiced',
+      nroComp:   resultado.nroComp,
       caeNumber: resultado.cae,
       caeExpiry: resultado.caeFchVto,
       errorLog:  '',
-    });
+    }, { new: true });
 
-    console.log(`✅ CAE: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
-
-    // Enviar mail si envioAuto=true
+    // Envío de mail si el usuario lo tiene activo
     if (req.envioAuto && order.customerEmail) {
-      _enviarMailFactura(order, resultado.cae).catch(console.warn);
+      _enviarMailFactura(updatedOrder, resultado.cae, resultado.nroComp).catch(console.warn);
     }
 
-    res.json({ ok: true, cae: resultado.cae, vto: resultado.caeFchVto, nroComp: resultado.nroComp });
+    res.json({ 
+      ok: true, 
+      cae: resultado.cae, 
+      nroComp: resultado.nroComp, 
+      vto: resultado.caeFchVto 
+    });
 
   } catch (e) {
-    console.error(`❌ Emitir CAE orden ${orderId}:`, e.message);
-    await Order.findOneAndUpdate(
-      { _id: orderId, userId: req.userId },
-      { status: 'error_afip', errorLog: e.message }
-    );
+    console.error(`❌ Error emisión manual [${orderId}]:`, e.message);
+    await Order.findByIdAndUpdate(orderId, { status: 'error_afip', errorLog: e.message });
     res.status(500).json({ error: e.message });
   }
 });
 
-// ── Emitir en lote todas las órdenes pendientes ─────────
+// --- EMITIR LOTE DE PENDIENTES ---
 app.post('/api/afip/emitir-lote', requireAuthAPI, requireArcaCuit, async (req, res) => {
   try {
-    const pendientes = await Order.find({ userId: req.userId, status: 'pending_invoice' })
-      .sort({ orderDate: 1, createdAt: 1 });
+    const pendientes = await Order.find({ 
+      userId: req.userId, 
+      status: 'pending_invoice' 
+    }).sort({ createdAt: 1 });
 
     if (!pendientes.length) {
-      return res.json({ ok: true, mensaje: 'No hay órdenes pendientes de facturar.' });
+      return res.json({ ok: true, mensaje: 'No hay órdenes pendientes.' });
     }
 
-    res.json({ ok: true, mensaje: `Iniciando emisión de ${pendientes.length} comprobantes…`, total: pendientes.length });
+    // Respuesta inmediata para el cliente (Procesamiento en background)
+    res.json({ ok: true, total: pendientes.length, mensaje: 'Procesando lote...' });
 
-    const cuit      = req.arcaCuit;
-    const ptoVta    = req.arcaPtoVta;
-    const categoria = req.arcaCategoria;
-    const envioAuto = req.envioAuto;
-    let ok = 0, errores = 0;
+    // Ejecución del lote
+    (async () => {
+      let ok = 0, errores = 0;
+      for (const order of pendientes) {
+        try {
+          // Salto preventivo si falta DNI y es monto alto
+          if (order.amount >= ARCA_LIMIT_SIN_DNI && (!order.customerDoc || order.customerDoc === '0')) {
+             throw new Error(`Monto $${order.amount} requiere DNI`);
+          }
 
-    for (const order of pendientes) {
-      try {
-        const r = await afip_emitirComprobante(cuit, ptoVta, {
-          tipoComprobante: _tipoComprobante(categoria),
-          clienteDoc:      order.customerDoc || '0',
-          importeTotal:    order.amount,
-        });
-        await Order.findByIdAndUpdate(order._id, {
-          status: 'invoiced', caeNumber: r.cae, caeExpiry: r.caeFchVto, errorLog: '',
-        });
-        if (envioAuto && order.customerEmail) {
-          _enviarMailFactura(order, r.cae).catch(console.warn);
+          const r = await afip_emitirComprobante(req.arcaCuit, req.arcaPtoVta, {
+            categoria:    req.arcaCategoria,
+            clienteDoc:   order.customerDoc || '0',
+            importeTotal: order.amount,
+          });
+
+          await Order.findByIdAndUpdate(order._id, {
+            status: 'invoiced', 
+            nroComp: r.nroComp,
+            caeNumber: r.cae, 
+            caeExpiry: r.caeFchVto, 
+            errorLog: ''
+          });
+
+          if (req.envioAuto && order.customerEmail) {
+            _enviarMailFactura(order, r.cae, r.nroComp).catch(() => {});
+          }
+          ok++;
+          // Delay de cortesía para AFIP
+          await new Promise(res => setTimeout(res, 400));
+        } catch (err) {
+          errores++;
+          await Order.findByIdAndUpdate(order._id, { 
+            status: err.message.includes('DNI') ? 'error_data' : 'error_afip', 
+            errorLog: err.message 
+          });
         }
-        ok++;
-        await new Promise(r => setTimeout(r, 350));
-      } catch (e) {
-        errores++;
-        await Order.findByIdAndUpdate(order._id, { status: 'error_afip', errorLog: e.message });
-        console.error(`❌ Lote CAE orden ${order._id}:`, e.message);
       }
-    }
-    console.log(`📊 Lote finalizado CUIT=${cuit}: ${ok} emitidos, ${errores} errores`);
+      console.log(`📊 Fin de Lote [${req.arcaCuit}]: ${ok} exitosas, ${errores} fallidas.`);
+    })();
+
   } catch (e) {
-    console.error('Emitir lote error:', e.message);
+    console.error('❌ Error crítico en Lote:', e.message);
+    res.status(500).json({ error: 'No se pudo iniciar el proceso de lote.' });
   }
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — ÓRDENES MANUALES
-//
-//  POST /api/orders/manual — crea una venta manual y,
-//  si factAuto=true, emite el CAE automáticamente.
+//  API — ÓRDENES MANUALES (v4.1)
 // ════════════════════════════════════════════════════════════
+
 app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
   try {
-    const { cliente, email, concepto, monto, tipo, dni } = req.body;
+    const { cliente, email, concepto, monto, dni } = req.body;
+    const importe = parseFloat(monto);
 
-    if (!cliente || !monto) {
-      return res.status(400).json({ error: 'Cliente y monto son obligatorios.' });
-    }
-    if (parseFloat(monto) <= 0) {
-      return res.status(400).json({ error: 'El monto debe ser mayor a 0.' });
+    // 1. Validaciones básicas
+    if (!cliente || isNaN(importe) || importe <= 0) {
+      return res.status(400).json({ error: 'Cliente y monto válido son obligatorios.' });
     }
 
+    // 2. Validación de Límite Legal (Monto vs DNI)
+    const docLimpio = dni ? String(dni).replace(/\D/g, '') : '0';
+    
+    if (importe >= ARCA_LIMIT_SIN_DNI && (docLimpio === '0' || docLimpio === '')) {
+      return res.status(400).json({ 
+        error: `Para montos mayores a $${ARCA_LIMIT_SIN_DNI.toLocaleString()}, el DNI/CUIT es obligatorio.` 
+      });
+    }
+
+    // 3. Recuperar settings para decidir si auto-facturar
     const user = await User.findById(req.userId).select('settings').lean();
-    const externalId = `MAN-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+    
+    // Generar un ID externo único para trazabilidad manual
+    const externalId = `MAN-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
+    // 4. Crear la Orden en DB
     const order = await Order.create({
       userId:        req.userId,
       platform:      'manual',
       externalId,
-      customerName:  cliente,
-      customerEmail: email || '',
-      customerDoc:   dni   || CUIT_CF,
-      amount:        parseFloat(monto),
+      customerName:  cliente.trim(),
+      customerEmail: email ? email.trim().toLowerCase() : '',
+      customerDoc:   docLimpio,
+      amount:        importe,
       currency:      'ARS',
-      concepto:      concepto || '',
+      concepto:      concepto || 'Venta Manual',
       status:        'pending_invoice',
       orderDate:     new Date(),
     });
 
-    // ── Auto-facturación si corresponde ──
-    if (user?.settings?.factAuto !== false && user?.settings?.arcaStatus === 'vinculado') {
-      // Responder primero, facturar en background
-      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada. Emitiendo CAE...' });
-      _intentarAutoFacturar(req.userId, order);
+    // 5. Flujo de respuesta y Auto-facturación
+    const isVinculado = user?.settings?.arcaStatus === 'vinculado';
+    const isFactAuto  = user?.settings?.factAuto !== false;
+
+    if (isVinculado && isFactAuto) {
+      // Respondemos al cliente inmediatamente
+      res.json({ 
+        ok: true, 
+        nro: externalId, 
+        id: order._id, 
+        message: 'Venta registrada. Procesando comprobante en AFIP...' 
+      });
+
+      // Ejecutamos en segundo plano para no bloquear el proceso
+      _intentarAutoFacturar(req.userId, order).catch(err => {
+         console.error(`❌ Fallo en background auto-factura manual: ${err.message}`);
+      });
     } else {
-      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada como pendiente.' });
+      res.json({ 
+        ok: true, 
+        nro: externalId, 
+        id: order._id, 
+        message: 'Venta registrada como pendiente de facturación.' 
+      });
     }
 
   } catch (e) {
-    console.error('Manual order error:', e.message);
-    res.status(500).json({ error: 'Error al registrar la venta.' });
+    console.error('❌ Error en venta manual:', e.message);
+    res.status(500).json({ error: 'No se pudo registrar la venta manual.' });
   }
 });
 

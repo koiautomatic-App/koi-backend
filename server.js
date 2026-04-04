@@ -349,8 +349,11 @@ function _parseFechaAFIP(str) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  AFIP — MÓDULO DE EMISIÓN v4.1 (COMPLETO & UNIFICADO)
+//  AFIP — MÓDULO DE EMISIÓN v4.1 (UNIFICADO & LIMPIO)
 // ════════════════════════════════════════════════════════════
+
+const TA_CACHE_DIR = path.join(os.tmpdir(), 'afip-ta-cache');
+if (!fs.existsSync(TA_CACHE_DIR)) fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
 
 /**
  * Emite un comprobante electrónico en AFIP utilizando delegación.
@@ -359,7 +362,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   // 1. Obtener credenciales (Token y Sign) vía WSAA
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
   
-  // 2. Determinar tipo de comprobante (C=11, B=6, A=1)
+  // 2. Determinar tipo de comprobante
   const cbTipo = datos.tipoComprobante || _tipoComprobante(datos.categoria);
   
   // 3. Sincronizar número de factura con AFIP
@@ -371,11 +374,10 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const docTipo = _docTipo(datos.clienteDoc);
   const docNro  = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
-  // 5. Construir el XML SOAP
+  // 5. Construir el XML SOAP para WSFE
   const soap = xmlbuilder.create('soapenv:Envelope')
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
     .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
-    .ele('soapenv:Header').up()
     .ele('soapenv:Body')
       .ele('ar:FECAESolicitar')
         .ele('ar:Auth')
@@ -391,7 +393,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
           .up()
           .ele('ar:FeDetReq')
             .ele('ar:FECAEDetRequest')
-              .ele('ar:Concepto').txt(1).up() // 1 = Productos
+              .ele('ar:Concepto').txt(1).up()
               .ele('ar:DocTipo').txt(docTipo).up()
               .ele('ar:DocNro').txt(docNro).up()
               .ele('ar:CbteDesde').txt(nroComp).up()
@@ -418,14 +420,13 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     const errNodes = xmlDoc.getElementsByTagName('Err');
     const obsNodes = xmlDoc.getElementsByTagName('Obs');
     let fallos = [];
-
     for (let i = 0; i < errNodes.length; i++) {
       fallos.push(`[Error ${errNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${errNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
     for (let i = 0; i < obsNodes.length; i++) {
       fallos.push(`[Obs ${obsNodes[i].getElementsByTagName('Code')[0]?.textContent}] ${obsNodes[i].getElementsByTagName('Msg')[0]?.textContent}`);
     }
-    throw new Error(`AFIP rechazó la factura: ${fallos.join(' | ') || 'Causa desconocida'}`);
+    throw new Error(`AFIP rechazó: ${fallos.join(' | ') || 'Causa desconocida'}`);
   }
 
   const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
@@ -442,7 +443,7 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
 async function afip_obtenerTA(cuit) {
   const TA_PATH = path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json');
 
-  // 1. Intentar leer desde caché (archivo local)
+  // 1. Intentar leer desde caché
   if (fs.existsSync(TA_PATH)) {
     try {
       const data = JSON.parse(fs.readFileSync(TA_PATH, 'utf8'));
@@ -451,11 +452,11 @@ async function afip_obtenerTA(cuit) {
         return { token: data.credentials[0].token[0], sign: data.credentials[0].sign[0] };
       }
     } catch (e) {
-      console.error(`⚠️ TA inválido para ${cuit}, re-autenticando...`);
+      console.warn(`⚠️ Cache de TA inválido para ${cuit}`);
     }
   }
 
-  // 2. Si no hay TA válido, solicitar uno nuevo al WSAA
+  // 2. Si no hay TA, solicitar uno nuevo al WSAA
   const tra = xmlbuilder.create('loginTicketRequest')
     .att('version', '1.0')
     .ele('header')
@@ -468,16 +469,13 @@ async function afip_obtenerTA(cuit) {
 
   const traPath = path.join(os.tmpdir(), `tra-${cuit}-${Date.now()}.xml`);
   const cmsPath = path.join(os.tmpdir(), `cms-${cuit}-${Date.now()}.xml`);
-
-  // Rutas a Secret Files de Render
   const keyPath = process.env.AFIP_KEY_PATH || path.resolve(__dirname, './certs/private.key');
   const crtPath = process.env.AFIP_CERT_PATH || path.resolve(__dirname, './certs/maestro.crt');
 
   try {
-    // Escribir el archivo TRA temporal
     await fsp.writeFile(traPath, tra);
 
-    // Firmar con OpenSSL (Asegurate que Render tenga openssl instalado, que suele venir por defecto)
+    // Firmar con OpenSSL
     execSync(`openssl cms -sign -in ${traPath} -out ${cmsPath} -signer ${crtPath} -inkey ${keyPath} -nodetach -outform DER`);
     
     const cmsBase64 = (await fsp.readFile(cmsPath)).toString('base64');
@@ -491,9 +489,9 @@ async function afip_obtenerTA(cuit) {
     const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
     const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
     
-    if (!loginReturn) throw new Error("WSAA no devolvió loginCmsReturn");
+    if (!loginReturn) throw new Error("WSAA no devolvió credenciales");
 
-    // Guardar en caché y retornar
+    // Guardar en caché
     if (!fs.existsSync(path.dirname(TA_PATH))) fs.mkdirSync(path.dirname(TA_PATH), { recursive: true });
     await fsp.writeFile(TA_PATH, loginReturn);
     
@@ -502,14 +500,42 @@ async function afip_obtenerTA(cuit) {
       token: finalXml.getElementsByTagName('token')[0].textContent,
       sign: finalXml.getElementsByTagName('sign')[0].textContent
     };
-  } catch (error) {
-    console.error(`❌ Error en afip_obtenerTA para ${cuit}:`, error.message);
-    throw error;
   } finally {
-    // Limpieza de archivos temporales
+    // Limpieza estricta de temporales
     await fsp.unlink(traPath).catch(() => {});
     await fsp.unlink(cmsPath).catch(() => {});
   }
+}
+
+// ════════════════════════════════════════════════════════════
+//  HELPERS INTERNOS AFIP
+// ════════════════════════════════════════════════════════════
+
+async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Body').ele('ar:FECompUltimoAutorizado')
+      .ele('ar:Auth')
+        .ele('ar:Token').txt(token).up()
+        .ele('ar:Sign').txt(sign).up()
+        .ele('ar:Cuit').txt(cuit).up()
+      .up()
+      .ele('ar:PtoVta').txt(ptoVta).up()
+      .ele('ar:CbteTipo').txt(tipo).up()
+    .up().up().end();
+
+  const res = await _soapPost(AFIP_URLS.wsfe, soap);
+  const nro = res.getElementsByTagName('CbteNro')[0]?.textContent;
+  return parseInt(nro || '0');
+}
+
+async function _soapPost(url, xml) {
+  const res = await axios.post(url, xml, { 
+    headers: { 'Content-Type': 'text/xml; charset=utf-8' }, 
+    timeout: 15000 
+  });
+  return new DOMParser().parseFromString(res.data, 'text/xml');
 }
 
 // ════════════════════════════════════════════════════════════
@@ -617,34 +643,6 @@ async function _soapPost(url, xml) {
     
     throw new Error(msg);
   }
-}
-
-// --- HELPERS MENORES ---
-
-function _tipoComprobante(cat) {
-  // 11: Factura C (Monotributo), 6: Factura B, 1: Factura A
-  const c = String(cat).toUpperCase();
-  if (c === 'A') return 1;
-  if (c === 'B') return 6;
-  return 11; 
-}
-
-function _docTipo(doc) {
-  // 80: CUIT, 96: DNI, 99: Sin identificar (Consumidor Final)
-  const d = String(doc || '').replace(/\D/g, '');
-  if (d.length === 11) return 80;
-  if (d.length >= 7 && d.length <= 8) return 96;
-  return 99;
-}
-
-function _fechaAFIP() {
-  // Formato AAAAMMDD requerido por AFIP
-  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
-}
-
-function _parseFechaAFIP(f) {
-  if (!f || f.length !== 8) return null;
-  return new Date(`${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`);
 }
 
 // ════════════════════════════════════════════════════════════

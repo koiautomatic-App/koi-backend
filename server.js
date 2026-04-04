@@ -246,275 +246,156 @@ OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT
+//  MÓDULO AFIP — DELEGACIÓN MULTI-TENANT v4.1 (Ajustado)
 // ════════════════════════════════════════════════════════════
 
+const forge = require('node-forge'); // Usaremos forge para evitar dependencia de OpenSSL binario si es posible, o mantenemos execSync si prefieres.
+
 function _firmarCMS(xml) {
-  // Usa los certs de Render Secret Files directamente
-  if (!fs.existsSync(AFIP_KEY_PATH) || !fs.existsSync(AFIP_CERT_PATH)) {
-    throw new Error(
-      `Certificados AFIP no encontrados.\n` +
-      `  .key esperado en: ${AFIP_KEY_PATH}\n` +
-      `  .crt esperado en: ${AFIP_CERT_PATH}\n` +
-      `Verificá que los Secret Files "koi.key" y "koi.crt" estén cargados en Render.`
-    );
+  if (!AFIP_CERT || !AFIP_KEY) {
+    throw new Error('Certificados AFIP no cargados en el servidor.');
   }
 
-  const tmpXml = path.join(os.tmpdir(), `koi_ltr_${Date.now()}.xml`);
-  const tmpOut = path.join(os.tmpdir(), `koi_cms_${Date.now()}.der`);
-
   try {
-    fs.writeFileSync(tmpXml, xml, 'utf8');
-    execSync(
-      `openssl cms -sign -in "${tmpXml}" -signer "${AFIP_CERT_PATH}" -inkey "${AFIP_KEY_PATH}"` +
-      ` -nodetach -outform DER -out "${tmpOut}"`,
-      { stdio: 'pipe' }
-    );
-    return fs.readFileSync(tmpOut).toString('base64');
-  } finally {
-    try { fs.unlinkSync(tmpXml); } catch {}
-    try { fs.unlinkSync(tmpOut); } catch {}
+    const cert = forge.pki.certificateFromPem(AFIP_CERT);
+    const privKey = forge.pki.privateKeyFromPem(AFIP_KEY);
+    const p7 = forge.pkcs7.createSignedData();
+    p7.content = forge.util.createBuffer(xml, 'utf8');
+    p7.addCertificate(cert);
+    p7.addSigner({
+      key: privKey,
+      certificate: cert,
+      digestAlgorithm: forge.pki.oids.sha256,
+      authenticatedAttributes: [
+        { type: forge.pki.oids.contentType, value: forge.pki.oids.data },
+        { type: forge.pki.oids.messageDigest },
+        { type: forge.pki.oids.signingTime, value: new Date() },
+      ],
+    });
+    p7.sign({ detached: false });
+    return Buffer.from(forge.asn1.toDer(p7.toAsn1()).getBytes(), 'binary').toString('base64');
+  } catch (err) {
+    throw new Error(`Error al firmar CMS: ${err.message}`);
   }
 }
 
 function _generarCMS(servicio = 'wsfe') {
   const ahora = new Date();
-  const desde = new Date(ahora.getTime() - 60_000);
-  const hasta = new Date(ahora.getTime() + 12 * 3600_000);
-  const toAFIP = d => d.toISOString().replace(/\.\d{3}Z$/, '-03:00');
+  const desde = new Date(ahora.getTime() - 60000).toISOString().replace('Z', '-03:00');
+  const hasta = new Date(ahora.getTime() + 12 * 3600000).toISOString().replace('Z', '-03:00');
 
-  const xml = `<?xml version="1.0" encoding="UTF-8"?>
-<loginTicketRequest version="1.0">
-  <header>
-    <uniqueId>${Date.now()}</uniqueId>
-    <generationTime>${toAFIP(desde)}</generationTime>
-    <expirationTime>${toAFIP(hasta)}</expirationTime>
-  </header>
-  <service>${servicio}</service>
-</loginTicketRequest>`;
+  const tra = xmlbuilder.create('loginTicketRequest', { version: '1.0', encoding: 'UTF-8' })
+    .ele('header')
+      .ele('uniqueId').txt(Math.floor(Date.now() / 1000)).up()
+      .ele('generationTime').txt(desde).up()
+      .ele('expirationTime').txt(hasta).up()
+    .up()
+    .ele('service').txt(servicio)
+    .end();
 
-  return _firmarCMS(xml);
+  return _firmarCMS(tra);
 }
 
-function _soapPost(url, body) {
-  return new Promise((resolve, reject) => {
-    const parsed   = new URL(url);
-    const postData = Buffer.from(body, 'utf8');
-    const options  = {
-      hostname: parsed.hostname,
-      port:     parsed.port || 443,
-      path:     parsed.pathname + (parsed.search || ''),
-      method:   'POST',
-      headers:  {
-        'Content-Type':   'text/xml; charset=utf-8',
-        'Content-Length': postData.length,
-      },
-    };
-
-    const req = https.request(options, res => {
-      let data = '';
-      res.setEncoding('utf8');
-      res.on('data', c => data += c);
-      res.on('end', () => {
-        if (res.statusCode >= 400) reject(new Error(`AFIP HTTP ${res.statusCode}: ${data.slice(0, 300)}`));
-        else resolve(data);
-      });
-    });
-
-    req.on('error', reject);
-    req.setTimeout(30_000, () => { req.destroy(); reject(new Error('Timeout AFIP')); });
-    req.write(postData);
-    req.end();
+async function _soapPost(url, body, action = '""') {
+  const res = await axios.post(url, body, {
+    headers: { 
+      'Content-Type': 'text/xml; charset=utf-8', 
+      'SOAPAction': action 
+    },
+    timeout: 30000,
   });
-}
-
-function _leerTACache(cuit) {
-  try {
-    return JSON.parse(fs.readFileSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json'), 'utf8'));
-  } catch { return null; }
-}
-
-function _guardarTACache(cuit, ta) {
-  const dir = path.join(TA_CACHE_DIR, cuit);
-  fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(path.join(dir, 'ta-wsfe.json'), JSON.stringify(ta, null, 2), 'utf8');
-}
-
-function _taEsValido(ta) {
-  if (!ta?.expiracion) return false;
-  return Date.now() < new Date(ta.expiracion).getTime() - 10 * 60 * 1000;
-}
-
-function _parsearTA(xml) {
-  const m = xml.match(/<loginCmsReturn>([\s\S]*?)<\/loginCmsReturn>/);
-  if (!m) throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
-
-  const taXml = Buffer.from(m[1].trim(), 'base64').toString('utf8');
-  const token = taXml.match(/<token>([\s\S]*?)<\/token>/)?.[1]?.trim();
-  const sign  = taXml.match(/<sign>([\s\S]*?)<\/sign>/)?.[1]?.trim();
-  const exp   = taXml.match(/<expirationTime>([\s\S]*?)<\/expirationTime>/)?.[1]?.trim();
-
-  if (!token || !sign) throw new Error('WSAA: no se pudo extraer token/sign del TA');
-  return { token, sign, expiracion: exp, generadoEn: new Date().toISOString() };
-}
-
-async function afip_obtenerTA(cuitUsuario) {
-  const cache = _leerTACache(cuitUsuario);
-  if (cache && _taEsValido(cache)) return { token: cache.token, sign: cache.sign };
-
-  const cms = _generarCMS('wsfe');
-
-  const soapBody = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <wsaa:loginCms>
-      <wsaa:in0>${cms}</wsaa:in0>
-    </wsaa:loginCms>
-  </soapenv:Body>
-</soapenv:Envelope>`;
-
-  const resp = await _soapPost(WSAA_URL, soapBody);
-  const ta   = _parsearTA(resp);
-  _guardarTACache(cuitUsuario, ta);
-  return { token: ta.token, sign: ta.sign };
-}
-
-function _fechaAFIP(d) {
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('');
-}
-
-function _parseFechaAFIP(str) {
-  if (!str || str.length !== 8) return null;
-  return new Date(`${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}`);
-}
-
-function _docTipo(doc) {
-  const d = String(doc || '0').replace(/\D/g, '');
-  if (d === '0' || d.startsWith('9999')) return 99;
-  if (d.length === 11) return 80;
-  return 96;
-}
-
-function _tipoComprobante(categoria) {
-  return 11; // Monotributistas A-K → siempre Factura C
+  return new DOMParser().parseFromString(res.data, 'text/xml');
 }
 
 async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
-  const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ar:FECompUltimoAutorizado>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuit}</ar:Cuit>
-      </ar:Auth>
-      <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-      <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-    </ar:FECompUltimoAutorizado>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Header').up()
+    .ele('soapenv:Body')
+      .ele('ar:FECompUltimoAutorizado')
+        .ele('ar:Auth')
+          .ele('ar:Token').txt(token).up()
+          .ele('ar:Sign').txt(sign).up()
+          .ele('ar:Cuit').txt(cuit).up()
+        .up()
+        .ele('ar:PtoVta').txt(puntoVenta).up()
+        .ele('ar:CbteTipo').txt(cbTipo).up()
+      .up().up().end();
 
-  const resp  = await _soapPost(WSFE_URL, soap);
-  const match = resp.match(/<CbteNro>(\d+)<\/CbteNro>/);
-  return match ? parseInt(match[1], 10) : 0;
+  const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
+  return parseInt(xmlDoc.getElementsByTagName('CbteNro')[0]?.textContent || '0');
 }
 
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
   const { token, sign } = await afip_obtenerTA(cuitEmisor);
-
-  const cbTipo    = datos.tipoComprobante || 11;
+  
+  const cbTipo = datos.tipoComprobante || 11;
   const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
-  const nroComp   = ultimoNro + 1;
-  const fechaHoy  = _fechaAFIP(new Date());
-  const importe   = parseFloat(datos.importeTotal.toFixed(2));
-  const docTipo   = _docTipo(datos.clienteDoc);
-  const docNro    = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  const nroComp = ultimoNro + 1;
+  
+  const importe = parseFloat(datos.importeTotal.toFixed(2));
+  const docTipo = _docTipo(datos.clienteDoc);
+  const docNro = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
 
-  const soap = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
-  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <ar:FECAESolicitar>
-      <ar:Auth>
-        <ar:Token>${token}</ar:Token>
-        <ar:Sign>${sign}</ar:Sign>
-        <ar:Cuit>${cuitEmisor}</ar:Cuit>
-      </ar:Auth>
-      <ar:FeCAEReq>
-        <ar:FeCabReq>
-          <ar:CantReg>1</ar:CantReg>
-          <ar:PtoVta>${puntoVenta}</ar:PtoVta>
-          <ar:CbteTipo>${cbTipo}</ar:CbteTipo>
-        </ar:FeCabReq>
-        <ar:FeDetReq>
-          <ar:FECAEDetRequest>
-            <ar:Concepto>1</ar:Concepto>
-            <ar:DocTipo>${docTipo}</ar:DocTipo>
-            <ar:DocNro>${docNro}</ar:DocNro>
-            <ar:CbteDesde>${nroComp}</ar:CbteDesde>
-            <ar:CbteHasta>${nroComp}</ar:CbteHasta>
-            <ar:CbteFch>${fechaHoy}</ar:CbteFch>
-            <ar:ImpTotal>${importe}</ar:ImpTotal>
-            <ar:ImpTotConc>0.00</ar:ImpTotConc>
-            <ar:ImpNeto>${importe}</ar:ImpNeto>
-            <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>0.00</ar:ImpIVA>
-            <ar:ImpTrib>0.00</ar:ImpTrib>
-            <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>
-          </ar:FECAEDetRequest>
-        </ar:FeDetReq>
-      </ar:FeCAEReq>
-    </ar:FECAESolicitar>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+  const soap = xmlbuilder.create('soapenv:Envelope')
+    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .ele('soapenv:Header').up()
+    .ele('soapenv:Body')
+      .ele('ar:FECAESolicitar')
+        .ele('ar:Auth')
+          .ele('ar:Token').txt(token).up()
+          .ele('ar:Sign').txt(sign).up()
+          .ele('ar:Cuit').txt(cuitEmisor).up()
+        .up()
+        .ele('ar:FeCAEReq')
+          .ele('ar:FeCabReq')
+            .ele('ar:CantReg').txt(1).up()
+            .ele('ar:PtoVta').txt(puntoVenta).up()
+            .ele('ar:CbteTipo').txt(cbTipo).up()
+          .up()
+          .ele('ar:FeDetReq')
+            .ele('ar:FECAEDetRequest')
+              .ele('ar:Concepto').txt(1).up()
+              .ele('ar:DocTipo').txt(docTipo).up()
+              .ele('ar:DocNro').txt(docNro).up()
+              .ele('ar:CbteDesde').txt(nroComp).up()
+              .ele('ar:CbteHasta').txt(nroComp).up()
+              .ele('ar:CbteFch').txt(_fechaAFIP(new Date())).up()
+              .ele('ar:ImpTotal').txt(importe).up()
+              .ele('ar:ImpTotConc').txt(0).up()
+              .ele('ar:ImpNeto').txt(importe).up()
+              .ele('ar:ImpOpEx').txt(0).up()
+              .ele('ar:ImpIVA').txt(0).up()
+              .ele('ar:ImpTrib').txt(0).up()
+              .ele('ar:MonId').txt('PES').up()
+              .ele('ar:MonCotiz').txt(1).up()
+            .up()
+          .up()
+        .up()
+      .up().up().end();
 
-  const resp      = await _soapPost(WSFE_URL, soap);
-  const resultado = resp.match(/<Resultado>([\s\S]*?)<\/Resultado>/)?.[1]?.trim();
-  const errMsg    = resp.match(/<Msg>([\s\S]*?)<\/Msg>/)?.[1]?.trim();
+  const xmlDoc = await _soapPost(AFIP_URLS.wsfe, soap);
+  const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
+  const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (resultado !== 'A') {
-    throw new Error(`AFIP rechazó el comprobante: ${errMsg || 'Error desconocido'}`);
+    const errNodes = xmlDoc.getElementsByTagName('Err');
+    let errores = [];
+    for (let i = 0; i < errNodes.length; i++) {
+      const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
+      const msg = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
+      errores.push(`[${code}] ${msg}`);
+    }
+    throw new Error(`AFIP rechazó: ${errores.join(' | ') || 'Error desconocido'}`);
   }
 
-  const cae    = resp.match(/<CAE>([\s\S]*?)<\/CAE>/)?.[1]?.trim();
-  const caeVto = resp.match(/<CAEFchVto>([\s\S]*?)<\/CAEFchVto>/)?.[1]?.trim();
-
-  if (!cae) throw new Error('AFIP: respuesta aprobada pero sin CAE');
+  const cae = detResp.getElementsByTagName('CAE')[0]?.textContent;
+  const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;
 
   return { cae, caeFchVto: _parseFechaAFIP(caeVto), nroComp };
 }
-
-async function afip_verificarDelegacion(cuitUsuario) {
-  try {
-    await afip_obtenerTA(cuitUsuario);
-    return { ok: true, mensaje: 'Delegación activa ✓' };
-  } catch (e) {
-    const msg = e.message || '';
-    const sinDelegacion = msg.includes('10003') || msg.toLowerCase().includes('no autorizado');
-    return {
-      ok:      false,
-      mensaje: sinDelegacion
-        ? `El CUIT ${cuitUsuario} no delegó wsfe al maestro de KOI (${CUIT_MAESTRO}). ` +
-          `Ir a AFIP: Mi SIL → Administrador de Relaciones → Adherir WSFE → Representante: ${CUIT_MAESTRO}`
-        : `Error de conexión con AFIP: ${msg}`,
-    };
-  }
-}
-
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARE — extrae arcaCuit + respeta factAuto/envioAuto
 // ════════════════════════════════════════════════════════════

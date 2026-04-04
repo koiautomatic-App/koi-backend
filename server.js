@@ -2,7 +2,6 @@
 //  KOI-FACTURA · SaaS Multi-Tenant Engine v3.4
 //  Node/Express · MongoDB Atlas · Google OAuth · JWT
 //  AFIP/ARCA — Delegación Multi-Tenant integrada
-//  CORREGIDO: XML, namespaces, formato de números
 // ============================================================
 
 'use strict';
@@ -59,7 +58,7 @@ function _verificarCertsMaestro() {
     console.log(`🔐 CUIT Maestro: ${CUIT_MAESTRO}`);
     console.log(`🌐 AFIP modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
   } else {
-    console.warn(`⚠️  Certs AFIP NO encontrados:`);
+    console.warn(`⚠️ Certs AFIP NO encontrados:`);
     if (!certOk) console.warn(`   Falta .crt en: ${AFIP_CERT_PATH}`);
     if (!keyOk)  console.warn(`   Falta .key en: ${AFIP_KEY_PATH}`);
   }
@@ -231,7 +230,7 @@ OrderSchema.index({ userId: 1, platform: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  MÓDULO AFIP — CORREGIDO
+//  MÓDULO AFIP
 // ════════════════════════════════════════════════════════════
 
 function _firmarCMS(xml) {
@@ -399,7 +398,7 @@ function _docTipo(doc) {
 }
 
 function _tipoComprobante(categoria) {
-  return 11; // Monotributistas → Factura C
+  return 11;
 }
 
 async function _afipUltimoNro(cuit, puntoVenta, cbTipo, token, sign) {
@@ -723,4 +722,833 @@ async function _intentarAutoFacturar(userId, order) {
     console.log(`✅ Auto-CAE: CUIT=${cuitLimpio} Orden=${order._id} CAE=${resultado.cae}`);
 
     if (user.settings.envioAuto && order.customerEmail) {
-     
+      console.log(`📧 Enviando factura a ${order.customerEmail}`);
+    }
+  } catch (e) {
+    console.error(`❌ Auto-facturación orden ${order._id}:`, e.message);
+    await Order.findByIdAndUpdate(order._id, {
+      status:   'error_afip',
+      errorLog: e.message,
+    });
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  AUTH HELPERS
+// ════════════════════════════════════════════════════════════
+const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
+const setTokenCookie = (res, token) =>
+  res.cookie('koi_token', token, {
+    httpOnly: true, secure: PROD_MODE, sameSite: 'lax',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+const requireAuth = (req, res, next) => {
+  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
+  catch { res.clearCookie('koi_token'); res.redirect('/login'); }
+};
+
+const requireAuthAPI = (req, res, next) => {
+  const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
+  try { req.userId = jwt.verify(token, JWT_SECRET).id; next(); }
+  catch { res.status(401).json({ error: 'No autenticado' }); }
+};
+
+// ════════════════════════════════════════════════════════════
+//  PASSPORT — Google OAuth 2.0
+// ════════════════════════════════════════════════════════════
+passport.use(new GoogleStrategy({
+  clientID:     process.env.GOOGLE_CLIENT_ID,
+  clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL:  `${BASE}/auth/google/callback`,
+}, async (_, __, profile, done) => {
+  try {
+    const email = profile.emails?.[0]?.value?.toLowerCase();
+    if (!email) return done(new Error('Google no devolvió email'));
+    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
+    if (!user) {
+      user = await User.create({
+        googleId: profile.id, email,
+        nombre:   profile.name?.givenName  || '',
+        apellido: profile.name?.familyName || '',
+        avatar:   profile.photos?.[0]?.value || '',
+      });
+    } else {
+      if (!user.googleId) user.googleId = profile.id;
+      user.avatar       = profile.photos?.[0]?.value || user.avatar;
+      user.ultimoAcceso = new Date();
+      await user.save();
+    }
+    done(null, user);
+  } catch (e) { done(e); }
+}));
+
+passport.serializeUser((user, done)   => done(null, user.id));
+passport.deserializeUser(async (id, done) => {
+  try { done(null, await User.findById(id).select('-password')); }
+  catch (e) { done(e); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  RUTAS AUTH
+// ════════════════════════════════════════════════════════════
+app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
+app.get('/auth/google/callback',
+  passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
+  (req, res) => { setTokenCookie(res, signToken(req.user.id)); res.redirect('/dashboard'); }
+);
+
+app.post('/auth/register', async (req, res) => {
+  try {
+    const { nombre, apellido, email, password } = req.body;
+    if (!nombre || !email || !password)
+      return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios.' });
+    if (password.length < 8)
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
+    if (await User.findOne({ email: email.toLowerCase() }))
+      return res.status(409).json({ error: 'Ya existe una cuenta con ese email.' });
+    const user = await User.create({ nombre, apellido, email, password });
+    setTokenCookie(res, signToken(user.id));
+    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+  } catch (e) {
+    console.error('Register:', e.message);
+    res.status(500).json({ error: 'Error interno. Intentá de nuevo.' });
+  }
+});
+
+app.post('/auth/login', async (req, res) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos.' });
+    const user = await User.findOne({ email: email.toLowerCase() }).select('+password');
+    if (!user?.password) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    if (!await user.checkPassword(password)) return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
+    user.ultimoAcceso = new Date();
+    await user.save();
+    setTokenCookie(res, signToken(user.id));
+    res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
+  } catch (e) {
+    console.error('Login:', e.message);
+    res.status(500).json({ error: 'Error interno.' });
+  }
+});
+
+app.get('/auth/logout', (req, res) => {
+  req.logout?.(() => {});
+  res.clearCookie('koi_token');
+  res.redirect('/login');
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — USUARIO & CONFIGURACIÓN
+// ════════════════════════════════════════════════════════════
+app.get('/api/me', requireAuthAPI, async (req, res) => {
+  const user = await User.findById(req.userId).select('-password -settings.arcaClave').lean();
+  if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+  res.json({ ok: true, user });
+});
+
+app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
+  try {
+    const { nombre, apellido, ...body } = req.body;
+    const update = {};
+    if (nombre)   update.nombre   = nombre;
+    if (apellido) update.apellido = apellido;
+    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit'];
+    for (const key of allowedSettings) {
+      if (body[key] !== undefined) {
+        update[`settings.${key}`] = body[key];
+      }
+    }
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      { $set: update },
+      { new: true, select: '-password -settings.arcaClave' }
+    ).lean();
+    res.json({ ok: true, user });
+  } catch (e) {
+    res.status(500).json({ error: 'Error al guardar configuración' });
+  }
+});
+
+app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
+  try {
+    const { cuit, arcaClave } = req.body;
+    if (!cuit || !arcaClave) return res.status(400).json({ error: 'CUIT y Clave Fiscal son requeridos.' });
+    const cleanCuit = String(cuit).replace(/\D/g, '');
+    const user = await User.findByIdAndUpdate(
+      req.userId,
+      {
+        $set: {
+          'settings.cuit':       cleanCuit,
+          'settings.arcaUser':   cleanCuit,
+          'settings.arcaClave':  encrypt(arcaClave),
+          'settings.arcaStatus': 'pendiente',
+          'settings.arcaNotas':  'Datos recibidos. Validando vinculación con ARCA...',
+        },
+      },
+      { new: true, select: '-password -settings.arcaClave' }
+    ).lean();
+    res.json({ ok: true, message: 'Carpeta fiscal enviada. El proceso puede demorar hasta 24hs.', user });
+  } catch (e) {
+    console.error('Error ARCA Link:', e.message);
+    res.status(500).json({ error: 'No se pudo procesar la vinculación.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — AFIP/ARCA — EMISIÓN
+// ════════════════════════════════════════════════════════════
+app.get('/api/afip/delegacion', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  try {
+    const resultado = await afip_verificarDelegacion(req.arcaCuit);
+    res.json({ ok: resultado.ok, mensaje: resultado.mensaje, cuit: req.arcaCuit });
+  } catch (e) {
+    res.status(500).json({ error: 'Error verificando delegación: ' + e.message });
+  }
+});
+
+app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
+  try {
+    await new Promise((resolve, reject) => {
+      const r = https.get(WSFE_URL + '?wsdl', { timeout: 8000 }, resolve);
+      r.on('error', reject);
+      r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
+    });
+    res.json({ ok: true, online: true });
+  } catch {
+    res.json({ ok: true, online: false });
+  }
+});
+
+app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
+  const { orderId } = req.params;
+  try {
+    const order = await Order.findOne({ _id: orderId, userId: req.userId });
+    if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
+    if (order.status === 'invoiced') {
+      return res.status(409).json({ error: 'Esta orden ya tiene un CAE emitido.', cae: order.caeNumber });
+    }
+    if (order.status === 'error_data') {
+      return res.status(400).json({ error: `No se puede emitir: ${order.errorLog}` });
+    }
+
+    const resultado = await afip_emitirComprobante(
+      req.arcaCuit,
+      req.arcaPtoVta,
+      {
+        tipoComprobante: _tipoComprobante(req.arcaCategoria),
+        clienteDoc:      order.customerDoc || '0',
+        importeTotal:    order.amount,
+      }
+    );
+
+    await Order.findByIdAndUpdate(orderId, {
+      status:    'invoiced',
+      caeNumber: resultado.cae,
+      caeExpiry: resultado.caeFchVto,
+      errorLog:  '',
+    });
+
+    console.log(`✅ CAE: CUIT=${req.arcaCuit} PV=${req.arcaPtoVta} Orden=${orderId} CAE=${resultado.cae}`);
+
+    if (req.envioAuto && order.customerEmail) {
+      console.log(`📧 Enviando factura a ${order.customerEmail}`);
+    }
+
+    res.json({ ok: true, cae: resultado.cae, vto: resultado.caeFchVto, nroComp: resultado.nroComp });
+
+  } catch (e) {
+    console.error(`❌ Emitir CAE orden ${orderId}:`, e.message);
+    await Order.findOneAndUpdate(
+      { _id: orderId, userId: req.userId },
+      { status: 'error_afip', errorLog: e.message }
+    );
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — ÓRDENES MANUALES
+// ════════════════════════════════════════════════════════════
+app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
+  try {
+    const { cliente, email, concepto, monto, tipo, dni } = req.body;
+    if (!cliente || !monto) {
+      return res.status(400).json({ error: 'Cliente y monto son obligatorios.' });
+    }
+    if (parseFloat(monto) <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0.' });
+    }
+
+    const user = await User.findById(req.userId).select('settings').lean();
+    const externalId = `MAN-${Date.now()}-${crypto.randomBytes(4).toString('hex')}`;
+
+    const order = await Order.create({
+      userId:        req.userId,
+      platform:      'manual',
+      externalId,
+      customerName:  cliente,
+      customerEmail: email || '',
+      customerDoc:   dni   || CUIT_CF,
+      amount:        parseFloat(monto),
+      currency:      'ARS',
+      concepto:      concepto || '',
+      status:        'pending_invoice',
+      orderDate:     new Date(),
+    });
+
+    if (user?.settings?.factAuto !== false && user?.settings?.arcaStatus === 'vinculado') {
+      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada. Emitiendo CAE...' });
+      _intentarAutoFacturar(req.userId, order);
+    } else {
+      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada como pendiente.' });
+    }
+
+  } catch (e) {
+    console.error('Manual order error:', e.message);
+    res.status(500).json({ error: 'Error al registrar la venta.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — INTEGRACIONES
+// ════════════════════════════════════════════════════════════
+app.get('/api/integrations', requireAuthAPI, async (req, res) => {
+  const list = await Integration.find({ userId: req.userId })
+    .select('-credentials -webhookSecret').lean();
+  res.json({ ok: true, integrations: list });
+});
+
+app.patch('/api/integrations/:id/status', requireAuthAPI, async (req, res) => {
+  try {
+    const { status } = req.body;
+    if (!['active', 'paused'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
+    const doc = await Integration.findOneAndUpdate(
+      { _id: req.params.id, userId: req.userId }, { status },
+      { new: true, select: '-credentials -webhookSecret' }
+    );
+    if (!doc) return res.status(404).json({ error: 'Integración no encontrada' });
+    res.json({ ok: true, integration: doc });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.delete('/api/integrations/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const doc = await Integration.findOneAndDelete({ _id: req.params.id, userId: req.userId });
+    if (!doc) return res.status(404).json({ error: 'Integración no encontrada' });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+app.get('/api/integrations/:id/webhook', requireAuthAPI, async (req, res) => {
+  const doc = await Integration.findOne({ _id: req.params.id, userId: req.userId })
+    .select('platform webhookSecret');
+  if (!doc) return res.status(404).json({ error: 'No encontrada' });
+  res.json({ ok: true, url: `${BASE}/webhook/${doc.platform}/${doc.webhookSecret}` });
+});
+
+app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
+  const { platform } = req.params;
+  const TOKEN_PLATFORMS = ['tiendanube', 'empretienda', 'rappi', 'vtex', 'shopify'];
+  if (!TOKEN_PLATFORMS.includes(platform))
+    return res.status(400).json({ error: `Plataforma ${platform} no soporta token directo` });
+
+  try {
+    const { storeId, storeName, storeUrl, apiToken, apiKey, apiSecret } = req.body;
+    if (!storeId) return res.status(400).json({ error: 'storeId requerido' });
+
+    const creds = {};
+    if (apiToken)  creds.apiToken  = encrypt(apiToken);
+    if (apiKey)    creds.apiKey    = encrypt(apiKey);
+    if (apiSecret) creds.apiSecret = encrypt(apiSecret);
+
+    const integration = await Integration.findOneAndUpdate(
+      { userId: req.userId, platform, storeId: String(storeId) },
+      {
+        $set: {
+          storeName: storeName || `${platform} ${storeId}`, storeUrl: storeUrl || '',
+          status: 'active', errorLog: '', credentials: creds,
+          updatedAt: new Date(), initialSyncDone: false,
+        },
+        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+
+    if (platform === 'tiendanube' && apiToken) {
+      await _registerWebhookTiendaNube(integration, apiToken).catch(console.warn);
+    }
+
+    _dispararSyncHistorico(integration);
+    res.json({ ok: true, message: `${platform} conectado. Sincronizando historial...` });
+  } catch (e) {
+    console.error(`Connect ${platform}:`, e.message);
+    res.status(500).json({ error: 'Error al conectar. Verificá las credenciales.' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  WOOCOMMERCE OAUTH
+// ════════════════════════════════════════════════════════════
+app.get('/auth/woo/connect', requireAuth, (req, res) => {
+  const { store_url } = req.query;
+  if (!store_url) return res.status(400).send('Falta store_url');
+  const clean   = store_url.replace(/\/$/, '').toLowerCase();
+  const state   = jwt.sign({ userId: req.userId, storeUrl: clean }, JWT_SECRET, { expiresIn: '15m' });
+  const authUrl = `${clean}/wc-auth/v1/authorize`
+    + `?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}`
+    + `&return_url=${encodeURIComponent(`${BASE}/dashboard?woo=connected`)}`
+    + `&callback_url=${encodeURIComponent(`${BASE}/auth/woo/callback?state=${encodeURIComponent(state)}`)}`;
+  res.redirect(authUrl);
+});
+
+app.post('/auth/woo/callback', async (req, res) => {
+  res.status(200).json({ status: 'ok' });
+  const { state } = req.query;
+  const { consumer_key, consumer_secret } = req.body;
+  try {
+    const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'woocommerce', storeId: storeUrl },
+      {
+        $set: {
+          storeName: storeUrl.replace(/^https?:\/\//, ''), storeUrl,
+          status: 'active', errorLog: '',
+          credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) },
+          initialSyncDone: false, updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+    await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
+    _dispararSyncHistorico(integration);
+    console.log(`✅ WooCommerce conectado: ${storeUrl}`);
+  } catch (e) { console.error('WooCommerce callback:', e.message); }
+});
+
+async function _registerWebhookWoo(integration, key, secret, storeUrl) {
+  const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
+  try {
+    const { data: existing } = await axios.get(`${storeUrl}/wp-json/wc/v3/webhooks`, {
+      auth: { username: key, password: secret }, params: { per_page: 100 },
+    });
+    if (existing?.some(wh => wh.delivery_url === webhookUrl)) return;
+    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`,
+      { name: 'KOI-Factura', topic: 'order.created', delivery_url: webhookUrl, status: 'active' },
+      { auth: { username: key, password: secret } }
+    );
+    console.log(`🔌 WooCommerce webhook: ${storeUrl}`);
+  } catch (e) {
+    console.warn('WooCommerce webhook:', e.response?.data?.message || e.message);
+    await Integration.findByIdAndUpdate(integration._id, { errorLog: `Webhook: ${e.message}` });
+  }
+}
+
+async function _registerWebhookTiendaNube(integration, apiToken) {
+  const webhookUrl = `${BASE}/webhook/tiendanube/${integration.webhookSecret}`;
+  await axios.post(
+    `https://api.tiendanube.com/v1/${integration.storeId}/webhooks`,
+    { event: 'order/paid', url: webhookUrl },
+    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/3.2' } }
+  );
+}
+
+// ════════════════════════════════════════════════════════════
+//  MERCADOLIBRE OAUTH
+// ════════════════════════════════════════════════════════════
+app.get('/auth/ml/connect', requireAuth, (req, res) => {
+  const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
+  res.redirect(
+    'https://auth.mercadolibre.com.ar/authorization'
+    + `?response_type=code&client_id=${process.env.ML_CLIENT_ID}`
+    + `&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}`
+    + `&state=${encodeURIComponent(state)}`
+  );
+});
+
+app.get('/auth/ml/callback', async (req, res) => {
+  const { code, state } = req.query;
+  if (!code) return res.redirect('/dashboard?error=ml_denied');
+  try {
+    const { userId } = jwt.verify(state, JWT_SECRET);
+    const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', {
+      grant_type: 'authorization_code', client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET, code, redirect_uri: `${BASE}/auth/ml/callback`,
+    });
+    const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me',
+      { headers: { Authorization: `Bearer ${token.access_token}` } }
+    );
+    const sellerId = String(token.user_id || seller.id);
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'mercadolibre', storeId: sellerId },
+      {
+        $set: {
+          storeName: seller.nickname || `ML ${sellerId}`, status: 'active', errorLog: '',
+          credentials: {
+            accessToken:  encrypt(token.access_token),
+            refreshToken: encrypt(token.refresh_token),
+            tokenExpiry:  new Date(Date.now() + token.expires_in * 1000).toISOString(),
+            sellerId,
+          },
+          initialSyncDone: false, updatedAt: new Date(),
+        },
+        $setOnInsert: { userId, platform: 'mercadolibre', storeId: sellerId, createdAt: new Date() },
+      },
+      { upsert: true, new: true }
+    );
+    _dispararSyncHistorico(integration);
+    res.redirect('/dashboard?ml=connected');
+  } catch (e) {
+    console.error('ML callback:', e.response?.data || e.message);
+    res.redirect('/dashboard?error=ml_failed');
+  }
+});
+
+async function _getMLToken(integration) {
+  const expiry = new Date(integration.credentials.tokenExpiry || 0);
+  if (expiry > new Date(Date.now() + 10 * 60 * 1000)) return decrypt(integration.credentials.accessToken);
+  const { data } = await axios.post('https://api.mercadolibre.com/oauth/token', {
+    grant_type: 'refresh_token', client_id: process.env.ML_CLIENT_ID,
+    client_secret: process.env.ML_CLIENT_SECRET, refresh_token: decrypt(integration.credentials.refreshToken),
+  });
+  await Integration.findByIdAndUpdate(integration._id, {
+    'credentials.accessToken':  encrypt(data.access_token),
+    'credentials.refreshToken': encrypt(data.refresh_token),
+    'credentials.tokenExpiry':  new Date(Date.now() + data.expires_in * 1000).toISOString(),
+  });
+  return data.access_token;
+}
+
+// ════════════════════════════════════════════════════════════
+//  BULK SYNC ENGINE
+// ════════════════════════════════════════════════════════════
+const BULK_SYNC = {
+  async woocommerce(integration) {
+    const key = integration.getKey('consumerKey'), secret = integration.getKey('consumerSecret');
+    let page = 1, total = 0;
+    while (true) {
+      const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
+        auth: { username: key, password: secret },
+        params: { per_page: 100, page, orderby: 'date', order: 'desc' },
+      });
+      if (!orders?.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.woocommerce(r))));
+      total += orders.length;
+      if (orders.length < 100) break;
+      page++;
+    }
+    return total;
+  },
+  async tiendanube(integration) {
+    const token = integration.getKey('apiToken');
+    let page = 1, total = 0;
+    while (true) {
+      const { data: orders } = await axios.get(
+        `https://api.tiendanube.com/v1/${integration.storeId}/orders`,
+        { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/3.2' }, params: { per_page: 200, page } }
+      );
+      if (!orders?.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.tiendanube(r))));
+      total += orders.length;
+      if (orders.length < 200) break;
+      page++;
+    }
+    return total;
+  },
+  async mercadolibre(integration) {
+    const accessToken = await _getMLToken(integration);
+    const sellerId    = integration.credentials.sellerId;
+    let offset = 0, total = 0;
+    while (true) {
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params:  { seller: sellerId, limit: 50, offset, sort: 'date_desc' },
+      });
+      const orders = data.results || [];
+      if (!orders.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.mercadolibre(r))));
+      total  += orders.length;
+      offset += 50;
+      if (offset >= (data.paging?.total || 0)) break;
+    }
+    return total;
+  },
+  async vtex(integration) {
+    const apiKey = integration.getKey('apiKey'), apiToken = integration.getKey('apiToken');
+    let page = 1, total = 0;
+    while (true) {
+      const { data } = await axios.get(`${integration.storeUrl}/api/oms/pvt/orders`, {
+        headers: { 'X-VTEX-API-AppKey': apiKey, 'X-VTEX-API-AppToken': apiToken },
+        params:  { page, per_page: 100 },
+      });
+      const orders = data.list || [];
+      if (!orders.length) break;
+      await Promise.all(orders.map(r => upsertOrder(integration, normalize.vtex(r))));
+      total += orders.length;
+      if (orders.length < 100) break;
+      page++;
+    }
+    return total;
+  },
+};
+
+async function _dispararSyncHistorico(integration) {
+  const syncFn = BULK_SYNC[integration.platform];
+  if (!syncFn) return;
+  console.log(`🔄 Sync histórico: ${integration.platform} / ${integration.storeId}`);
+  try {
+    const count = await syncFn(integration);
+    await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '', initialSyncDone: true });
+    console.log(`✅ Sync ${integration.platform}: ${count} órdenes`);
+  } catch (err) {
+    console.error(`❌ Sync ${integration.platform}:`, err.message);
+    await Integration.findByIdAndUpdate(integration._id, { errorLog: `Sync: ${err.message}`, status: 'error' });
+  }
+}
+
+app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
+    if (!integration) return res.status(404).json({ error: 'No encontrada' });
+    if (integration.status !== 'active') return res.status(400).json({ error: 'Integración inactiva' });
+    const syncFn = BULK_SYNC[integration.platform];
+    if (!syncFn) return res.status(400).json({ error: `Sync no disponible para ${integration.platform}` });
+    res.json({ ok: true, message: 'Sincronización iniciada' });
+    syncFn(integration)
+      .then(count => Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '' }))
+      .catch(async err => Integration.findByIdAndUpdate(integration._id, { errorLog: err.message, status: 'error' }));
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  WEBHOOKS UNIVERSALES
+// ════════════════════════════════════════════════════════════
+async function handleWebhook(platform, secret, getCanonical) {
+  const integration = await Integration.findOne({ platform, webhookSecret: secret, status: 'active' });
+  if (!integration) return;
+  try {
+    const canonical = await getCanonical(integration);
+    if (canonical) await upsertOrder(integration, canonical);
+  } catch (e) { console.error(`❌ Webhook ${platform}:`, e.message); }
+}
+
+app.post('/webhook/woocommerce/:secret',  async (req, res) => { res.status(200).send('OK'); await handleWebhook('woocommerce',  req.params.secret, () => normalize.woocommerce(req.body)); });
+app.post('/webhook/tiendanube/:secret',   async (req, res) => {
+  res.status(200).send('OK');
+  await handleWebhook('tiendanube', req.params.secret, async (integration) => {
+    const { data } = await axios.get(
+      `https://api.tiendanube.com/v1/${integration.storeId}/orders/${req.body.id}`,
+      { headers: { Authentication: `bearer ${integration.getKey('apiToken')}`, 'User-Agent': 'KOI-Factura/3.2' } }
+    );
+    return normalize.tiendanube(data);
+  });
+});
+app.post('/webhook/mercadolibre/:secret', async (req, res) => {
+  res.status(200).send('OK');
+  const { topic, resource } = req.body;
+  if (!['orders_v2', 'orders'].includes(topic)) return;
+  await handleWebhook('mercadolibre', req.params.secret, async (integration) => {
+    const token    = await _getMLToken(integration);
+    const orderUrl = resource.startsWith('http') ? resource : `https://api.mercadolibre.com${resource}`;
+    const { data } = await axios.get(orderUrl, { headers: { Authorization: `Bearer ${token}` } });
+    return normalize.mercadolibre(data);
+  });
+});
+app.post('/webhook/vtex/:secret',        async (req, res) => { res.status(200).send('OK'); await handleWebhook('vtex',        req.params.secret, () => normalize.vtex(req.body)); });
+app.post('/webhook/empretienda/:secret', async (req, res) => { res.status(200).send('OK'); await handleWebhook('empretienda', req.params.secret, () => normalize.empretienda(req.body)); });
+app.post('/webhook/rappi/:secret',       async (req, res) => { res.status(200).send('OK'); await handleWebhook('rappi',       req.params.secret, () => normalize.rappi(req.body)); });
+app.post('/webhook/shopify/:secret',     async (req, res) => { res.status(200).send('OK'); await handleWebhook('shopify',     req.params.secret, () => normalize.shopify(req.body)); });
+
+// ════════════════════════════════════════════════════════════
+//  API — STATS CON FILTRO DE PERÍODO
+// ════════════════════════════════════════════════════════════
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+  try {
+    const { platform, desde, hasta } = req.query;
+    const match = { userId: new mongoose.Types.ObjectId(req.userId) };
+    if (platform) match.platform = platform;
+
+    if (desde || hasta) {
+      const df = {};
+      if (desde) df.$gte = new Date(desde);
+      if (hasta) { const h = new Date(hasta); h.setHours(23,59,59,999); df.$lte = h; }
+      match.$or = [
+        { orderDate: df },
+        { orderDate: { $exists: false }, createdAt: df },
+        { orderDate: null, createdAt: df },
+      ];
+    }
+
+    const hoyStart = new Date(); hoyStart.setHours(0,0,0,0);
+    const hoyEnd   = new Date(); hoyEnd.setHours(23,59,59,999);
+    const matchHoy = {
+      userId: new mongoose.Types.ObjectId(req.userId),
+      status: { $in: ['pending_invoice', 'invoiced'] },
+      $or: [
+        { orderDate: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: { $exists: false }, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+        { orderDate: null, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
+      ],
+    };
+    if (platform) matchHoy.platform = platform;
+
+    const [totals, facturado, recent, hoyAgg, pendientesCount, plataformas] = await Promise.all([
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.aggregate([{ $match: { ...match, status: 'invoiced' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.find({ ...match }).sort({ orderDate: -1, createdAt: -1 }).limit(100)
+        .select('platform externalId customerName amount currency status createdAt orderDate').lean(),
+      Order.aggregate([{ $match: matchHoy }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.countDocuments({ ...match, status: 'pending_invoice' }),
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
+    ]);
+
+    res.json({
+      ok:             true,
+      totalMonto:     totals[0]?.total    || 0,
+      totalOrden:     totals[0]?.count    || 0,
+      facturadoMonto: facturado[0]?.total || 0,
+      facturadoCount: facturado[0]?.count || 0,
+      hoyMonto:       hoyAgg[0]?.total   || 0,
+      hoyCount:       hoyAgg[0]?.count   || 0,
+      pendientes:     pendientesCount     || 0,
+      plataformas,
+      ultimas:        recent,
+    });
+  } catch (e) {
+    console.error('Stats:', e.message);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
+  }
+});
+
+app.get('/api/orders', requireAuthAPI, async (req, res) => {
+  try {
+    const { platform, status, limit = 100 } = req.query;
+    const filter = { userId: req.userId };
+    if (platform) filter.platform = platform;
+    if (status)   filter.status   = status;
+    const orders = await Order.find(filter)
+      .sort({ orderDate: -1, createdAt: -1 })
+      .limit(Math.min(parseInt(limit), 500)).lean();
+    res.json({ ok: true, orders });
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
+});
+
+// ════════════════════════════════════════════════════════════
+//  PÁGINAS HTML
+// ════════════════════════════════════════════════════════════
+const isLoggedIn = (req) => {
+  try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
+};
+app.get('/',          (req, res) => res.redirect(isLoggedIn(req) ? '/dashboard' : '/login'));
+app.get('/login',     (req, res) => isLoggedIn(req) ? res.redirect('/dashboard') : res.sendFile(path.join(__dirname, 'public', 'login.html')));
+app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
+
+// ════════════════════════════════════════════════════════════
+//  KEEP-ALIVE
+// ════════════════════════════════════════════════════════════
+app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
+
+const selfPing = () => {
+  if (!process.env.BASE_URL) return;
+  axios.get(`${BASE}/health`, { timeout: 10_000 })
+    .then(() => console.log(`🏓 Ping OK [${new Date().toISOString()}]`))
+    .catch(err => console.warn(`⚠️ Ping: ${err.message}`));
+};
+
+app.listen(PORT, () => {
+  console.log(`🚀 KOI-Factura v3.4 — puerto ${PORT}`);
+  console.log(`📡 Base URL: ${BASE}`);
+  console.log(`🔐 CUIT Maestro AFIP: ${CUIT_MAESTRO}`);
+  console.log(`🌐 AFIP modo: ${PROD_MODE ? 'PRODUCCIÓN' : 'HOMOLOGACIÓN'}`);
+  setTimeout(() => { selfPing(); setInterval(selfPing, 10 * 60 * 1000); }, 30_000);
+});
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN PANEL — CONSERJERÍA MANUAL
+// ════════════════════════════════════════════════════════════
+const ADMIN_EMAIL = 'koi.automatic@gmail.com';
+
+async function requireAdmin(req, res, next) {
+  const admin = await User.findById(req.userId).select('email').lean();
+  if (!admin || admin.email.trim() !== ADMIN_EMAIL) {
+    return res.status(403).json({ error: 'No tenés permisos de administrador.' });
+  }
+  next();
+}
+
+app.get('/api/admin/pendientes', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    const pendientes = await User.find({
+      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso', 'vinculado'] },
+    }).select('nombre apellido email settings').lean();
+
+    const lista = pendientes.map(u => {
+      const s = u.settings || {};
+      return {
+        id:          u._id,
+        cliente:     `${u.nombre || ''} ${u.apellido || ''}`.trim(),
+        email:       u.email,
+        cuit:        s.cuit        || 'N/A',
+        claveFiscal: s.arcaClave   ? decrypt(s.arcaClave) : 'Sin clave',
+        status:      s.arcaStatus  || 'pendiente',
+        puntoVenta:  s.arcaPtoVta  || 1,
+        notas:       s.arcaNotas   || '',
+      };
+    });
+
+    res.json({ ok: true, total: lista.length, lista });
+  } catch (e) {
+    res.status(500).json({ error: 'Error en el panel de admin' });
+  }
+});
+
+app.post('/api/admin/update-status', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    const { userId, nuevoStatus, notas, puntoVenta } = req.body;
+
+    await User.findByIdAndUpdate(userId, {
+      $set: {
+        'settings.arcaStatus': nuevoStatus,
+        'settings.arcaNotas':  notas,
+        'settings.arcaPtoVta': Number(puntoVenta) || 1,
+      },
+    });
+
+    if (nuevoStatus === 'vinculado') {
+      const user = await User.findById(userId).select('settings.cuit').lean();
+      const cuit = user?.settings?.cuit?.replace(/\D/g, '');
+      if (cuit) {
+        try { fs.unlinkSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json')); } catch {}
+        console.log(`🔄 TA cache limpiado para CUIT ${cuit}`);
+      }
+    }
+
+    res.json({ ok: true, message: `Estado: "${nuevoStatus}". Punto de Venta: ${puntoVenta || 1}` });
+  } catch (e) {
+    res.status(500).json({ error: 'No se pudo actualizar el estado.' });
+  }
+});
+
+app.get('/api/admin/delegaciones', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    if (!fs.existsSync(TA_CACHE_DIR)) return res.json({ ok: true, delegaciones: [], maestro: CUIT_MAESTRO });
+
+    const carpetas = fs.readdirSync(TA_CACHE_DIR).filter(d => /^\d+$/.test(d));
+    const delegaciones = carpetas.map(cuit => {
+      let estado = 'sin_ta', expiracion = null, valido = false;
+      try {
+        const ta   = JSON.parse(fs.readFileSync(path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json'), 'utf8'));
+        expiracion = ta.expiracion;
+        valido     = expiracion ? new Date(expiracion).getTime() > Date.now() : false;
+        estado     = valido ? 'activo' : 'expirado';
+      } catch {}
+      return { cuit, estado, expiracion, valido };
+    });
+
+    res.json({ ok: true, delegaciones, maestro: CUIT_MAESTRO, modo: PROD_MODE ? 'produccion' : 'homologacion' });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});

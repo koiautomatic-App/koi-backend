@@ -1525,6 +1525,155 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+//  DIAGNÓSTICO COMPLETO DE EMISIÓN
+// ════════════════════════════════════════════════════════════
+app.post('/api/debug/emitir-diagnostico', requireAuthAPI, async (req, res) => {
+  const resultados = {
+    paso1_usuario: { ok: false, detalle: '' },
+    paso2_cuit: { ok: false, detalle: '' },
+    paso3_estado: { ok: false, detalle: '' },
+    paso4_token: { ok: false, detalle: '' },
+    paso5_emision: { ok: false, detalle: '', cae: null, error: null },
+    paso6_respuesta_raw: null
+  };
+
+  try {
+    // 1. Verificar usuario
+    const user = await User.findById(req.userId).select('settings').lean();
+    if (!user) {
+      resultados.paso1_usuario.detalle = 'Usuario no encontrado';
+      return res.status(404).json(resultados);
+    }
+    resultados.paso1_usuario = { ok: true, detalle: `Usuario: ${user.email}` };
+
+    // 2. Verificar CUIT
+    const cuitLimpio = user.settings?.cuit?.replace(/\D/g, '');
+    if (!cuitLimpio || cuitLimpio.length !== 11) {
+      resultados.paso2_cuit.detalle = `CUIT inválido: ${user.settings?.cuit || 'no configurado'}`;
+      return res.status(400).json(resultados);
+    }
+    resultados.paso2_cuit = { ok: true, detalle: `CUIT: ${cuitLimpio}` };
+
+    // 3. Verificar estado ARCA
+    if (user.settings.arcaStatus !== 'vinculado') {
+      resultados.paso3_estado.detalle = `Estado actual: ${user.settings.arcaStatus}`;
+      return res.status(403).json(resultados);
+    }
+    resultados.paso3_estado = { ok: true, detalle: 'Estado: vinculado' };
+
+    const ptoVta = parseInt(user.settings.arcaPtoVta) || 1;
+    const categoria = user.settings.categoria || 'C';
+
+    // 4. Probar obtener token
+    try {
+      const { token, sign } = await afip_obtenerTA(cuitLimpio);
+      resultados.paso4_token = { ok: true, detalle: `Token obtenido (${token.substring(0, 20)}...)` };
+      
+      // 5. Crear orden de prueba
+      const testOrder = {
+        userId: req.userId,
+        platform: 'diagnostico',
+        externalId: `DIAG-${Date.now()}`,
+        customerName: 'Cliente Test',
+        customerEmail: 'test@ejemplo.com',
+        customerDoc: '0',
+        amount: 100,
+        status: 'pending_invoice'
+      };
+      
+      // 6. Intentar emitir
+      try {
+        // Construir XML manualmente para debug
+        const nroComp = 1;
+        const importe = '100.00';
+        const docTipo = 99;
+        const docNro = 0;
+        const fecha = _fechaAFIP();
+        
+        const soap = xmlbuilder.create('soapenv:Envelope')
+          .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
+          .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+          .ele('soapenv:Body')
+            .ele('ar:FECAESolicitar')
+              .ele('ar:Auth')
+                .ele('ar:Token').txt(token).up()
+                .ele('ar:Sign').txt(sign).up()
+                .ele('ar:Cuit').txt(cuitLimpio).up()
+              .up()
+              .ele('ar:FeCAEReq')
+                .ele('ar:FeCabReq')
+                  .ele('ar:CantReg').txt(1).up()
+                  .ele('ar:PtoVta').txt(ptoVta).up()
+                  .ele('ar:CbteTipo').txt(11).up()
+                .up()
+                .ele('ar:FeDetReq')
+                  .ele('ar:FECAEDetRequest')
+                    .ele('ar:Concepto').txt(1).up()
+                    .ele('ar:DocTipo').txt(docTipo).up()
+                    .ele('ar:DocNro').txt(docNro).up()
+                    .ele('ar:CbteDesde').txt(nroComp).up()
+                    .ele('ar:CbteHasta').txt(nroComp).up()
+                    .ele('ar:CbteFch').txt(fecha).up()
+                    .ele('ar:ImpTotal').txt(importe).up()
+                    .ele('ar:ImpTotConc').txt("0.00").up()
+                    .ele('ar:ImpNeto').txt(importe).up()
+                    .ele('ar:ImpOpEx').txt("0.00").up()
+                    .ele('ar:ImpIVA').txt("0.00").up()
+                    .ele('ar:ImpTrib').txt("0.00").up()
+                    .ele('ar:MonId').txt('PES').up()
+                    .ele('ar:MonCotiz').txt(1).up()
+                  .up()
+                .up()
+              .up()
+            .up()
+          .up()
+          .end({ pretty: false });
+        
+        // Guardar XML para debug
+        const xmlPath = path.join(os.tmpdir(), `debug-soap-${Date.now()}.xml`);
+        fs.writeFileSync(xmlPath, soap);
+        console.log(`📁 XML guardado en: ${xmlPath}`);
+        
+        const response = await axios.post(AFIP_URLS.wsfe, soap, {
+          headers: { 'Content-Type': 'text/xml' },
+          timeout: 30000,
+          httpsAgent
+        });
+        
+        resultados.paso6_respuesta_raw = response.data.substring(0, 1000);
+        
+        const xmlDoc = new DOMParser().parseFromString(response.data, 'text/xml');
+        const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
+        const cae = xmlDoc.getElementsByTagName('CAE')[0]?.textContent;
+        const errMsg = xmlDoc.getElementsByTagName('Msg')[0]?.textContent;
+        
+        if (resultado === 'A' && cae) {
+          resultados.paso5_emision = { ok: true, detalle: `CAE obtenido: ${cae}`, cae };
+        } else {
+          resultados.paso5_emision = { ok: false, detalle: errMsg || 'Error sin mensaje', error: errMsg };
+        }
+        
+      } catch (emitError) {
+        resultados.paso5_emision = { 
+          ok: false, 
+          detalle: emitError.message,
+          error: emitError.response?.data?.substring(0, 500) || emitError.message
+        };
+      }
+      
+    } catch (tokenError) {
+      resultados.paso4_token = { ok: false, detalle: tokenError.message };
+    }
+    
+    res.json(resultados);
+    
+  } catch (error) {
+    resultados.paso1_usuario.detalle = error.message;
+    res.status(500).json(resultados);
+  }
+});
+
+// ════════════════════════════════════════════════════════════
 //  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
 

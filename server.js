@@ -352,12 +352,6 @@ function _parseFechaAFIP(str) {
 //  AFIP — MÓDULO DE EMISIÓN v4.1 (COMPLETO & UNIFICADO)
 // ════════════════════════════════════════════════════════════
 
-// --- CONFIGURACIÓN DE URLS ---
-const AFIP_URLS = {
-  wsaa: process.env.WSAA_URL || "https://wsaa.afip.gov.ar/ws/services/LoginCms",
-  wsfe: process.env.WSFE_URL || "https://servicios1.afip.gov.ar/wsfev1/service.asmx"
-};
-
 /**
  * Emite un comprobante electrónico en AFIP utilizando delegación.
  */
@@ -509,58 +503,6 @@ async function afip_obtenerTA(cuitEmisor) {
 }
 
 // ════════════════════════════════════════════════════════════
-//  FUNCIONES DE APOYO (HELPERS)
-// ════════════════════════════════════════════════════════════
-
-async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
-  const soap = xmlbuilder.create('soapenv:Envelope')
-    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
-    .ele('soapenv:Body').ele('ar:FECompUltimoAutorizado')
-      .ele('ar:Auth')
-        .ele('ar:Token').txt(token).up()
-        .ele('ar:Sign').txt(sign).up()
-        .ele('ar:Cuit').txt(cuit).up()
-      .up()
-      .ele('ar:PtoVta').txt(ptoVta).up()
-      .ele('ar:CbteTipo').txt(tipo).up()
-    .up().up().end();
-
-  const res = await _soapPost(AFIP_URLS.wsfe, soap);
-  const nro = res.getElementsByTagName('CbteNro')[0]?.textContent;
-  return parseInt(nro || '0');
-}
-
-async function _soapPost(url, xml) {
-  const res = await axios.post(url, xml, { headers: { 'Content-Type': 'text/xml; charset=utf-8' }, timeout: 12000 });
-  return new DOMParser().parseFromString(res.data, 'text/xml');
-}
-
-function _tipoComprobante(cat) {
-  const c = String(cat).toUpperCase();
-  if (c === 'A') return 1;
-  if (c === 'B') return 6;
-  return 11; 
-}
-
-function _docTipo(doc) {
-  const d = String(doc || '').replace(/\D/g, '');
-  if (d.length === 11) return 80; // CUIT
-  if (d.length >= 7 && d.length <= 8) return 96; // DNI
-  return 99; // Sin identificar
-}
-
-function _fechaAFIP() {
-  return new Date().toISOString().slice(0, 10).replace(/-/g, '');
-}
-
-function _parseFechaAFIP(f) {
-  return f ? new Date(`${f.slice(0, 4)}-${f.slice(4, 6)}-${f.slice(6, 8)}`) : null;
-}
-
-module.exports = { afip_emitirComprobante };
-
-  // ════════════════════════════════════════════════════════════
 //  CONFIGURACIÓN DE RUTAS DE CERTIFICADOS (RENDER FRIENDLY)
 // ════════════════════════════════════════════════════════════
 
@@ -602,17 +544,6 @@ if (!require('fs').existsSync(keyPath)) {
   }
 }
 
-// --- HELPERS INTERNOS ---
-
-async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
-  const soap = xmlbuilder.create('soapenv:Envelope')
-    .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
-    .ele('soapenv:Body').ele('ar:FEParamGetUltCompl')
-      .ele('ar:Auth')
-        .ele('ar:Token').txt(token).up()
-        .ele('ar:Sign').txt(sign).up()
-        .ele('ar:Cuit').txt(cuit
 
 // ════════════════════════════════════════════════════════════
 //  FUNCIONES DE APOYO (REQUERIDAS POR EL MÓDULO)

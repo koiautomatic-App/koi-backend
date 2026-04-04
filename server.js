@@ -437,49 +437,51 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
 }
 
 /**
- * Obtiene el Ticket de Acceso (Token y Sign) con caché en /tmp.
+ * Obtiene o renueva el Ticket de Acceso (TA) de AFIP para un CUIT específico.
  */
-async function afip_obtenerTA(cuitEmisor) {
-  const TA_PATH = path.join('/tmp', `ta-${
-    cuitEmisor}.xml`);
+async function afip_obtenerTA(cuit) {
+  const TA_PATH = path.join(TA_CACHE_DIR, cuit, 'ta-wsfe.json');
 
-  // Intentar leer caché para no saturar WSAA
-  try {
-    const cachedXML = await fsp.readFile(TA_PATH, 'utf-8');
-    const xml = new DOMParser().parseFromString(cachedXML, 'text/xml');
-    const expTime = xml.getElementsByTagName('expirationTime')[0]?.textContent;
-    if (expTime && new Date(expTime) > new Date(Date.now() + 600000)) {
-      return {
-        token: xml.getElementsByTagName('token')[0].textContent,
-        sign: xml.getElementsByTagName('sign')[0].textContent
-      };
+  // 1. Intentar leer desde caché (archivo local)
+  if (fs.existsSync(TA_PATH)) {
+    try {
+      const data = JSON.parse(fs.readFileSync(TA_PATH, 'utf8'));
+      const exp  = new Date(data.header[1].expirationTime[0]);
+      if (exp > new Date()) {
+        return { token: data.credentials[0].token[0], sign: data.credentials[0].sign[0] };
+      }
+    } catch (e) {
+      console.error(`⚠️ TA inválido para ${cuit}, re-autenticando...`);
     }
-  } catch (e) {}
+  }
 
-  const ahora = new Date();
-  const expira = new Date(ahora.getTime() + 12 * 60 * 60 * 1000);
-  const tra = xmlbuilder.create('loginTicketRequest').att('version', '1.0')
+  // 2. Si no hay TA válido, solicitar uno nuevo al WSAA
+  const tra = xmlbuilder.create('loginTicketRequest')
+    .att('version', '1.0')
     .ele('header')
-      .ele('uniqueId').txt(Math.floor(ahora.getTime() / 1000)).up()
-      .ele('generationTime').txt(ahora.toISOString()).up()
-      .ele('expirationTime').txt(expira.toISOString()).up()
+      .ele('uniqueId').txt(Math.floor(Date.now() / 1000)).up()
+      .ele('generationTime').txt(new Date(Date.now() - 600000).toISOString()).up()
+      .ele('expirationTime').txt(new Date(Date.now() + 600000).toISOString()).up()
     .up()
     .ele('service').txt('wsfe').up()
     .end();
 
-  const traPath = path.join('/tmp', `tra-${cuitEmisor}.xml`);
-  const cmsPath = path.join('/tmp', `tra-${cuitEmisor}.cms`);
-  
+  const traPath = path.join(os.tmpdir(), `tra-${cuit}-${Date.now()}.xml`);
+  const cmsPath = path.join(os.tmpdir(), `cms-${cuit}-${Date.now()}.xml`);
+
   // Rutas a Secret Files de Render
   const keyPath = process.env.AFIP_KEY_PATH || path.resolve(__dirname, './certs/private.key');
   const crtPath = process.env.AFIP_CERT_PATH || path.resolve(__dirname, './certs/maestro.crt');
 
-  await fs.writeFile(traPath, tra);
-
   try {
-    // Firmar con OpenSSL
+    // Escribir el archivo TRA temporal
+    await fsp.writeFile(traPath, tra);
+
+    // Firmar con OpenSSL (Asegurate que Render tenga openssl instalado, que suele venir por defecto)
     execSync(`openssl cms -sign -in ${traPath} -out ${cmsPath} -signer ${crtPath} -inkey ${keyPath} -nodetach -outform DER`);
+    
     const cmsBase64 = (await fsp.readFile(cmsPath)).toString('base64');
+
     const soapWsaa = xmlbuilder.create('soapenv:Envelope')
       .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
       .att('xmlns:wsaa', 'http://wsaa.view.sua.diah.afip.gov.ar/ws/services/LoginCms')
@@ -489,14 +491,22 @@ async function afip_obtenerTA(cuitEmisor) {
     const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
     const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
     
+    if (!loginReturn) throw new Error("WSAA no devolvió loginCmsReturn");
+
+    // Guardar en caché y retornar
+    if (!fs.existsSync(path.dirname(TA_PATH))) fs.mkdirSync(path.dirname(TA_PATH), { recursive: true });
     await fsp.writeFile(TA_PATH, loginReturn);
-    const finalXml = new DOMParser().parseFromString(loginReturn, 'text/xml');
     
+    const finalXml = new DOMParser().parseFromString(loginReturn, 'text/xml');
     return {
       token: finalXml.getElementsByTagName('token')[0].textContent,
       sign: finalXml.getElementsByTagName('sign')[0].textContent
     };
+  } catch (error) {
+    console.error(`❌ Error en afip_obtenerTA para ${cuit}:`, error.message);
+    throw error;
   } finally {
+    // Limpieza de archivos temporales
     await fsp.unlink(traPath).catch(() => {});
     await fsp.unlink(cmsPath).catch(() => {});
   }

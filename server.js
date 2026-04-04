@@ -56,7 +56,7 @@ axios.defaults.httpsAgent = httpsAgent;
 // ════════════════════════════════════════════════════════════
 
 const AFIP_URLS = {
-  wsaa: 'https://servicios1.afip.gov.ar/ws/services/LoginCms',
+  wsaa: 'https://wsaa.afip.gov.ar/ws/services/LoginCms',
   wsfe: 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
 };
 

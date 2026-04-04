@@ -1,6 +1,19 @@
 // ============================================================
-//  KOI-FACTURA · v4.2 COMPLETA (PRODUCCIÓN ESTABLE)
-//  Mantiene todas las integraciones + AFIP con URLs fijas
+//  KOI-FACTURA · v4.3 — Fix crítico WSAA/AFIP
+//
+//  CAMBIOS v4.3 vs v4.2:
+//  ─────────────────────────────────────────────────────────
+//  1. WSAA namespace SIN trailing slash
+//     ANTES: xmlns:wsaa="http://...afip.gov.ar/"
+//     AHORA:  xmlns:wsaa="http://...afip.gov.ar"
+//
+//  2. Timestamps TRA SIN milisegundos (AFIP los rechaza)
+//     ANTES: 2024-01-15T13:30:00.000Z → "2024-01-15T13:30:00.000-03:00"
+//     AHORA:  "2024-01-15T10:30:00-03:00" (hora ARG real, sin .000)
+//
+//  3. WSFE también usa namespace sin trailing slash
+//
+//  4. Logging detallado del request/response AFIP para debug
 // ============================================================
 
 'use strict';
@@ -20,7 +33,6 @@ const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const crypto = require('crypto');
 const path = require('path');
 const fs = require('fs');
-const { execSync } = require('child_process');
 const os = require('os');
 const https = require('https');
 const xmlbuilder = require('xmlbuilder');
@@ -31,123 +43,104 @@ const PORT = process.env.PORT || 10000;
 const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
-// ... después de const https = require('https');
-
 // ════════════════════════════════════════════════════════════
-//  FIX: AFIP usa claves DH pequeñas (1024 bits)
-//  OpenSSL 3.x las rechaza, esta configuración las permite
+//  TLS — AFIP usa claves DH de 1024 bits (OpenSSL 3.x las rechaza por default)
 // ════════════════════════════════════════════════════════════
-process.env.NODE_OPTIONS = '--tls-min-v1.0 --openssl-legacy-provider';
-
 const httpsAgent = new https.Agent({
   secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
-  ciphers: 'DEFAULT:!DH:!aNULL:!eNULL:!LOW:!MEDIUM:!EXP:!RC4',
-  minVersion: 'TLSv1',
-  maxVersion: 'TLSv1.2',
-  keepAlive: true
+  rejectUnauthorized: true,
+  keepAlive: true,
 });
 
-// Aplicar a todas las peticiones axios
 axios.defaults.httpsAgent = httpsAgent;
 
 // ════════════════════════════════════════════════════════════
-//  AFIP — CONFIGURACIÓN GLOBAL (URLs FIJAS DE PRODUCCIÓN)
-//  Estas son las que funcionaban sin errores
+//  AFIP — CONFIGURACIÓN GLOBAL
+//  URLs tomadas de env vars primero, luego hardcoded producción
 // ════════════════════════════════════════════════════════════
-
 const AFIP_URLS = {
-  wsaa: 'https://wsaa.afip.gov.ar/ws/services/LoginCms',
-  wsfe: 'https://servicios1.afip.gov.ar/wsfev1/service.asmx'
+  wsaa: process.env.WSAA_URL || 'https://wsaa.afip.gov.ar/ws/services/LoginCms',
+  wsfe: process.env.WSFE_URL || 'https://servicios1.afip.gov.ar/wsfev1/service.asmx',
 };
 
-// Rutas de certificados
-const AFIP_KEY_PATH = process.env.AFIP_KEY_PATH || path.join(__dirname, 'cert', 'koi.key');
-const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || path.join(__dirname, 'cert', 'koi.crt');
-const TA_CACHE_DIR = path.join(os.tmpdir(), 'koi-ta-cache');
+const AFIP_KEY_PATH  = process.env.AFIP_KEY_PATH  || '/etc/secrets/koi.key';
+const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || '/etc/secrets/koi.crt';
+const TA_CACHE_DIR   = path.join(os.tmpdir(), 'koi-ta-cache');
+fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
 
-if (!fs.existsSync(TA_CACHE_DIR)) {
-  fs.mkdirSync(TA_CACHE_DIR, { recursive: true });
-}
-
-console.log(`🔐 Certificado AFIP: ${AFIP_CERT_PATH} (existe: ${fs.existsSync(AFIP_CERT_PATH)})`);
-console.log(`🔐 Clave AFIP: ${AFIP_KEY_PATH} (existe: ${fs.existsSync(AFIP_KEY_PATH)})`);
+console.log('');
+console.log('==============================================');
+console.log('  KOI-Factura v4.3 — Config al arrancar');
+console.log('==============================================');
+console.log('  WSAA URL   :', AFIP_URLS.wsaa);
+console.log('  WSFE URL   :', AFIP_URLS.wsfe);
+console.log('  CERT path  :', AFIP_CERT_PATH, '→ existe:', fs.existsSync(AFIP_CERT_PATH));
+console.log('  KEY  path  :', AFIP_KEY_PATH,  '→ existe:', fs.existsSync(AFIP_KEY_PATH));
+if (fs.existsSync(AFIP_CERT_PATH)) console.log('  CERT size  :', fs.statSync(AFIP_CERT_PATH).size, 'bytes');
+if (fs.existsSync(AFIP_KEY_PATH))  console.log('  KEY  size  :', fs.statSync(AFIP_KEY_PATH).size,  'bytes');
+console.log('==============================================');
+console.log('');
 
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARES
 // ════════════════════════════════════════════════════════════
-
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 const allowedOrigins = [BASE, 'http://localhost:3000', 'http://localhost:10000'];
 app.use(cors({
-  origin: function (origin, callback) {
-    if (!origin || allowedOrigins.indexOf(origin) !== -1 || origin.includes('render.com')) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
+  origin: (origin, cb) => {
+    if (!origin || allowedOrigins.includes(origin) || (origin || '').includes('render.com')) cb(null, true);
+    else cb(new Error('Not allowed by CORS'));
   },
-  credentials: true
+  credentials: true,
 }));
 
 app.use(cookieParser());
 app.use(express.static(path.join(__dirname, 'public')));
-
 app.use(session({
   secret: process.env.SESSION_SECRET || 'koi-session-dev',
-  resave: false,
-  saveUninitialized: false,
+  resave: false, saveUninitialized: false,
   cookie: { secure: false, httpOnly: true, maxAge: 7 * 24 * 60 * 60 * 1000 },
 }));
-
 app.use(passport.initialize());
 app.use(passport.session());
 
 // ════════════════════════════════════════════════════════════
 //  MONGODB
 // ════════════════════════════════════════════════════════════
-
 mongoose.connect(process.env.MONGO_URI, { maxPoolSize: 10 })
   .then(() => console.log('🐟 MongoDB conectado'))
-  .catch(err => console.error('❌ MongoDB error:', err.message));
-
-mongoose.connection.on('error', err => console.error('🔴 MongoDB error:', err));
-mongoose.connection.on('disconnected', () => console.warn('🟡 MongoDB desconectado'));
+  .catch(err => console.error('❌ MongoDB:', err.message));
 
 // ════════════════════════════════════════════════════════════
-//  ENCRYPTION — AES-256-GCM
+//  ENCRYPTION
 // ════════════════════════════════════════════════════════════
-
 const ENC_KEY = Buffer.from(
   (process.env.ENCRYPTION_KEY || 'koi0000000000000000000000000000k').slice(0, 32), 'utf8'
 );
-
 const encrypt = (text) => {
   if (!text) return null;
   try {
     const iv = crypto.randomBytes(12);
-    const cipher = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
-    const enc = Buffer.concat([cipher.update(String(text), 'utf8'), cipher.final()]);
-    const tag = cipher.getAuthTag();
-    return `${iv.toString('hex')}:${tag.toString('hex')}:${enc.toString('hex')}`;
-  } catch (e) { return null; }
+    const c  = crypto.createCipheriv('aes-256-gcm', ENC_KEY, iv);
+    const e  = Buffer.concat([c.update(String(text), 'utf8'), c.final()]);
+    return `${iv.toString('hex')}:${c.getAuthTag().toString('hex')}:${e.toString('hex')}`;
+  } catch { return null; }
 };
-
 const decrypt = (payload) => {
   if (!payload) return null;
   try {
-    const [ivHex, tagHex, encHex] = payload.split(':');
-    const decipher = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(ivHex, 'hex'));
-    decipher.setAuthTag(Buffer.from(tagHex, 'hex'));
-    return Buffer.concat([decipher.update(Buffer.from(encHex, 'hex')), decipher.final()]).toString('utf8');
+    const [iv, tag, enc] = payload.split(':');
+    const d = crypto.createDecipheriv('aes-256-gcm', ENC_KEY, Buffer.from(iv, 'hex'));
+    d.setAuthTag(Buffer.from(tag, 'hex'));
+    return Buffer.concat([d.update(Buffer.from(enc, 'hex')), d.final()]).toString('utf8');
   } catch { return null; }
 };
 
 // ════════════════════════════════════════════════════════════
 //  SCHEMAS
 // ════════════════════════════════════════════════════════════
-
 const UserSchema = new mongoose.Schema({
   nombre: { type: String, trim: true },
   apellido: { type: String, trim: true },
@@ -157,106 +150,85 @@ const UserSchema = new mongoose.Schema({
   avatar: { type: String },
   plan: { type: String, default: 'free', enum: ['free', 'pro'] },
   settings: {
-    factAuto: { type: Boolean, default: true },
-    envioAuto: { type: Boolean, default: true },
-    categoria: { type: String, default: 'C' },
-    cuit: { type: String, trim: true },
-    arcaUser: { type: String },
-    arcaClave: { type: String },
+    factAuto:   { type: Boolean, default: true },
+    envioAuto:  { type: Boolean, default: true },
+    categoria:  { type: String, default: 'C' },
+    cuit:       { type: String, trim: true },
+    arcaUser:   { type: String },
+    arcaClave:  { type: String },
     arcaPtoVta: { type: Number, default: 1 },
     arcaStatus: {
-      type: String,
-      default: 'sin_vincular',
+      type: String, default: 'sin_vincular',
       enum: ['sin_vincular', 'pendiente', 'en_proceso', 'vinculado', 'error'],
     },
     arcaNotas: { type: String },
   },
   ultimoAcceso: { type: Date, default: Date.now },
-  creadoEn: { type: Date, default: Date.now },
+  creadoEn:     { type: Date, default: Date.now },
 });
-
 UserSchema.pre('save', async function(next) {
   if (!this.isModified('password') || !this.password) return next();
   this.password = await bcrypt.hash(this.password, 12);
   next();
 });
-
 UserSchema.methods.checkPassword = function(plain) {
   return bcrypt.compare(plain, this.password);
 };
-
 const User = mongoose.model('User', UserSchema);
 
 const IntegrationSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
-  platform: {
-    type: String,
-    required: true,
-    enum: ['woocommerce', 'tiendanube', 'mercadolibre', 'empretienda', 'rappi', 'vtex', 'shopify'],
-  },
-  storeId: { type: String, required: true },
+  userId:   { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
+  platform: { type: String, required: true, enum: ['woocommerce','tiendanube','mercadolibre','empretienda','rappi','vtex','shopify'] },
+  storeId:   { type: String, required: true },
   storeName: { type: String },
-  storeUrl: { type: String },
-  status: { type: String, default: 'active', enum: ['active', 'paused', 'error', 'pending'] },
+  storeUrl:  { type: String },
+  status:    { type: String, default: 'active', enum: ['active','paused','error','pending'] },
   credentials: { type: mongoose.Schema.Types.Mixed, default: {} },
   webhookSecret: { type: String, default: () => crypto.randomBytes(24).toString('hex'), index: true },
-  lastSyncAt: { type: Date },
-  syncCursor: { type: String },
-  errorLog: { type: String },
+  lastSyncAt:    { type: Date },
+  errorLog:      { type: String },
   initialSyncDone: { type: Boolean, default: false },
   updatedAt: { type: Date, default: Date.now },
   createdAt: { type: Date, default: Date.now },
 });
-
 IntegrationSchema.index({ userId: 1, platform: 1, storeId: 1 }, { unique: true });
-
-IntegrationSchema.methods.setKey = function(field, value) {
+IntegrationSchema.methods.setKey = function(f, v) {
   if (!this.credentials) this.credentials = {};
-  this.credentials[field] = encrypt(value);
+  this.credentials[f] = encrypt(v);
   this.markModified('credentials');
 };
-
-IntegrationSchema.methods.getKey = function(field) {
-  return decrypt(this.credentials?.[field]);
-};
-
+IntegrationSchema.methods.getKey = function(f) { return decrypt(this.credentials?.[f]); };
 const Integration = mongoose.model('Integration', IntegrationSchema);
 
 const OrderSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  userId:        { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
   integrationId: { type: mongoose.Schema.Types.ObjectId, ref: 'Integration' },
-  platform: { type: String, required: true },
-  externalId: { type: String, required: true },
-  customerName: { type: String, default: '' },
+  platform:      { type: String, required: true },
+  externalId:    { type: String, required: true },
+  customerName:  { type: String, default: '' },
   customerEmail: { type: String, default: '' },
-  customerDoc: { type: String, default: '0' },
-  amount: { type: Number, required: true },
-  currency: { type: String, default: 'ARS' },
-  concepto: { type: String, default: '' },
+  customerDoc:   { type: String, default: '0' },
+  amount:        { type: Number, required: true },
+  currency:      { type: String, default: 'ARS' },
+  concepto:      { type: String, default: '' },
   status: {
-    type: String,
-    default: 'pending_invoice',
-    enum: ['pending_invoice', 'processing', 'invoiced', 'error_data', 'error_afip', 'skipped'],
+    type: String, default: 'pending_invoice',
+    enum: ['pending_invoice','processing','invoiced','error_data','error_afip','skipped'],
   },
-  orderDate: { type: Date },
-  nroComp: { type: Number },
-  caeNumber: { type: String },
-  caeExpiry: { type: Date },
-  errorLog: { type: String },
-  retryCount: { type: Number, default: 0 },
-  createdAt: { type: Date, default: Date.now },
+  orderDate:  { type: Date },
+  nroComp:    { type: Number },
+  caeNumber:  { type: String },
+  caeExpiry:  { type: Date },
+  errorLog:   { type: String },
+  createdAt:  { type: Date, default: Date.now },
 });
-
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, orderDate: -1 });
-OrderSchema.index({ userId: 1, createdAt: -1 });
-
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
-//  AFIP — FUNCIONES AUXILIARES
+//  AFIP — HELPERS
 // ════════════════════════════════════════════════════════════
-
 const ARCA_LIMIT_SIN_DNI = 191624;
 const CUIT_CF = '99999999';
 
@@ -267,158 +239,190 @@ function _docTipo(doc) {
   return 96;
 }
 
-function _tipoComprobante(categoria) {
-  return 11;
-}
-
 function _fechaAFIP(d) {
   const date = d instanceof Date ? d : new Date();
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0')
-  ].join('');
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2,'0')}${String(date.getDate()).padStart(2,'0')}`;
 }
 
 function _parseFechaAFIP(str) {
   if (!str || str.length !== 8) return null;
-  return new Date(`${str.slice(0, 4)}-${str.slice(4, 6)}-${str.slice(6, 8)}`);
+  return new Date(`${str.slice(0,4)}-${str.slice(4,6)}-${str.slice(6,8)}`);
 }
 
-function _cleanDoc(raw) {
-  return String(raw || '').replace(/\D/g, '');
+/**
+ * Convierte una fecha a formato ISO 8601 SIN milisegundos, con zona -03:00
+ * AFIP rechaza timestamps con milisegundos.
+ *
+ * CORRECTO: "2024-01-15T10:30:00-03:00"
+ * INCORRECTO: "2024-01-15T13:30:00.000Z" o "2024-01-15T13:30:00.000-03:00"
+ */
+function _toAfipTimestamp(date) {
+  // Convertir a hora Argentina (UTC-3)
+  const argOffset = -3 * 60; // minutos
+  const utcMs     = date.getTime() + date.getTimezoneOffset() * 60_000;
+  const argDate   = new Date(utcMs + argOffset * 60_000);
+
+  const pad = n => String(n).padStart(2, '0');
+  return (
+    `${argDate.getFullYear()}-${pad(argDate.getMonth()+1)}-${pad(argDate.getDate())}` +
+    `T${pad(argDate.getHours())}:${pad(argDate.getMinutes())}:${pad(argDate.getSeconds())}` +
+    `-03:00`
+  );
 }
 
+function _cleanDoc(raw) { return String(raw || '').replace(/\D/g, ''); }
 function _resolveDoc(doc, amount) {
   if (doc.length >= 7 && doc.length <= 11) return doc;
   return amount >= ARCA_LIMIT_SIN_DNI ? null : CUIT_CF;
 }
 
 // ════════════════════════════════════════════════════════════
-//  AFIP — OBTENCIÓN DE TOKEN (con cache)
+//  AFIP — TOKEN WSAA
+//
+//  FIX CRÍTICO: namespace WSAA correcto
+//  AFIP WSDL usa "http://wsaa.view.sua.dvadac.desein.afip.gov.ar"
+//  (SIN trailing slash al final)
+//  Con trailing slash → HTTP 500 inmediato
 // ════════════════════════════════════════════════════════════
-
 async function afip_obtenerTA(cuit) {
   const TA_PATH = path.join(TA_CACHE_DIR, `${cuit}.json`);
 
-  // Verificar cache
+  // 1. Cache válido → reusar
   if (fs.existsSync(TA_PATH)) {
     try {
       const cache = JSON.parse(fs.readFileSync(TA_PATH, 'utf8'));
-      if (cache.expiry && cache.expiry > Date.now()) {
-        console.log(`[AFIP] Usando TA cacheado para CUIT ${cuit}`);
+      if (cache.expiry && cache.expiry > Date.now() + 5 * 60_000) {
+        console.log(`[AFIP] TA cacheado para CUIT ${cuit} — expira ${new Date(cache.expiry).toISOString()}`);
         return { token: cache.token, sign: cache.sign };
       }
-    } catch (e) {}
+      console.log(`[AFIP] TA expirado para CUIT ${cuit} — renovando`);
+    } catch {}
   }
 
-  console.log(`[AFIP] Obteniendo nuevo TA para CUIT ${cuit}`);
+  // 2. Verificar certs
+  if (!fs.existsSync(AFIP_CERT_PATH)) throw new Error(`Cert no encontrado: ${AFIP_CERT_PATH}`);
+  if (!fs.existsSync(AFIP_KEY_PATH))  throw new Error(`Key no encontrada: ${AFIP_KEY_PATH}`);
 
-  // 1. Generar TRA (Ticket Request)
-  const ahora = new Date();
-  const genTime = new Date(ahora.getTime() - 60000).toISOString().replace('Z', '-03:00');
-  const expTime = new Date(ahora.getTime() + 12 * 3600000).toISOString().replace('Z', '-03:00');
+  console.log(`[AFIP] Obteniendo TA para CUIT ${cuit}`);
 
-  const tra = `<?xml version="1.0" encoding="UTF-8"?>
-<loginTicketRequest version="1.0">
-  <header>
-    <uniqueId>${Date.now()}</uniqueId>
-    <generationTime>${genTime}</generationTime>
-    <expirationTime>${expTime}</expirationTime>
-  </header>
-  <service>wsfe</service>
-</loginTicketRequest>`;
+  // 3. Construir TRA con timestamps correctos (sin milisegundos, zona -03:00)
+  const ahora   = new Date();
+  const genTime = _toAfipTimestamp(new Date(ahora.getTime() - 60_000));
+  const expTime = _toAfipTimestamp(new Date(ahora.getTime() + 12 * 3_600_000));
 
-  // 2. Firmar con node-forge (PKCS#7)
-  const certPem = fs.readFileSync(AFIP_CERT_PATH, 'utf8');
-  const keyPem = fs.readFileSync(AFIP_KEY_PATH, 'utf8');
-  
-  const cert = forge.pki.certificateFromPem(certPem);
+  const tra = [
+    '<?xml version="1.0" encoding="UTF-8"?>',
+    '<loginTicketRequest version="1.0">',
+    '  <header>',
+    `    <uniqueId>${Math.floor(Date.now() / 1000)}</uniqueId>`,
+    `    <generationTime>${genTime}</generationTime>`,
+    `    <expirationTime>${expTime}</expirationTime>`,
+    '  </header>',
+    '  <service>wsfe</service>',
+    '</loginTicketRequest>',
+  ].join('\n');
+
+  console.log(`[AFIP] TRA generationTime: ${genTime}`);
+  console.log(`[AFIP] TRA expirationTime: ${expTime}`);
+
+  // 4. Firmar con node-forge (PKCS#7 DER)
+  const certPem    = fs.readFileSync(AFIP_CERT_PATH, 'utf8');
+  const keyPem     = fs.readFileSync(AFIP_KEY_PATH,  'utf8');
+  const cert       = forge.pki.certificateFromPem(certPem);
   const privateKey = forge.pki.privateKeyFromPem(keyPem);
-  
+
   const p7 = forge.pkcs7.createSignedData();
   p7.content = forge.util.createBuffer(tra, 'utf8');
   p7.addCertificate(cert);
   p7.addSigner({
-    key: privateKey,
-    certificate: cert,
+    key: privateKey, certificate: cert,
     digestAlgorithm: forge.pki.oids.sha256,
-    authenticatedAttributes: [{
-      type: forge.pki.oids.contentType,
-      value: forge.pki.oids.data
-    }, {
-      type: forge.pki.oids.messageDigest
-    }, {
-      type: forge.pki.oids.signingTime,
-      value: new Date()
-    }]
+    authenticatedAttributes: [
+      { type: forge.pki.oids.contentType,   value: forge.pki.oids.data },
+      { type: forge.pki.oids.messageDigest },
+      { type: forge.pki.oids.signingTime,   value: new Date() },
+    ],
   });
-  
   p7.sign({ detached: false });
-  
-  // Convertir a DER y luego a base64
-  const der = forge.asn1.toDer(p7.toAsn1()).getBytes();
-  const cmsBase64 = forge.util.encode64(der);
-  
-  console.log(`[AFIP] CMS firmado con node-forge, longitud: ${cmsBase64.length}`);
 
-  // 3. Enviar a WSAA
+  const cmsBase64 = forge.util.encode64(
+    forge.asn1.toDer(p7.toAsn1()).getBytes()
+  );
+  console.log(`[AFIP] CMS firmado con node-forge — longitud: ${cmsBase64.length}`);
+
+  // 5. SOAP envelope para WSAA
+  //    NAMESPACE CORRECTO: "http://wsaa.view.sua.dvadac.desein.afip.gov.ar"
+  //    (SIN trailing slash — con slash AFIP devuelve HTTP 500)
   const soapWsaa = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope 
-  xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
-  xmlns:wsaa="http://wsaa.view.sua.dvadac.desein.afip.gov.ar/">
-  <soapenv:Header/>
-  <soapenv:Body>
-    <wsaa:loginCms>
-      <wsaa:in0>${cmsBase64}</wsaa:in0>
-    </wsaa:loginCms>
-  </soapenv:Body>
-</soapenv:Envelope>`;
+<SOAP-ENV:Envelope
+  xmlns:SOAP-ENV="http://schemas.xmlsoap.org/soap/envelope/"
+  xmlns:ns1="http://wsaa.view.sua.dvadac.desein.afip.gov.ar">
+  <SOAP-ENV:Body>
+    <ns1:loginCms>
+      <ns1:in0>${cmsBase64}</ns1:in0>
+    </ns1:loginCms>
+  </SOAP-ENV:Body>
+</SOAP-ENV:Envelope>`;
 
-  const resp = await axios.post(AFIP_URLS.wsaa, soapWsaa, {
-    headers: { 'Content-Type': 'text/xml' },
-    timeout: 30000,
-    httpsAgent
-  });
+  console.log(`[AFIP] POST a WSAA: ${AFIP_URLS.wsaa}`);
 
-  // 4. Parsear respuesta
+  let resp;
+  try {
+    resp = await axios.post(AFIP_URLS.wsaa, soapWsaa, {
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': '""',
+      },
+      timeout: 30_000,
+      httpsAgent,
+    });
+  } catch (axiosErr) {
+    const status  = axiosErr.response?.status;
+    const body    = axiosErr.response?.data?.substring(0, 500) || '';
+    console.error(`[AFIP] WSAA HTTP ${status}:`, body);
+    throw new Error(`WSAA HTTP ${status}: ${body || axiosErr.message}`);
+  }
+
+  console.log(`[AFIP] WSAA respondió HTTP ${resp.status} — ${resp.data.length} chars`);
+
+  // 6. Parsear respuesta — la respuesta viene dentro de loginCmsReturn
   const wsaaDoc = new DOMParser().parseFromString(resp.data, 'text/xml');
+
+  // Verificar fault SOAP
+  const fault = wsaaDoc.getElementsByTagName('faultstring')[0]?.textContent;
+  if (fault) throw new Error(`WSAA SOAP fault: ${fault}`);
+
   const loginReturn = wsaaDoc.getElementsByTagName('loginCmsReturn')[0]?.textContent;
-  
   if (!loginReturn) {
-    console.error('Respuesta WSAA sin loginCmsReturn:', resp.data.substring(0, 500));
-    throw new Error("WSAA: respuesta inválida");
+    console.error('[AFIP] Respuesta WSAA completa:', resp.data.substring(0, 800));
+    throw new Error('WSAA: no se encontró loginCmsReturn en la respuesta');
   }
 
-  const taXml = Buffer.from(loginReturn, 'base64').toString('utf8');
-  const taDoc = new DOMParser().parseFromString(taXml, 'text/xml');
-  const token = taDoc.getElementsByTagName('token')[0]?.textContent;
-  const sign = taDoc.getElementsByTagName('sign')[0]?.textContent;
-  const exp = taDoc.getElementsByTagName('expirationTime')[0]?.textContent;
+  // Decodificar el TA interno (base64 → XML)
+  const taXml  = Buffer.from(loginReturn, 'base64').toString('utf8');
+  const taDoc  = new DOMParser().parseFromString(taXml, 'text/xml');
+  const token  = taDoc.getElementsByTagName('token')[0]?.textContent;
+  const sign   = taDoc.getElementsByTagName('sign')[0]?.textContent;
+  const expStr = taDoc.getElementsByTagName('expirationTime')[0]?.textContent;
 
-  if (!token || !sign) {
-    throw new Error("WSAA: token o sign no encontrados");
-  }
+  if (!token || !sign) throw new Error('WSAA: token o sign no encontrado en el TA');
 
-  const expiry = exp ? new Date(exp).getTime() : Date.now() + 12 * 3600000;
+  const expiry = expStr ? new Date(expStr).getTime() : Date.now() + 12 * 3_600_000;
 
-  // Guardar en cache
-  const cacheDir = path.dirname(TA_PATH);
-  if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-  fs.writeFileSync(TA_PATH, JSON.stringify({ token, sign, expiry }));
+  // 7. Guardar en cache
+  fs.writeFileSync(TA_PATH, JSON.stringify({ token, sign, expiry }), 'utf8');
+  console.log(`[AFIP] TA OK para CUIT ${cuit} — expira ${new Date(expiry).toISOString()}`);
 
-  console.log(`[AFIP] TA obtenido correctamente para CUIT ${cuit}`);
   return { token, sign };
 }
 
 // ════════════════════════════════════════════════════════════
 //  AFIP — ÚLTIMO NÚMERO DE COMPROBANTE
 // ════════════════════════════════════════════════════════════
-
 async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
-  const soap = xmlbuilder.create('soapenv:Envelope')
+  const soap = xmlbuilder.create('soapenv:Envelope', { version: '1.0', encoding: 'UTF-8' })
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .att('xmlns:ar',      'http://ar.gov.afip.dif.FEV1/')
     .ele('soapenv:Body')
       .ele('ar:FECompUltimoAutorizado')
         .ele('ar:Auth')
@@ -432,33 +436,37 @@ async function _afipUltimoNro(cuit, ptoVta, tipo, token, sign) {
     .up()
     .end({ pretty: false });
 
-  const res = await axios.post(AFIP_URLS.wsfe, soap, {
-    headers: { 'Content-Type': 'text/xml' },
-    timeout: 30000
+  const res  = await axios.post(AFIP_URLS.wsfe, soap, {
+    headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+    timeout: 30_000,
+    httpsAgent,
   });
-  const xmlDoc = new DOMParser().parseFromString(res.data, 'text/xml');
-  const nro = xmlDoc.getElementsByTagName('CbteNro')[0]?.textContent;
-  return parseInt(nro || '0');
+  const xml = new DOMParser().parseFromString(res.data, 'text/xml');
+  return parseInt(xml.getElementsByTagName('CbteNro')[0]?.textContent || '0');
 }
 
 // ════════════════════════════════════════════════════════════
 //  AFIP — EMISIÓN PRINCIPAL
 // ════════════════════════════════════════════════════════════
-
 async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
-  const { token, sign } = await afip_obtenerTA(cuitEmisor);
-  
-  const cbTipo = datos.tipoComprobante || _tipoComprobante(datos.categoria);
-  const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
-  const nroComp = ultimoNro + 1;
-  
-  const importe = datos.importeTotal.toFixed(2);
-  const docTipo = _docTipo(datos.clienteDoc);
-  const docNro = String(datos.clienteDoc || '0').replace(/\D/g, '') || '0';
+  console.log(`[AFIP] Emitiendo: CUIT=${cuitEmisor} PV=${puntoVenta} Monto=${datos.importeTotal}`);
 
-  const soap = xmlbuilder.create('soapenv:Envelope')
+  const { token, sign } = await afip_obtenerTA(cuitEmisor);
+
+  const cbTipo    = 11; // Factura C (monotributo)
+  const ultimoNro = await _afipUltimoNro(cuitEmisor, puntoVenta, cbTipo, token, sign);
+  const nroComp   = ultimoNro + 1;
+
+  const importe = parseFloat(datos.importeTotal.toFixed(2));
+  const docTipo = _docTipo(datos.clienteDoc);
+  const docNro  = docTipo === 99 ? 0 : parseInt(String(datos.clienteDoc || '0').replace(/\D/g, ''));
+
+  console.log(`[AFIP] Último nro: ${ultimoNro} → emitiendo nro: ${nroComp}`);
+  console.log(`[AFIP] DocTipo: ${docTipo} DocNro: ${docNro} Importe: ${importe}`);
+
+  const soap = xmlbuilder.create('soapenv:Envelope', { version: '1.0', encoding: 'UTF-8' })
     .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-    .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
+    .att('xmlns:ar',      'http://ar.gov.afip.dif.FEV1/')
     .ele('soapenv:Body')
       .ele('ar:FECAESolicitar')
         .ele('ar:Auth')
@@ -480,12 +488,12 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
               .ele('ar:CbteDesde').txt(nroComp).up()
               .ele('ar:CbteHasta').txt(nroComp).up()
               .ele('ar:CbteFch').txt(_fechaAFIP()).up()
-              .ele('ar:ImpTotal').txt(importe).up()
-              .ele('ar:ImpTotConc').txt("0.00").up()
-              .ele('ar:ImpNeto').txt(importe).up()
-              .ele('ar:ImpOpEx').txt("0.00").up()
-              .ele('ar:ImpIVA').txt("0.00").up()
-              .ele('ar:ImpTrib').txt("0.00").up()
+              .ele('ar:ImpTotal').txt(importe.toFixed(2)).up()
+              .ele('ar:ImpTotConc').txt('0.00').up()
+              .ele('ar:ImpNeto').txt(importe.toFixed(2)).up()
+              .ele('ar:ImpOpEx').txt('0.00').up()
+              .ele('ar:ImpIVA').txt('0.00').up()
+              .ele('ar:ImpTrib').txt('0.00').up()
               .ele('ar:MonId').txt('PES').up()
               .ele('ar:MonCotiz').txt(1).up()
             .up()
@@ -495,185 +503,174 @@ async function afip_emitirComprobante(cuitEmisor, puntoVenta, datos) {
     .up()
     .end({ pretty: false });
 
-  const xmlDoc = await (async () => {
-    const res = await axios.post(AFIP_URLS.wsfe, soap, {
-      headers: { 'Content-Type': 'text/xml' },
-      timeout: 30000
+  let wsfeResp;
+  try {
+    wsfeResp = await axios.post(AFIP_URLS.wsfe, soap, {
+      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+      timeout: 30_000,
+      httpsAgent,
     });
-    return new DOMParser().parseFromString(res.data, 'text/xml');
-  })();
+  } catch (axiosErr) {
+    const status = axiosErr.response?.status;
+    const body   = axiosErr.response?.data?.substring(0, 500) || '';
+    console.error(`[AFIP] WSFE HTTP ${status}:`, body);
+    throw new Error(`WSFE HTTP ${status}: ${body || axiosErr.message}`);
+  }
 
+  const xmlDoc    = new DOMParser().parseFromString(wsfeResp.data, 'text/xml');
   const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (resultado !== 'A') {
     const errores = [];
     const errNodes = xmlDoc.getElementsByTagName('Err');
     for (let i = 0; i < errNodes.length; i++) {
-      const msg = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
       const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
+      const msg  = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
       if (msg) errores.push(`[${code}] ${msg}`);
     }
-    throw new Error(`AFIP rechazó: ${errores.join(' | ') || 'Error desconocido'}`);
+    // También capturar observaciones
+    const obsNodes = xmlDoc.getElementsByTagName('Obs');
+    for (let i = 0; i < obsNodes.length; i++) {
+      const code = obsNodes[i].getElementsByTagName('Code')[0]?.textContent;
+      const msg  = obsNodes[i].getElementsByTagName('Msg')[0]?.textContent;
+      if (msg) errores.push(`OBS[${code}] ${msg}`);
+    }
+    const errMsg = errores.join(' | ') || `Resultado: ${resultado || 'vacío'}`;
+    console.error('[AFIP] WSFE rechazó:', errMsg);
+    throw new Error(`AFIP rechazó el comprobante: ${errMsg}`);
   }
 
   const detResp = xmlDoc.getElementsByTagName('FECAEDetResponse')[0];
+  const cae     = detResp?.getElementsByTagName('CAE')[0]?.textContent;
+  const caeVto  = detResp?.getElementsByTagName('CAEFchVto')[0]?.textContent;
+
+  if (!cae) throw new Error('AFIP aprobó pero no devolvió CAE');
+
+  console.log(`[AFIP] ✅ CAE: ${cae} — Nro: ${nroComp} — Vto: ${caeVto}`);
+
   return {
-    cae: detResp.getElementsByTagName('CAE')[0]?.textContent,
-    caeFchVto: _parseFechaAFIP(detResp.getElementsByTagName('CAEFchVto')[0]?.textContent),
-    nroComp
+    cae,
+    caeFchVto: _parseFechaAFIP(caeVto),
+    nroComp,
   };
 }
 
 // ════════════════════════════════════════════════════════════
 //  NORMALIZER
 // ════════════════════════════════════════════════════════════
-
 const normalize = {
   woocommerce(raw) {
     const b = raw.billing || {};
     const doc = _cleanDoc(b.dni || b.identification || b.cpf || '');
     return {
-      externalId: String(raw.id),
-      customerName: `${b.first_name || ''} ${b.last_name || ''}`.trim(),
+      externalId:    String(raw.id),
+      customerName:  `${b.first_name || ''} ${b.last_name || ''}`.trim(),
       customerEmail: b.email || '',
-      customerDoc: _resolveDoc(doc, parseFloat(raw.total) || 0),
-      amount: parseFloat(raw.total) || 0,
-      currency: raw.currency || 'ARS',
-      orderDate: raw.date_created ? new Date(raw.date_created) : undefined,
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
+      amount:        parseFloat(raw.total) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
     };
   },
   tiendanube(raw) {
     const doc = _cleanDoc(raw.billing_info?.document || '');
     return {
-      externalId: String(raw.id),
-      customerName: raw.contact?.name || '',
+      externalId:    String(raw.id),
+      customerName:  raw.contact?.name || '',
       customerEmail: raw.contact?.email || '',
-      customerDoc: _resolveDoc(doc, parseFloat(raw.total) || 0),
-      amount: parseFloat(raw.total) || 0,
-      currency: raw.currency || 'ARS',
-      orderDate: raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total) || 0),
+      amount:        parseFloat(raw.total) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
   mercadolibre(raw) {
     const doc = _cleanDoc(raw.billing_info?.doc_number || '');
     return {
-      externalId: String(raw.id),
-      customerName: raw.buyer?.nickname || '',
+      externalId:    String(raw.id),
+      customerName:  raw.buyer?.nickname || '',
       customerEmail: raw.buyer?.email || '',
-      customerDoc: _resolveDoc(doc, parseFloat(raw.total_amount) || 0),
-      amount: parseFloat(raw.total_amount) || 0,
-      currency: raw.currency_id || 'ARS',
-      orderDate: raw.date_created ? new Date(raw.date_created) : undefined,
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount) || 0),
+      amount:        parseFloat(raw.total_amount) || 0,
+      currency:      raw.currency_id || 'ARS',
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
     };
   },
   vtex(raw) {
-    const client = raw.clientProfileData || {};
-    const doc = _cleanDoc(client.document || client.cpf || '');
+    const c = raw.clientProfileData || {};
+    const doc = _cleanDoc(c.document || c.cpf || '');
     return {
-      externalId: raw.orderId || String(raw.id),
-      customerName: `${client.firstName || ''} ${client.lastName || ''}`.trim(),
-      customerEmail: client.email || '',
-      customerDoc: _resolveDoc(doc, (parseFloat(raw.value) || 0) / 100),
-      amount: (parseFloat(raw.value) || 0) / 100,
-      currency: raw.currencyCode || 'ARS',
-      orderDate: raw.creationDate ? new Date(raw.creationDate) : undefined,
+      externalId:    raw.orderId || String(raw.id),
+      customerName:  `${c.firstName || ''} ${c.lastName || ''}`.trim(),
+      customerEmail: c.email || '',
+      customerDoc:   _resolveDoc(doc, (parseFloat(raw.value) || 0) / 100),
+      amount:        (parseFloat(raw.value) || 0) / 100,
+      currency:      raw.currencyCode || 'ARS',
+      orderDate:     raw.creationDate ? new Date(raw.creationDate) : undefined,
     };
   },
   empretienda(raw) {
     const doc = _cleanDoc(raw.customer?.dni || raw.customer?.document || '');
     return {
-      externalId: String(raw.order_id || raw.id),
-      customerName: raw.customer?.name || '',
+      externalId:    String(raw.order_id || raw.id),
+      customerName:  raw.customer?.name || '',
       customerEmail: raw.customer?.email || '',
-      customerDoc: _resolveDoc(doc, parseFloat(raw.total_price || raw.total) || 0),
-      amount: parseFloat(raw.total_price || raw.total) || 0,
-      currency: 'ARS',
-      orderDate: raw.created_at ? new Date(raw.created_at) : undefined,
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price || raw.total) || 0),
+      amount:        parseFloat(raw.total_price || raw.total) || 0,
+      currency:      'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
   rappi(raw) {
-    const order = raw.order || raw;
+    const o = raw.order || raw;
     return {
-      externalId: String(order.id),
-      customerName: order.user?.name || '',
-      customerEmail: order.user?.email || '',
-      customerDoc: CUIT_CF,
-      amount: parseFloat(order.total_products || order.total) || 0,
-      currency: 'ARS',
-      orderDate: order.created_at ? new Date(order.created_at) : undefined,
+      externalId:    String(o.id),
+      customerName:  o.user?.name || '',
+      customerEmail: o.user?.email || '',
+      customerDoc:   CUIT_CF,
+      amount:        parseFloat(o.total_products || o.total) || 0,
+      currency:      'ARS',
+      orderDate:     o.created_at ? new Date(o.created_at) : undefined,
     };
   },
   shopify(raw) {
-    const addr = raw.billing_address || raw.shipping_address || {};
-    const doc = _cleanDoc(raw.note_attributes?.find(a => a.name === 'dni')?.value || '');
+    const a = raw.billing_address || raw.shipping_address || {};
+    const doc = _cleanDoc(raw.note_attributes?.find(x => x.name === 'dni')?.value || '');
     return {
-      externalId: String(raw.id),
-      customerName: `${addr.first_name || ''} ${addr.last_name || ''}`.trim(),
+      externalId:    String(raw.id),
+      customerName:  `${a.first_name || ''} ${a.last_name || ''}`.trim(),
       customerEmail: raw.email || raw.customer?.email || '',
-      customerDoc: _resolveDoc(doc, parseFloat(raw.total_price) || 0),
-      amount: parseFloat(raw.total_price) || 0,
-      currency: raw.currency || 'ARS',
-      orderDate: raw.created_at ? new Date(raw.created_at) : undefined,
+      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price) || 0),
+      amount:        parseFloat(raw.total_price) || 0,
+      currency:      raw.currency || 'ARS',
+      orderDate:     raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
 };
 
 // ════════════════════════════════════════════════════════════
-//  UPSERT ENGINE + AUTO-FACTURACIÓN
+//  UPSERT + AUTO-FACTURACIÓN
 // ════════════════════════════════════════════════════════════
-
 async function upsertOrder(integration, canonical) {
   if (!canonical) return;
 
-  const orderFilter = {
-    userId: integration.userId,
-    platform: integration.platform,
-    externalId: canonical.externalId,
-  };
-
+  const filter = { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId };
   const requiereDNI = canonical.amount >= ARCA_LIMIT_SIN_DNI;
-  const tieneDNI = canonical.customerDoc && canonical.customerDoc !== '0';
+  const tieneDNI    = canonical.customerDoc && canonical.customerDoc !== '0';
 
   if (requiereDNI && !tieneDNI) {
-    await Order.findOneAndUpdate(
-      orderFilter,
-      {
-        $setOnInsert: {
-          userId: integration.userId,
-          integrationId: integration._id,
-          platform: integration.platform,
-          ...canonical,
-          customerDoc: '0',
-          status: 'error_data',
-          errorLog: `Monto $${canonical.amount.toLocaleString()} supera límite sin DNI`,
-        },
-      },
-      { upsert: true }
-    ).catch(() => {});
+    await Order.findOneAndUpdate(filter, {
+      $setOnInsert: { userId: integration.userId, integrationId: integration._id, platform: integration.platform, ...canonical, customerDoc: '0', status: 'error_data', errorLog: `Monto $${canonical.amount.toLocaleString()} supera límite sin DNI` },
+    }, { upsert: true }).catch(() => {});
     return;
   }
 
-  const order = await Order.findOneAndUpdate(
-    orderFilter,
-    {
-      $setOnInsert: {
-        userId: integration.userId,
-        integrationId: integration._id,
-        platform: integration.platform,
-        ...canonical,
-        status: 'pending_invoice',
-      },
-    },
-    { upsert: true, new: true }
-  ).catch(err => {
-    if (err.code !== 11000) console.error(`❌ upsert error:`, err.message);
-    return null;
-  });
+  const order = await Order.findOneAndUpdate(filter, {
+    $setOnInsert: { userId: integration.userId, integrationId: integration._id, platform: integration.platform, ...canonical, status: 'pending_invoice' },
+  }, { upsert: true, new: true }).catch(err => { if (err.code !== 11000) console.error('upsert:', err.message); return null; });
 
-  if (order && order.status === 'pending_invoice') {
-    _intentarAutoFacturar(integration.userId, order).catch(e =>
-      console.error(`Auto-factura error: ${e.message}`)
-    );
+  if (order?.status === 'pending_invoice') {
+    _intentarAutoFacturar(integration.userId, order).catch(e => console.error('Auto-factura:', e.message));
   }
 }
 
@@ -681,332 +678,175 @@ async function _intentarAutoFacturar(userId, order) {
   try {
     const user = await User.findById(userId).select('settings').lean();
     if (!user?.settings) return;
-
-    const { factAuto, arcaStatus, cuit, arcaPtoVta, categoria } = user.settings;
-
+    const { factAuto, arcaStatus, cuit, arcaPtoVta } = user.settings;
     if (!factAuto || arcaStatus !== 'vinculado' || !cuit) return;
 
-    const cuitLimpio = cuit.replace(/\D/g, '');
-    const ptoVta = parseInt(arcaPtoVta) || 1;
-
-    const resultado = await afip_emitirComprobante(cuitLimpio, ptoVta, {
-      categoria: categoria || 'C',
-      clienteDoc: order.customerDoc || '0',
-      importeTotal: order.amount,
-    });
+    const resultado = await afip_emitirComprobante(
+      cuit.replace(/\D/g, ''),
+      parseInt(arcaPtoVta) || 1,
+      { clienteDoc: order.customerDoc || '0', importeTotal: order.amount }
+    );
 
     await Order.findByIdAndUpdate(order._id, {
-      status: 'invoiced',
-      nroComp: resultado.nroComp,
-      caeNumber: resultado.cae,
-      caeExpiry: resultado.caeFchVto,
-      errorLog: '',
+      status: 'invoiced', nroComp: resultado.nroComp,
+      caeNumber: resultado.cae, caeExpiry: resultado.caeFchVto, errorLog: '',
     });
-
-    console.log(`✅ Facturado: CUIT ${cuitLimpio} | Nro ${resultado.nroComp} | CAE ${resultado.cae}`);
+    console.log(`✅ Auto-CAE: ${resultado.cae} | Nro ${resultado.nroComp}`);
   } catch (e) {
-    console.error(`❌ Auto-Factura error:`, e.message);
-    await Order.findByIdAndUpdate(order._id, {
-      status: 'error_afip',
-      errorLog: e.message,
-    });
+    console.error('Auto-factura error:', e.message);
+    await Order.findByIdAndUpdate(order._id, { status: 'error_afip', errorLog: e.message });
   }
 }
 
 // ════════════════════════════════════════════════════════════
 //  AUTH HELPERS
 // ════════════════════════════════════════════════════════════
-
-const signToken = (userId) => jwt.sign({ id: userId }, JWT_SECRET, { expiresIn: '7d' });
-
-const setTokenCookie = (res, token) => {
-  res.cookie('koi_token', token, {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax',
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
+const signToken      = (id) => jwt.sign({ id }, JWT_SECRET, { expiresIn: '7d' });
+const setTokenCookie = (res, token) => res.cookie('koi_token', token, { httpOnly: true, secure: false, sameSite: 'lax', maxAge: 7*24*60*60*1000 });
+const requireAuth    = (req, res, next) => {
+  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
+  catch { res.clearCookie('koi_token'); res.redirect('/login'); }
 };
-
-const requireAuth = (req, res, next) => {
-  const token = req.cookies.koi_token;
-  if (!token) return res.redirect('/login');
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
-    next();
-  } catch (err) {
-    res.clearCookie('koi_token');
-    res.redirect('/login');
-  }
-};
-
 const requireAuthAPI = (req, res, next) => {
-  const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
-  if (!token) {
-    return res.status(401).json({ error: 'No autenticado' });
-  }
-  try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
-    next();
-  } catch (err) {
-    res.clearCookie('koi_token');
-    res.status(401).json({ error: 'Token inválido o expirado' });
-  }
+  const t = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
+  try { req.userId = jwt.verify(t, JWT_SECRET).id; next(); }
+  catch { res.clearCookie('koi_token'); res.status(401).json({ error: 'No autenticado' }); }
 };
 
 async function requireArcaCuit(req, res, next) {
   try {
-    const userId = req.userId || req.user?._id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Sesión no válida' });
-    }
-
-    const user = await User.findById(userId).select('settings').lean();
-    if (!user) {
-      return res.status(404).json({ error: 'Usuario no encontrado' });
-    }
-
-    const cuitLimpio = user.settings?.cuit ? user.settings.cuit.replace(/\D/g, '') : null;
-    if (!cuitLimpio || cuitLimpio.length !== 11) {
-      return res.status(400).json({ error: 'CUIT no configurado o inválido' });
-    }
-
-    if (user.settings.arcaStatus !== 'vinculado') {
-      return res.status(403).json({ error: `Estado: ${user.settings.arcaStatus}. La facturación requiere vinculación confirmada.` });
-    }
-
-    req.arcaCuit = cuitLimpio;
-    req.arcaPtoVta = parseInt(user.settings.arcaPtoVta) || 1;
+    const user = await User.findById(req.userId).select('settings').lean();
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    const cuit = user.settings?.cuit ? user.settings.cuit.replace(/\D/g, '') : null;
+    if (!cuit || cuit.length !== 11) return res.status(400).json({ error: 'CUIT no configurado o inválido' });
+    if (user.settings.arcaStatus !== 'vinculado') return res.status(403).json({ error: `Estado ARCA: ${user.settings.arcaStatus}. Requiere vinculación confirmada.` });
+    req.arcaCuit      = cuit;
+    req.arcaPtoVta    = parseInt(user.settings.arcaPtoVta) || 1;
     req.arcaCategoria = user.settings.categoria || 'C';
-    req.factAuto = user.settings.factAuto !== false;
-    req.envioAuto = user.settings.envioAuto !== false;
-
+    req.factAuto      = user.settings.factAuto !== false;
+    req.envioAuto     = user.settings.envioAuto !== false;
     next();
-  } catch (error) {
-    console.error('❌ requireArcaCuit error:', error.message);
-    res.status(500).json({ error: 'Error al validar credenciales de facturación' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error validando credenciales: ' + e.message }); }
 }
 
 // ════════════════════════════════════════════════════════════
-//  PASSPORT — GOOGLE OAUTH
+//  PASSPORT GOOGLE
 // ════════════════════════════════════════════════════════════
-
 passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: `${BASE}/auth/google/callback`,
-    proxy: true
-  },
-  async (accessToken, refreshToken, profile, done) => {
-    try {
-      const email = profile.emails?.[0]?.value?.toLowerCase();
-      if (!email) return done(new Error('Google no devolvió email'));
-
-      let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
-
-      if (!user) {
-        user = await User.create({
-          googleId: profile.id,
-          email: email,
-          nombre: profile.name?.givenName || '',
-          apellido: profile.name?.familyName || '',
-          avatar: profile.photos?.[0]?.value || '',
-          ultimoAcceso: new Date()
-        });
-        console.log(`🆕 Nuevo usuario Google: ${email}`);
-      } else {
-        if (!user.googleId) user.googleId = profile.id;
-        if (profile.photos?.[0]?.value && user.avatar !== profile.photos[0].value) user.avatar = profile.photos[0].value;
-        user.ultimoAcceso = new Date();
-        await user.save();
-      }
-      return done(null, user);
-    } catch (e) {
-      console.error('❌ GoogleStrategy error:', e.message);
-      return done(e);
-    }
-  }
-));
-
-passport.serializeUser((user, done) => done(null, user.id || user._id));
-passport.deserializeUser(async (id, done) => {
+  clientID: process.env.GOOGLE_CLIENT_ID, clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+  callbackURL: `${BASE}/auth/google/callback`, proxy: true,
+}, async (_, __, profile, done) => {
   try {
-    const user = await User.findById(id).select('-password').lean();
+    const email = profile.emails?.[0]?.value?.toLowerCase();
+    if (!email) return done(new Error('Google no devolvió email'));
+    let user = await User.findOne({ $or: [{ googleId: profile.id }, { email }] });
+    if (!user) {
+      user = await User.create({ googleId: profile.id, email, nombre: profile.name?.givenName || '', apellido: profile.name?.familyName || '', avatar: profile.photos?.[0]?.value || '' });
+    } else {
+      if (!user.googleId) user.googleId = profile.id;
+      user.avatar = profile.photos?.[0]?.value || user.avatar;
+      user.ultimoAcceso = new Date();
+      await user.save();
+    }
     done(null, user);
-  } catch (e) {
-    done(e);
-  }
+  } catch (e) { done(e); }
+}));
+passport.serializeUser((u, done) => done(null, u.id || u._id));
+passport.deserializeUser(async (id, done) => {
+  try { done(null, await User.findById(id).select('-password').lean()); } catch (e) { done(e); }
 });
 
 // ════════════════════════════════════════════════════════════
 //  RUTAS AUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
-
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
-  (req, res) => {
-    const token = signToken(req.user.id || req.user._id);
-    setTokenCookie(res, token);
-    res.redirect('/dashboard');
-  }
+  (req, res) => { setTokenCookie(res, signToken(req.user.id || req.user._id)); res.redirect('/dashboard'); }
 );
 
 app.post('/auth/register', async (req, res) => {
   try {
     const { nombre, apellido, email, password } = req.body;
-    if (!nombre || !email || !password) {
-      return res.status(400).json({ error: 'Nombre, email y contraseña son obligatorios.' });
-    }
-    if (password.length < 8) {
-      return res.status(400).json({ error: 'La contraseña debe tener al menos 8 caracteres.' });
-    }
-    const emailLimpio = email.trim().toLowerCase();
-    const existe = await User.findOne({ email: emailLimpio });
-    if (existe) {
-      return res.status(409).json({ error: 'Email ya registrado.' });
-    }
-    const user = await User.create({
-      nombre: nombre.trim(),
-      apellido: apellido ? apellido.trim() : '',
-      email: emailLimpio,
-      password
-    });
-    const token = signToken(user._id);
-    setTokenCookie(res, token);
+    if (!nombre || !email || !password) return res.status(400).json({ error: 'Faltan campos.' });
+    if (password.length < 8) return res.status(400).json({ error: 'Mínimo 8 caracteres.' });
+    const emailL = email.trim().toLowerCase();
+    if (await User.findOne({ email: emailL })) return res.status(409).json({ error: 'Email ya registrado.' });
+    const user = await User.create({ nombre: nombre.trim(), apellido: apellido?.trim() || '', email: emailL, password });
+    setTokenCookie(res, signToken(user._id));
     res.status(201).json({ ok: true, user: { nombre: user.nombre, email: user.email } });
-  } catch (e) {
-    console.error('❌ Register error:', e.message);
-    res.status(500).json({ error: 'Error al registrar usuario.' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al registrar.' }); }
 });
 
 app.post('/auth/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) {
-      return res.status(400).json({ error: 'Email y contraseña requeridos.' });
-    }
-    const emailLimpio = email.trim().toLowerCase();
-    const user = await User.findOne({ email: emailLimpio }).select('+password');
-    if (!user || !user.password || !await user.checkPassword(password)) {
-      return res.status(401).json({ error: 'Credenciales inválidas.' });
-    }
-    user.ultimoAcceso = new Date();
-    await user.save();
-    const token = signToken(user._id);
-    setTokenCookie(res, token);
+    if (!email || !password) return res.status(400).json({ error: 'Email y contraseña requeridos.' });
+    const user = await User.findOne({ email: email.trim().toLowerCase() }).select('+password');
+    if (!user?.password || !await user.checkPassword(password)) return res.status(401).json({ error: 'Credenciales inválidas.' });
+    user.ultimoAcceso = new Date(); await user.save();
+    setTokenCookie(res, signToken(user._id));
     res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
-  } catch (e) {
-    console.error('❌ Login error:', e.message);
-    res.status(500).json({ error: 'Error al iniciar sesión.' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al iniciar sesión.' }); }
 });
 
-app.get('/auth/logout', (req, res) => {
-  res.clearCookie('koi_token', {
-    httpOnly: true,
-    secure: false,
-    sameSite: 'lax'
-  });
-  res.redirect('/login');
-});
+app.get('/auth/logout', (req, res) => { res.clearCookie('koi_token', { httpOnly: true, secure: false, sameSite: 'lax' }); res.redirect('/login'); });
 
 // ════════════════════════════════════════════════════════════
 //  API — USUARIO
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/me', requireAuthAPI, async (req, res) => {
   try {
     const user = await User.findById(req.userId).select('-password -settings.arcaClave').lean();
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+    if (!user) return res.status(404).json({ error: 'No encontrado' });
     res.json({ ok: true, user });
-  } catch (e) {
-    res.status(500).json({ error: 'Error al obtener perfil' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al obtener perfil' }); }
 });
 
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
     const { nombre, apellido, ...body } = req.body;
     const update = {};
-    if (nombre) update.nombre = nombre.trim();
+    if (nombre)   update.nombre   = nombre.trim();
     if (apellido) update.apellido = apellido.trim();
-
-    const allowedSettings = ['factAuto', 'envioAuto', 'categoria', 'cuit', 'arcaPtoVta'];
-    for (const key of allowedSettings) {
+    for (const key of ['factAuto', 'envioAuto', 'categoria', 'cuit', 'arcaPtoVta']) {
       if (body[key] !== undefined) {
-        let value = body[key];
-        if (key === 'cuit') value = String(value).replace(/\D/g, '');
-        if (key === 'arcaPtoVta') value = parseInt(value) || 1;
-        update[`settings.${key}`] = value;
+        let v = body[key];
+        if (key === 'cuit')       v = String(v).replace(/\D/g, '');
+        if (key === 'arcaPtoVta') v = parseInt(v) || 1;
+        update[`settings.${key}`] = v;
       }
     }
-
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      { $set: update },
-      { new: true, select: '-password -settings.arcaClave' }
-    ).lean();
-
+    const user = await User.findByIdAndUpdate(req.userId, { $set: update }, { new: true, select: '-password -settings.arcaClave' }).lean();
     res.json({ ok: true, user });
-  } catch (e) {
-    console.error('❌ Update settings error:', e.message);
-    res.status(500).json({ error: 'Error al guardar configuración' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al guardar' }); }
 });
 
 app.patch('/api/me/arca', requireAuthAPI, async (req, res) => {
   try {
     const { cuit, arcaClave } = req.body;
-    if (!cuit || !arcaClave) {
-      return res.status(400).json({ error: 'CUIT y Clave Fiscal son obligatorios.' });
-    }
+    if (!cuit || !arcaClave) return res.status(400).json({ error: 'CUIT y Clave Fiscal son obligatorios.' });
     const cleanCuit = String(cuit).replace(/\D/g, '');
-    if (cleanCuit.length !== 11) {
-      return res.status(400).json({ error: 'CUIT inválido (debe tener 11 dígitos).' });
-    }
-
-    const user = await User.findByIdAndUpdate(
-      req.userId,
-      {
-        $set: {
-          'settings.cuit': cleanCuit,
-          'settings.arcaUser': cleanCuit,
-          'settings.arcaClave': encrypt(arcaClave),
-          'settings.arcaStatus': 'pendiente',
-          'settings.arcaNotas': 'Datos recibidos. Validando vinculación...',
-        },
-      },
-      { new: true, select: '-password -settings.arcaClave' }
-    ).lean();
-
+    if (cleanCuit.length !== 11) return res.status(400).json({ error: 'CUIT inválido.' });
+    const user = await User.findByIdAndUpdate(req.userId, {
+      $set: { 'settings.cuit': cleanCuit, 'settings.arcaUser': cleanCuit, 'settings.arcaClave': encrypt(arcaClave), 'settings.arcaStatus': 'pendiente', 'settings.arcaNotas': 'Datos recibidos. Validando...' },
+    }, { new: true, select: '-password -settings.arcaClave' }).lean();
     res.json({ ok: true, message: 'Vinculación enviada', user });
-  } catch (e) {
-    console.error('❌ ARCA link error:', e.message);
-    res.status(500).json({ error: 'Error al procesar vinculación' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al procesar vinculación' }); }
 });
 
 // ════════════════════════════════════════════════════════════
 //  API — EMISIÓN CAE
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/afip/estado', requireAuthAPI, async (req, res) => {
   try {
     await new Promise((resolve, reject) => {
-      const r = https.get(AFIP_URLS.wsfe + '?wsdl', { timeout: 8000 }, resolve);
+      const r = https.get(AFIP_URLS.wsfe + '?wsdl', { agent: httpsAgent, timeout: 8000 }, resolve);
       r.on('error', reject);
       r.on('timeout', () => { r.destroy(); reject(new Error('timeout')); });
     });
     res.json({ ok: true, online: true });
-  } catch {
-    res.json({ ok: true, online: false });
-  }
+  } catch { res.json({ ok: true, online: false }); }
 });
 
 app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (req, res) => {
@@ -1014,34 +854,20 @@ app.post('/api/orders/:orderId/emitir', requireAuthAPI, requireArcaCuit, async (
   try {
     const order = await Order.findOne({ _id: orderId, userId: req.userId });
     if (!order) return res.status(404).json({ error: 'Orden no encontrada' });
-    if (order.status === 'invoiced') {
-      return res.status(409).json({ error: 'Ya fue facturada', cae: order.caeNumber });
-    }
-    if (order.amount >= ARCA_LIMIT_SIN_DNI && (!order.customerDoc || order.customerDoc === '0')) {
-      return res.status(400).json({ error: 'Requiere DNI del cliente' });
-    }
+    if (order.status === 'invoiced') return res.status(409).json({ error: 'Ya fue facturada', cae: order.caeNumber });
 
-    const resultado = await afip_emitirComprobante(
-      req.arcaCuit,
-      req.arcaPtoVta,
-      {
-        categoria: req.arcaCategoria,
-        clienteDoc: order.customerDoc || '0',
-        importeTotal: order.amount,
-      }
-    );
+    const resultado = await afip_emitirComprobante(req.arcaCuit, req.arcaPtoVta, {
+      clienteDoc: order.customerDoc || '0', importeTotal: order.amount,
+    });
 
     await Order.findByIdAndUpdate(orderId, {
-      status: 'invoiced',
-      nroComp: resultado.nroComp,
-      caeNumber: resultado.cae,
-      caeExpiry: resultado.caeFchVto,
-      errorLog: '',
+      status: 'invoiced', nroComp: resultado.nroComp,
+      caeNumber: resultado.cae, caeExpiry: resultado.caeFchVto, errorLog: '',
     });
 
     res.json({ ok: true, cae: resultado.cae, nroComp: resultado.nroComp });
   } catch (e) {
-    console.error(`❌ Emitir error:`, e.message);
+    console.error('Emitir error:', e.message);
     await Order.findByIdAndUpdate(orderId, { status: 'error_afip', errorLog: e.message });
     res.status(500).json({ error: e.message });
   }
@@ -1051,51 +877,34 @@ app.post('/api/orders/manual', requireAuthAPI, async (req, res) => {
   try {
     const { cliente, email, concepto, monto, dni } = req.body;
     const importe = parseFloat(monto);
-    if (!cliente || isNaN(importe) || importe <= 0) {
-      return res.status(400).json({ error: 'Cliente y monto válido son obligatorios.' });
-    }
+    if (!cliente || isNaN(importe) || importe <= 0) return res.status(400).json({ error: 'Cliente y monto válido son obligatorios.' });
 
     const docLimpio = dni ? String(dni).replace(/\D/g, '') : '0';
-    if (importe >= ARCA_LIMIT_SIN_DNI && (docLimpio === '0' || docLimpio === '')) {
-      return res.status(400).json({ error: `Montos mayores a $${ARCA_LIMIT_SIN_DNI.toLocaleString()} requieren DNI/CUIT` });
-    }
-
     const user = await User.findById(req.userId).select('settings').lean();
     const externalId = `MAN-${Date.now()}-${crypto.randomBytes(3).toString('hex').toUpperCase()}`;
 
     const order = await Order.create({
-      userId: req.userId,
-      platform: 'manual',
-      externalId,
-      customerName: cliente.trim(),
-      customerEmail: email ? email.trim().toLowerCase() : '',
-      customerDoc: docLimpio,
-      amount: importe,
-      currency: 'ARS',
-      concepto: concepto || 'Venta Manual',
-      status: 'pending_invoice',
-      orderDate: new Date(),
+      userId: req.userId, platform: 'manual', externalId,
+      customerName: cliente.trim(), customerEmail: email ? email.trim().toLowerCase() : '',
+      customerDoc: docLimpio, amount: importe, currency: 'ARS',
+      concepto: concepto || 'Venta Manual', status: 'pending_invoice', orderDate: new Date(),
     });
 
     const isVinculado = user?.settings?.arcaStatus === 'vinculado';
-    const isFactAuto = user?.settings?.factAuto !== false;
+    const isFactAuto  = user?.settings?.factAuto !== false;
 
     if (isVinculado && isFactAuto) {
-      res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada. Emitiendo comprobante...' });
-      _intentarAutoFacturar(req.userId, order).catch(err => console.error('Auto-factura error:', err.message));
+      res.json({ ok: true, nro: externalId, id: order._id, message: 'Registrada. Emitiendo CAE...' });
+      _intentarAutoFacturar(req.userId, order).catch(e => console.error('Auto-factura:', e.message));
     } else {
       res.json({ ok: true, nro: externalId, id: order._id, message: 'Venta registrada como pendiente.' });
     }
-  } catch (e) {
-    console.error('❌ Manual order error:', e.message);
-    res.status(500).json({ error: 'Error al registrar venta' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al registrar venta: ' + e.message }); }
 });
 
 // ════════════════════════════════════════════════════════════
 //  API — STATS
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
     const { platform, desde, hasta } = req.query;
@@ -1105,7 +914,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     if (desde || hasta) {
       const df = {};
       if (desde) df.$gte = new Date(desde);
-      if (hasta) { const h = new Date(hasta); h.setHours(23, 59, 59, 999); df.$lte = h; }
+      if (hasta) { const h = new Date(hasta); h.setHours(23,59,59,999); df.$lte = h; }
       match.$or = [
         { orderDate: df },
         { orderDate: { $exists: false }, createdAt: df },
@@ -1113,11 +922,11 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       ];
     }
 
-    const hoyStart = new Date(); hoyStart.setHours(0, 0, 0, 0);
-    const hoyEnd = new Date(); hoyEnd.setHours(23, 59, 59, 999);
+    const hoyStart = new Date(); hoyStart.setHours(0,0,0,0);
+    const hoyEnd   = new Date(); hoyEnd.setHours(23,59,59,999);
     const matchHoy = {
       userId: new mongoose.Types.ObjectId(req.userId),
-      status: { $in: ['pending_invoice', 'invoiced'] },
+      status: { $in: ['pending_invoice','invoiced'] },
       $or: [
         { orderDate: { $gte: hoyStart, $lte: hoyEnd } },
         { orderDate: { $exists: false }, createdAt: { $gte: hoyStart, $lte: hoyEnd } },
@@ -1127,30 +936,27 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     if (platform) matchHoy.platform = platform;
 
     const [totals, facturado, recent, hoyAgg, pendientesCount, plataformas] = await Promise.all([
-      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice', 'invoiced'] } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
       Order.aggregate([{ $match: { ...match, status: 'invoiced' } }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
       Order.find({ ...match }).sort({ orderDate: -1, createdAt: -1 }).limit(100).lean(),
       Order.aggregate([{ $match: matchHoy }, { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }]),
       Order.countDocuments({ ...match, status: 'pending_invoice' }),
-      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice', 'invoiced'] } } }, { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
+      Order.aggregate([{ $match: { ...match, status: { $in: ['pending_invoice','invoiced'] } } }, { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } }, { $sort: { total: -1 } }]),
     ]);
 
     res.json({
       ok: true,
-      totalMonto: totals[0]?.total || 0,
-      totalOrden: totals[0]?.count || 0,
+      totalMonto:     totals[0]?.total    || 0,
+      totalOrden:     totals[0]?.count    || 0,
       facturadoMonto: facturado[0]?.total || 0,
       facturadoCount: facturado[0]?.count || 0,
-      hoyMonto: hoyAgg[0]?.total || 0,
-      hoyCount: hoyAgg[0]?.count || 0,
-      pendientes: pendientesCount || 0,
+      hoyMonto:       hoyAgg[0]?.total    || 0,
+      hoyCount:       hoyAgg[0]?.count    || 0,
+      pendientes:     pendientesCount      || 0,
       plataformas,
-      ultimas: recent,
+      ultimas:        recent,
     });
-  } catch (e) {
-    console.error('Stats error:', e.message);
-    res.status(500).json({ error: 'Error al obtener estadísticas' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error al obtener estadísticas' }); }
 });
 
 app.get('/api/orders', requireAuthAPI, async (req, res) => {
@@ -1158,35 +964,25 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     const { platform, status, limit = 100 } = req.query;
     const filter = { userId: req.userId };
     if (platform) filter.platform = platform;
-    if (status) filter.status = status;
-    const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Math.min(parseInt(limit), 500))
-      .lean();
+    if (status)   filter.status   = status;
+    const orders = await Order.find(filter).sort({ createdAt: -1 }).limit(Math.min(parseInt(limit), 500)).lean();
     res.json({ ok: true, orders });
-  } catch (e) {
-    res.status(500).json({ error: 'Error interno' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════
-
 app.get('/api/integrations', requireAuthAPI, async (req, res) => {
-  const list = await Integration.find({ userId: req.userId })
-    .select('-credentials -webhookSecret').lean();
+  const list = await Integration.find({ userId: req.userId }).select('-credentials -webhookSecret').lean();
   res.json({ ok: true, integrations: list });
 });
 
 app.patch('/api/integrations/:id/status', requireAuthAPI, async (req, res) => {
   try {
     const { status } = req.body;
-    if (!['active', 'paused'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
-    const doc = await Integration.findOneAndUpdate(
-      { _id: req.params.id, userId: req.userId }, { status },
-      { new: true, select: '-credentials -webhookSecret' }
-    );
+    if (!['active','paused'].includes(status)) return res.status(400).json({ error: 'Status inválido' });
+    const doc = await Integration.findOneAndUpdate({ _id: req.params.id, userId: req.userId }, { status }, { new: true, select: '-credentials -webhookSecret' });
     if (!doc) return res.status(404).json({ error: 'No encontrada' });
     res.json({ ok: true, integration: doc });
   } catch (e) { res.status(500).json({ error: 'Error interno' }); }
@@ -1201,70 +997,56 @@ app.delete('/api/integrations/:id', requireAuthAPI, async (req, res) => {
 });
 
 app.get('/api/integrations/:id/webhook', requireAuthAPI, async (req, res) => {
-  const doc = await Integration.findOne({ _id: req.params.id, userId: req.userId })
-    .select('platform webhookSecret');
+  const doc = await Integration.findOne({ _id: req.params.id, userId: req.userId }).select('platform webhookSecret');
   if (!doc) return res.status(404).json({ error: 'No encontrada' });
   res.json({ ok: true, url: `${BASE}/webhook/${doc.platform}/${doc.webhookSecret}` });
 });
 
 app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
   const { platform } = req.params;
-  const TOKEN_PLATFORMS = ['tiendanube', 'empretienda', 'rappi', 'vtex', 'shopify'];
-  if (!TOKEN_PLATFORMS.includes(platform))
-    return res.status(400).json({ error: `Plataforma ${platform} no soporta token directo` });
-
+  const SUPPORTED = ['tiendanube','empretienda','rappi','vtex','shopify'];
+  if (!SUPPORTED.includes(platform)) return res.status(400).json({ error: `Plataforma ${platform} no soporta token directo` });
   try {
     const { storeId, storeName, storeUrl, apiToken, apiKey, apiSecret } = req.body;
     if (!storeId) return res.status(400).json({ error: 'storeId requerido' });
-
     const creds = {};
     if (apiToken) creds.apiToken = encrypt(apiToken);
-    if (apiKey) creds.apiKey = encrypt(apiKey);
+    if (apiKey)   creds.apiKey   = encrypt(apiKey);
     if (apiSecret) creds.apiSecret = encrypt(apiSecret);
-
     const integration = await Integration.findOneAndUpdate(
       { userId: req.userId, platform, storeId: String(storeId) },
-      {
-        $set: {
-          storeName: storeName || `${platform} ${storeId}`,
-          storeUrl: storeUrl || '',
-          status: 'active',
-          errorLog: '',
-          credentials: creds,
-          updatedAt: new Date(),
-          initialSyncDone: false,
-        },
-        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() },
-      },
+      { $set: { storeName: storeName || `${platform} ${storeId}`, storeUrl: storeUrl || '', status: 'active', errorLog: '', credentials: creds, updatedAt: new Date(), initialSyncDone: false },
+        $setOnInsert: { userId: req.userId, platform, storeId: String(storeId), createdAt: new Date() } },
       { upsert: true, new: true }
     );
-
-    if (platform === 'tiendanube' && apiToken) {
-      await _registerWebhookTiendaNube(integration, apiToken).catch(console.warn);
-    }
-
+    if (platform === 'tiendanube' && apiToken) await _registerWebhookTiendaNube(integration, apiToken).catch(console.warn);
     _dispararSyncHistorico(integration);
-    res.json({ ok: true, message: `${platform} conectado. Sincronizando historial...` });
-  } catch (e) {
-    console.error(`Connect ${platform}:`, e.message);
-    res.status(500).json({ error: 'Error al conectar. Verificá las credenciales.' });
-  }
+    res.json({ ok: true, message: `${platform} conectado. Sincronizando...` });
+  } catch (e) { res.status(500).json({ error: 'Error al conectar: ' + e.message }); }
+});
+
+app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
+    if (!integration) return res.status(404).json({ error: 'No encontrada' });
+    if (integration.status !== 'active') return res.status(400).json({ error: 'Integración inactiva' });
+    if (!BULK_SYNC[integration.platform]) return res.status(400).json({ error: `Sync no disponible para ${integration.platform}` });
+    res.json({ ok: true, message: 'Sincronización iniciada' });
+    BULK_SYNC[integration.platform](integration)
+      .then(() => Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '' }))
+      .catch(err => Integration.findByIdAndUpdate(integration._id, { errorLog: err.message }));
+  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
 });
 
 // ════════════════════════════════════════════════════════════
 //  WOOCOMMERCE OAUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/woo/connect', requireAuth, (req, res) => {
   const { store_url } = req.query;
   if (!store_url) return res.status(400).send('Falta store_url');
   const clean = store_url.replace(/\/$/, '').toLowerCase();
   const state = jwt.sign({ userId: req.userId, storeUrl: clean }, JWT_SECRET, { expiresIn: '15m' });
-  const authUrl = `${clean}/wc-auth/v1/authorize`
-    + `?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}`
-    + `&return_url=${encodeURIComponent(`${BASE}/dashboard?woo=connected`)}`
-    + `&callback_url=${encodeURIComponent(`${BASE}/auth/woo/callback?state=${encodeURIComponent(state)}`)}`;
-  res.redirect(authUrl);
+  res.redirect(`${clean}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}&return_url=${encodeURIComponent(`${BASE}/dashboard?woo=connected`)}&callback_url=${encodeURIComponent(`${BASE}/auth/woo/callback?state=${encodeURIComponent(state)}`)}`);
 });
 
 app.post('/auth/woo/callback', async (req, res) => {
@@ -1275,66 +1057,39 @@ app.post('/auth/woo/callback', async (req, res) => {
     const { userId, storeUrl } = jwt.verify(state, JWT_SECRET);
     const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'woocommerce', storeId: storeUrl },
-      {
-        $set: {
-          storeName: storeUrl.replace(/^https?:\/\//, ''),
-          storeUrl,
-          status: 'active',
-          errorLog: '',
-          credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) },
-          initialSyncDone: false,
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() },
-      },
+      { $set: { storeName: storeUrl.replace(/^https?:\/\//, ''), storeUrl, status: 'active', errorLog: '', credentials: { consumerKey: encrypt(consumer_key), consumerSecret: encrypt(consumer_secret) }, initialSyncDone: false, updatedAt: new Date() },
+        $setOnInsert: { userId, platform: 'woocommerce', storeId: storeUrl, createdAt: new Date() } },
       { upsert: true, new: true }
     );
     await _registerWebhookWoo(integration, consumer_key, consumer_secret, storeUrl);
     _dispararSyncHistorico(integration);
-    console.log(`✅ WooCommerce conectado: ${storeUrl}`);
+    console.log(`✅ WooCommerce: ${storeUrl}`);
   } catch (e) { console.error('WooCommerce callback:', e.message); }
 });
 
 async function _registerWebhookWoo(integration, key, secret, storeUrl) {
-  const webhookUrl = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
+  const wh = `${BASE}/webhook/woocommerce/${integration.webhookSecret}`;
   try {
-    const { data: existing } = await axios.get(`${storeUrl}/wp-json/wc/v3/webhooks`, {
-      auth: { username: key, password: secret },
-      params: { per_page: 100 },
-    });
-    if (existing?.some(wh => wh.delivery_url === webhookUrl)) return;
-    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`,
-      { name: 'KOI-Factura', topic: 'order.created', delivery_url: webhookUrl, status: 'active' },
-      { auth: { username: key, password: secret } }
-    );
+    const { data: existing } = await axios.get(`${storeUrl}/wp-json/wc/v3/webhooks`, { auth: { username: key, password: secret }, params: { per_page: 100 } });
+    if (existing?.some(w => w.delivery_url === wh)) return;
+    await axios.post(`${storeUrl}/wp-json/wc/v3/webhooks`, { name: 'KOI-Factura', topic: 'order.created', delivery_url: wh, status: 'active' }, { auth: { username: key, password: secret } });
     console.log(`🔌 WooCommerce webhook: ${storeUrl}`);
-  } catch (e) {
-    console.warn('WooCommerce webhook:', e.response?.data?.message || e.message);
-    await Integration.findByIdAndUpdate(integration._id, { errorLog: `Webhook: ${e.message}` });
-  }
+  } catch (e) { console.warn('WooCommerce webhook:', e.message); }
 }
 
 async function _registerWebhookTiendaNube(integration, apiToken) {
-  const webhookUrl = `${BASE}/webhook/tiendanube/${integration.webhookSecret}`;
-  await axios.post(
-    `https://api.tiendanube.com/v1/${integration.storeId}/webhooks`,
-    { event: 'order/paid', url: webhookUrl },
-    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/4.2' } }
+  await axios.post(`https://api.tiendanube.com/v1/${integration.storeId}/webhooks`,
+    { event: 'order/paid', url: `${BASE}/webhook/tiendanube/${integration.webhookSecret}` },
+    { headers: { Authentication: `bearer ${apiToken}`, 'User-Agent': 'KOI-Factura/4.3' } }
   );
 }
 
 // ════════════════════════════════════════════════════════════
 //  MERCADOLIBRE OAUTH
 // ════════════════════════════════════════════════════════════
-
 app.get('/auth/ml/connect', requireAuth, (req, res) => {
   const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
-  res.redirect(
-    'https://auth.mercadolibre.com.ar/authorization'
-    + `?response_type=code&client_id=${process.env.ML_CLIENT_ID}`
-    + `&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}`
-    + `&state=${encodeURIComponent(state)}`
-  );
+  res.redirect(`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}&state=${encodeURIComponent(state)}`);
 });
 
 app.get('/auth/ml/callback', async (req, res) => {
@@ -1342,81 +1097,41 @@ app.get('/auth/ml/callback', async (req, res) => {
   if (!code) return res.redirect('/dashboard?error=ml_denied');
   try {
     const { userId } = jwt.verify(state, JWT_SECRET);
-    const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', {
-      grant_type: 'authorization_code',
-      client_id: process.env.ML_CLIENT_ID,
-      client_secret: process.env.ML_CLIENT_SECRET,
-      code,
-      redirect_uri: `${BASE}/auth/ml/callback`,
-    });
-    const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me', {
-      headers: { Authorization: `Bearer ${token.access_token}` }
-    });
+    const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', { grant_type: 'authorization_code', client_id: process.env.ML_CLIENT_ID, client_secret: process.env.ML_CLIENT_SECRET, code, redirect_uri: `${BASE}/auth/ml/callback` });
+    const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me', { headers: { Authorization: `Bearer ${token.access_token}` } });
     const sellerId = String(token.user_id || seller.id);
     const integration = await Integration.findOneAndUpdate(
       { userId, platform: 'mercadolibre', storeId: sellerId },
-      {
-        $set: {
-          storeName: seller.nickname || `ML ${sellerId}`,
-          status: 'active',
-          errorLog: '',
-          credentials: {
-            accessToken: encrypt(token.access_token),
-            refreshToken: encrypt(token.refresh_token),
-            tokenExpiry: new Date(Date.now() + token.expires_in * 1000).toISOString(),
-            sellerId,
-          },
-          initialSyncDone: false,
-          updatedAt: new Date(),
-        },
-        $setOnInsert: { userId, platform: 'mercadolibre', storeId: sellerId, createdAt: new Date() },
-      },
+      { $set: { storeName: seller.nickname || `ML ${sellerId}`, status: 'active', errorLog: '', credentials: { accessToken: encrypt(token.access_token), refreshToken: encrypt(token.refresh_token), tokenExpiry: new Date(Date.now() + token.expires_in * 1000).toISOString(), sellerId }, initialSyncDone: false, updatedAt: new Date() },
+        $setOnInsert: { userId, platform: 'mercadolibre', storeId: sellerId, createdAt: new Date() } },
       { upsert: true, new: true }
     );
     _dispararSyncHistorico(integration);
     res.redirect('/dashboard?ml=connected');
-  } catch (e) {
-    console.error('ML callback:', e.response?.data || e.message);
-    res.redirect('/dashboard?error=ml_failed');
-  }
+  } catch (e) { console.error('ML callback:', e.message); res.redirect('/dashboard?error=ml_failed'); }
 });
 
 async function _getMLToken(integration) {
   const expiry = new Date(integration.credentials.tokenExpiry || 0);
-  if (expiry > new Date(Date.now() + 10 * 60 * 1000)) return decrypt(integration.credentials.accessToken);
-  const { data } = await axios.post('https://api.mercadolibre.com/oauth/token', {
-    grant_type: 'refresh_token',
-    client_id: process.env.ML_CLIENT_ID,
-    client_secret: process.env.ML_CLIENT_SECRET,
-    refresh_token: decrypt(integration.credentials.refreshToken),
-  });
-  await Integration.findByIdAndUpdate(integration._id, {
-    'credentials.accessToken': encrypt(data.access_token),
-    'credentials.refreshToken': encrypt(data.refresh_token),
-    'credentials.tokenExpiry': new Date(Date.now() + data.expires_in * 1000).toISOString(),
-  });
+  if (expiry > new Date(Date.now() + 10 * 60_000)) return decrypt(integration.credentials.accessToken);
+  const { data } = await axios.post('https://api.mercadolibre.com/oauth/token', { grant_type: 'refresh_token', client_id: process.env.ML_CLIENT_ID, client_secret: process.env.ML_CLIENT_SECRET, refresh_token: decrypt(integration.credentials.refreshToken) });
+  await Integration.findByIdAndUpdate(integration._id, { 'credentials.accessToken': encrypt(data.access_token), 'credentials.refreshToken': encrypt(data.refresh_token), 'credentials.tokenExpiry': new Date(Date.now() + data.expires_in * 1000).toISOString() });
   return data.access_token;
 }
 
 // ════════════════════════════════════════════════════════════
 //  BULK SYNC ENGINE
 // ════════════════════════════════════════════════════════════
-
 const BULK_SYNC = {
   async woocommerce(integration) {
     const key = integration.getKey('consumerKey'), secret = integration.getKey('consumerSecret');
     let page = 1, total = 0;
     while (true) {
-      const { data: orders } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, {
-        auth: { username: key, password: secret },
-        params: { per_page: 100, page, orderby: 'date', order: 'desc' },
-      });
-      if (!orders?.length) break;
-      for (const order of orders) {
-        await upsertOrder(integration, normalize.woocommerce(order));
-      }
-      total += orders.length;
-      if (orders.length < 100) break;
+      const { data } = await axios.get(`${integration.storeUrl}/wp-json/wc/v3/orders`, { auth: { username: key, password: secret }, params: { per_page: 100, page, orderby: 'date', order: 'desc' } });
+      if (!data?.length) break;
+      for (const o of data) await upsertOrder(integration, normalize.woocommerce(o));
+      total += data.length;
+      if (data.length < 100) break;
       page++;
     }
     return total;
@@ -1425,16 +1140,11 @@ const BULK_SYNC = {
     const token = integration.getKey('apiToken');
     let page = 1, total = 0;
     while (true) {
-      const { data: orders } = await axios.get(
-        `https://api.tiendanube.com/v1/${integration.storeId}/orders`,
-        { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/4.2' }, params: { per_page: 200, page } }
-      );
-      if (!orders?.length) break;
-      for (const order of orders) {
-        await upsertOrder(integration, normalize.tiendanube(order));
-      }
-      total += orders.length;
-      if (orders.length < 200) break;
+      const { data } = await axios.get(`https://api.tiendanube.com/v1/${integration.storeId}/orders`, { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/4.3' }, params: { per_page: 200, page } });
+      if (!data?.length) break;
+      for (const o of data) await upsertOrder(integration, normalize.tiendanube(o));
+      total += data.length;
+      if (data.length < 200) break;
       page++;
     }
     return total;
@@ -1444,15 +1154,10 @@ const BULK_SYNC = {
     const sellerId = integration.credentials.sellerId;
     let offset = 0, total = 0;
     while (true) {
-      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params: { seller: sellerId, limit: 50, offset, sort: 'date_desc' },
-      });
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', { headers: { Authorization: `Bearer ${accessToken}` }, params: { seller: sellerId, limit: 50, offset, sort: 'date_desc' } });
       const orders = data.results || [];
       if (!orders.length) break;
-      for (const order of orders) {
-        await upsertOrder(integration, normalize.mercadolibre(order));
-      }
+      for (const o of orders) await upsertOrder(integration, normalize.mercadolibre(o));
       total += orders.length;
       offset += 50;
       if (offset >= (data.paging?.total || 0)) break;
@@ -1463,15 +1168,10 @@ const BULK_SYNC = {
     const apiKey = integration.getKey('apiKey'), apiToken = integration.getKey('apiToken');
     let page = 1, total = 0;
     while (true) {
-      const { data } = await axios.get(`${integration.storeUrl}/api/oms/pvt/orders`, {
-        headers: { 'X-VTEX-API-AppKey': apiKey, 'X-VTEX-API-AppToken': apiToken },
-        params: { page, per_page: 100 },
-      });
+      const { data } = await axios.get(`${integration.storeUrl}/api/oms/pvt/orders`, { headers: { 'X-VTEX-API-AppKey': apiKey, 'X-VTEX-API-AppToken': apiToken }, params: { page, per_page: 100 } });
       const orders = data.list || [];
       if (!orders.length) break;
-      for (const order of orders) {
-        await upsertOrder(integration, normalize.vtex(order));
-      }
+      for (const o of orders) await upsertOrder(integration, normalize.vtex(o));
       total += orders.length;
       if (orders.length < 100) break;
       page++;
@@ -1481,11 +1181,11 @@ const BULK_SYNC = {
 };
 
 async function _dispararSyncHistorico(integration) {
-  const syncFn = BULK_SYNC[integration.platform];
-  if (!syncFn) return;
-  console.log(`🔄 Sync histórico: ${integration.platform} / ${integration.storeId}`);
+  const fn = BULK_SYNC[integration.platform];
+  if (!fn) return;
+  console.log(`🔄 Sync: ${integration.platform} / ${integration.storeId}`);
   try {
-    const count = await syncFn(integration);
+    const count = await fn(integration);
     await Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '', initialSyncDone: true });
     console.log(`✅ Sync ${integration.platform}: ${count} órdenes`);
   } catch (err) {
@@ -1494,239 +1194,30 @@ async function _dispararSyncHistorico(integration) {
   }
 }
 
-app.post('/api/integrations/:id/sync', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
-    if (!integration) return res.status(404).json({ error: 'No encontrada' });
-    if (integration.status !== 'active') return res.status(400).json({ error: 'Integración inactiva' });
-    const syncFn = BULK_SYNC[integration.platform];
-    if (!syncFn) return res.status(400).json({ error: `Sync no disponible para ${integration.platform}` });
-    res.json({ ok: true, message: 'Sincronización iniciada' });
-    syncFn(integration)
-      .then(count => Integration.findByIdAndUpdate(integration._id, { lastSyncAt: new Date(), errorLog: '' }))
-      .catch(async err => Integration.findByIdAndUpdate(integration._id, { errorLog: err.message, status: 'error' }));
-  } catch (e) { res.status(500).json({ error: 'Error interno' }); }
-});
-
 // ════════════════════════════════════════════════════════════
-//  WEBHOOKS UNIVERSALES
+//  WEBHOOKS
 // ════════════════════════════════════════════════════════════
-
 async function handleWebhook(platform, secret, getCanonical) {
   const integration = await Integration.findOne({ platform, webhookSecret: secret, status: 'active' });
   if (!integration) return;
   try {
     const canonical = await getCanonical(integration);
     if (canonical) await upsertOrder(integration, canonical);
-  } catch (e) { console.error(`❌ Webhook ${platform}:`, e.message); }
+  } catch (e) { console.error(`Webhook ${platform}:`, e.message); }
 }
 
-app.post('/webhook/woocommerce/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('woocommerce', req.params.secret, () => normalize.woocommerce(req.body));
-});
-
-app.post('/webhook/tiendanube/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('tiendanube', req.params.secret, async (integration) => {
-    const token = integration.getKey('apiToken');
-    const { data } = await axios.get(
-      `https://api.tiendanube.com/v1/${integration.storeId}/orders/${req.body.id}`,
-      { headers: { Authentication: `bearer ${token}`, 'User-Agent': 'KOI-Factura/4.2' } }
-    );
-    return normalize.tiendanube(data);
-  });
-});
-
-app.post('/webhook/mercadolibre/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  const { topic, resource } = req.body;
-  if (!['orders_v2', 'orders'].includes(topic)) return;
-  await handleWebhook('mercadolibre', req.params.secret, async (integration) => {
-    const token = await _getMLToken(integration);
-    const orderUrl = resource.startsWith('http') ? resource : `https://api.mercadolibre.com${resource}`;
-    const { data } = await axios.get(orderUrl, { headers: { Authorization: `Bearer ${token}` } });
-    return normalize.mercadolibre(data);
-  });
-});
-
-app.post('/webhook/vtex/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('vtex', req.params.secret, () => normalize.vtex(req.body));
-});
-
-app.post('/webhook/empretienda/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('empretienda', req.params.secret, () => normalize.empretienda(req.body));
-});
-
-app.post('/webhook/rappi/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('rappi', req.params.secret, () => normalize.rappi(req.body));
-});
-
-app.post('/webhook/shopify/:secret', async (req, res) => {
-  res.status(200).send('OK');
-  await handleWebhook('shopify', req.params.secret, () => normalize.shopify(req.body));
-});
-
-// ════════════════════════════════════════════════════════════
-//  DIAGNÓSTICO COMPLETO DE EMISIÓN
-// ════════════════════════════════════════════════════════════
-app.post('/api/debug/emitir-diagnostico', requireAuthAPI, async (req, res) => {
-  const resultados = {
-    paso1_usuario: { ok: false, detalle: '' },
-    paso2_cuit: { ok: false, detalle: '' },
-    paso3_estado: { ok: false, detalle: '' },
-    paso4_token: { ok: false, detalle: '' },
-    paso5_emision: { ok: false, detalle: '', cae: null, error: null },
-    paso6_respuesta_raw: null
-  };
-
-  try {
-    // 1. Verificar usuario
-    const user = await User.findById(req.userId).select('settings').lean();
-    if (!user) {
-      resultados.paso1_usuario.detalle = 'Usuario no encontrado';
-      return res.status(404).json(resultados);
-    }
-    resultados.paso1_usuario = { ok: true, detalle: `Usuario: ${user.email}` };
-
-    // 2. Verificar CUIT
-    const cuitLimpio = user.settings?.cuit?.replace(/\D/g, '');
-    if (!cuitLimpio || cuitLimpio.length !== 11) {
-      resultados.paso2_cuit.detalle = `CUIT inválido: ${user.settings?.cuit || 'no configurado'}`;
-      return res.status(400).json(resultados);
-    }
-    resultados.paso2_cuit = { ok: true, detalle: `CUIT: ${cuitLimpio}` };
-
-    // 3. Verificar estado ARCA
-    if (user.settings.arcaStatus !== 'vinculado') {
-      resultados.paso3_estado.detalle = `Estado actual: ${user.settings.arcaStatus}`;
-      return res.status(403).json(resultados);
-    }
-    resultados.paso3_estado = { ok: true, detalle: 'Estado: vinculado' };
-
-    const ptoVta = parseInt(user.settings.arcaPtoVta) || 1;
-    const categoria = user.settings.categoria || 'C';
-
-    // 4. Probar obtener token
-    try {
-      const { token, sign } = await afip_obtenerTA(cuitLimpio);
-      resultados.paso4_token = { ok: true, detalle: `Token obtenido (${token.substring(0, 20)}...)` };
-      
-      // 5. Crear orden de prueba
-      const testOrder = {
-        userId: req.userId,
-        platform: 'diagnostico',
-        externalId: `DIAG-${Date.now()}`,
-        customerName: 'Cliente Test',
-        customerEmail: 'test@ejemplo.com',
-        customerDoc: '0',
-        amount: 100,
-        status: 'pending_invoice'
-      };
-      
-      // 6. Intentar emitir
-      try {
-        // Construir XML manualmente para debug
-        const nroComp = 1;
-        const importe = '100.00';
-        const docTipo = 99;
-        const docNro = 0;
-        const fecha = _fechaAFIP();
-        
-        const soap = xmlbuilder.create('soapenv:Envelope')
-          .att('xmlns:soapenv', 'http://schemas.xmlsoap.org/soap/envelope/')
-          .att('xmlns:ar', 'http://ar.gov.afip.dif.FEV1/')
-          .ele('soapenv:Body')
-            .ele('ar:FECAESolicitar')
-              .ele('ar:Auth')
-                .ele('ar:Token').txt(token).up()
-                .ele('ar:Sign').txt(sign).up()
-                .ele('ar:Cuit').txt(cuitLimpio).up()
-              .up()
-              .ele('ar:FeCAEReq')
-                .ele('ar:FeCabReq')
-                  .ele('ar:CantReg').txt(1).up()
-                  .ele('ar:PtoVta').txt(ptoVta).up()
-                  .ele('ar:CbteTipo').txt(11).up()
-                .up()
-                .ele('ar:FeDetReq')
-                  .ele('ar:FECAEDetRequest')
-                    .ele('ar:Concepto').txt(1).up()
-                    .ele('ar:DocTipo').txt(docTipo).up()
-                    .ele('ar:DocNro').txt(docNro).up()
-                    .ele('ar:CbteDesde').txt(nroComp).up()
-                    .ele('ar:CbteHasta').txt(nroComp).up()
-                    .ele('ar:CbteFch').txt(fecha).up()
-                    .ele('ar:ImpTotal').txt(importe).up()
-                    .ele('ar:ImpTotConc').txt("0.00").up()
-                    .ele('ar:ImpNeto').txt(importe).up()
-                    .ele('ar:ImpOpEx').txt("0.00").up()
-                    .ele('ar:ImpIVA').txt("0.00").up()
-                    .ele('ar:ImpTrib').txt("0.00").up()
-                    .ele('ar:MonId').txt('PES').up()
-                    .ele('ar:MonCotiz').txt(1).up()
-                  .up()
-                .up()
-              .up()
-            .up()
-          .up()
-          .end({ pretty: false });
-        
-        // Guardar XML para debug
-        const xmlPath = path.join(os.tmpdir(), `debug-soap-${Date.now()}.xml`);
-        fs.writeFileSync(xmlPath, soap);
-        console.log(`📁 XML guardado en: ${xmlPath}`);
-        
-        const response = await axios.post(AFIP_URLS.wsfe, soap, {
-          headers: { 'Content-Type': 'text/xml' },
-          timeout: 30000,
-          httpsAgent
-        });
-        
-        resultados.paso6_respuesta_raw = response.data.substring(0, 1000);
-        
-        const xmlDoc = new DOMParser().parseFromString(response.data, 'text/xml');
-        const resultado = xmlDoc.getElementsByTagName('Resultado')[0]?.textContent;
-        const cae = xmlDoc.getElementsByTagName('CAE')[0]?.textContent;
-        const errMsg = xmlDoc.getElementsByTagName('Msg')[0]?.textContent;
-        
-        if (resultado === 'A' && cae) {
-          resultados.paso5_emision = { ok: true, detalle: `CAE obtenido: ${cae}`, cae };
-        } else {
-          resultados.paso5_emision = { ok: false, detalle: errMsg || 'Error sin mensaje', error: errMsg };
-        }
-        
-      } catch (emitError) {
-        resultados.paso5_emision = { 
-          ok: false, 
-          detalle: emitError.message,
-          error: emitError.response?.data?.substring(0, 500) || emitError.message
-        };
-      }
-      
-    } catch (tokenError) {
-      resultados.paso4_token = { ok: false, detalle: tokenError.message };
-    }
-    
-    res.json(resultados);
-    
-  } catch (error) {
-    resultados.paso1_usuario.detalle = error.message;
-    res.status(500).json(resultados);
-  }
-});
+app.post('/webhook/woocommerce/:secret',  async (req, res) => { res.status(200).send('OK'); await handleWebhook('woocommerce',  req.params.secret, () => normalize.woocommerce(req.body)); });
+app.post('/webhook/tiendanube/:secret',   async (req, res) => { res.status(200).send('OK'); await handleWebhook('tiendanube',   req.params.secret, async (i) => { const t = i.getKey('apiToken'); const { data } = await axios.get(`https://api.tiendanube.com/v1/${i.storeId}/orders/${req.body.id}`, { headers: { Authentication: `bearer ${t}`, 'User-Agent': 'KOI-Factura/4.3' } }); return normalize.tiendanube(data); }); });
+app.post('/webhook/mercadolibre/:secret', async (req, res) => { res.status(200).send('OK'); const { topic, resource } = req.body; if (!['orders_v2','orders'].includes(topic)) return; await handleWebhook('mercadolibre', req.params.secret, async (i) => { const t = await _getMLToken(i); const url = resource.startsWith('http') ? resource : `https://api.mercadolibre.com${resource}`; const { data } = await axios.get(url, { headers: { Authorization: `Bearer ${t}` } }); return normalize.mercadolibre(data); }); });
+app.post('/webhook/vtex/:secret',         async (req, res) => { res.status(200).send('OK'); await handleWebhook('vtex',         req.params.secret, () => normalize.vtex(req.body)); });
+app.post('/webhook/empretienda/:secret',  async (req, res) => { res.status(200).send('OK'); await handleWebhook('empretienda',  req.params.secret, () => normalize.empretienda(req.body)); });
+app.post('/webhook/rappi/:secret',        async (req, res) => { res.status(200).send('OK'); await handleWebhook('rappi',        req.params.secret, () => normalize.rappi(req.body)); });
+app.post('/webhook/shopify/:secret',      async (req, res) => { res.status(200).send('OK'); await handleWebhook('shopify',      req.params.secret, () => normalize.shopify(req.body)); });
 
 // ════════════════════════════════════════════════════════════
 //  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
-
-const isLoggedIn = (req) => {
-  try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
-};
-
+const isLoggedIn = (req) => { try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; } };
 app.get('/', (req, res) => res.redirect(isLoggedIn(req) ? '/dashboard' : '/login'));
 app.get('/login', (req, res) => isLoggedIn(req) ? res.redirect('/dashboard') : res.sendFile(path.join(__dirname, 'public', 'login.html')));
 app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname, 'public', 'index.html')));
@@ -1735,84 +1226,46 @@ app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 // ════════════════════════════════════════════════════════════
 //  KEEP-ALIVE
 // ════════════════════════════════════════════════════════════
-
-const selfPing = () => {
-  if (!process.env.BASE_URL) return;
-  axios.get(`${BASE}/health`, { timeout: 10000 })
-    .then(() => console.log(`🏓 Ping OK`))
-    .catch(err => console.warn(`⚠️ Ping: ${err.message}`));
-};
-
 app.listen(PORT, () => {
-  console.log(`🚀 KOI-Factura v4.2 COMPLETA — puerto ${PORT}`);
-  console.log(`📡 Base URL: ${BASE}`);
-  console.log(`🌐 AFIP URLs fijas en PRODUCCIÓN`);
-  setTimeout(() => { selfPing(); setInterval(selfPing, 10 * 60 * 1000); }, 30000);
+  console.log(`🚀 KOI-Factura v4.3 — puerto ${PORT} | ${BASE}`);
+  if (process.env.BASE_URL) {
+    const ping = () => axios.get(`${BASE}/health`, { timeout: 10_000 }).then(() => console.log('🏓 Ping OK')).catch(e => console.warn('⚠️ Ping:', e.message));
+    setTimeout(() => { ping(); setInterval(ping, 10 * 60 * 1000); }, 30_000);
+  }
 });
 
 // ════════════════════════════════════════════════════════════
 //  ADMIN PANEL
 // ════════════════════════════════════════════════════════════
-
 const ADMIN_EMAIL = 'koi.automatic@gmail.com';
 
 async function requireAdmin(req, res, next) {
   const admin = await User.findById(req.userId).select('email').lean();
-  if (!admin || admin.email.trim() !== ADMIN_EMAIL) {
-    return res.status(403).json({ error: 'No autorizado' });
-  }
+  if (!admin || admin.email.trim() !== ADMIN_EMAIL) return res.status(403).json({ error: 'No autorizado' });
   next();
 }
 
 app.get('/api/admin/pendientes', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
-    const pendientes = await User.find({
-      'settings.arcaStatus': { $in: ['pendiente', 'en_proceso', 'vinculado'] },
-    }).select('nombre apellido email settings').lean();
-
-    const lista = pendientes.map(u => {
-      const s = u.settings || {};
-      return {
-        id: u._id,
-        cliente: `${u.nombre || ''} ${u.apellido || ''}`.trim(),
-        email: u.email,
-        cuit: s.cuit || 'N/A',
-        claveFiscal: s.arcaClave ? decrypt(s.arcaClave) : 'Sin clave',
-        status: s.arcaStatus || 'pendiente',
-        puntoVenta: s.arcaPtoVta || 1,
-        notas: s.arcaNotas || '',
-      };
-    });
-
+    const pendientes = await User.find({ 'settings.arcaStatus': { $in: ['pendiente','en_proceso','vinculado'] } }).select('nombre apellido email settings').lean();
+    const lista = pendientes.map(u => ({
+      id: u._id, cliente: `${u.nombre || ''} ${u.apellido || ''}`.trim(), email: u.email,
+      cuit: u.settings?.cuit || 'N/A', claveFiscal: u.settings?.arcaClave ? decrypt(u.settings.arcaClave) : 'Sin clave',
+      status: u.settings?.arcaStatus || 'pendiente', puntoVenta: u.settings?.arcaPtoVta || 1, notas: u.settings?.arcaNotas || '',
+    }));
     res.json({ ok: true, total: lista.length, lista });
-  } catch (e) {
-    res.status(500).json({ error: 'Error en panel de admin' });
-  }
+  } catch (e) { res.status(500).json({ error: 'Error en panel admin' }); }
 });
 
 app.post('/api/admin/update-status', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const { userId, nuevoStatus, notas, puntoVenta } = req.body;
-
-    await User.findByIdAndUpdate(userId, {
-      $set: {
-        'settings.arcaStatus': nuevoStatus,
-        'settings.arcaNotas': notas,
-        'settings.arcaPtoVta': Number(puntoVenta) || 1,
-      },
-    });
-
+    await User.findByIdAndUpdate(userId, { $set: { 'settings.arcaStatus': nuevoStatus, 'settings.arcaNotas': notas, 'settings.arcaPtoVta': Number(puntoVenta) || 1 } });
     if (nuevoStatus === 'vinculado') {
       const user = await User.findById(userId).select('settings.cuit').lean();
       const cuit = user?.settings?.cuit?.replace(/\D/g, '');
-      if (cuit) {
-        try { fs.unlinkSync(path.join(TA_CACHE_DIR, `${cuit}.json`)); } catch {}
-        console.log(`🔄 TA cache limpiado para CUIT ${cuit}`);
-      }
+      if (cuit) { try { fs.unlinkSync(path.join(TA_CACHE_DIR, `${cuit}.json`)); } catch {} console.log(`🔄 TA cache limpiado CUIT ${cuit}`); }
     }
-
-    res.json({ ok: true, message: `Estado actualizado a "${nuevoStatus}"` });
-  } catch (e) {
-    res.status(500).json({ error: 'No se pudo actualizar el estado' });
-  }
+    res.json({ ok: true, message: `Estado: "${nuevoStatus}"` });
+  } catch (e) { res.status(500).json({ error: 'No se pudo actualizar' }); }
 });

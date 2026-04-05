@@ -554,7 +554,10 @@ async function getUltimoComprobante(cuit, ptoVta, tipoCbte, token, sign) {
   let ultimoData;
   try {
     const r = await axios.post(AFIP_URLS.wsfe, soap, {
-      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
+      },
       httpsAgent,
       timeout: 20_000,
       validateStatus: () => true,
@@ -672,7 +675,10 @@ async function solicitarCAE(orden, userSettings, token, sign) {
   let wsfeData;
   try {
     const wsfeResp = await axios.post(AFIP_URLS.wsfe, soap, {
-      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+      headers: {
+        'Content-Type': 'text/xml; charset=utf-8',
+        'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
+      },
       httpsAgent,
       timeout: 30_000,
       validateStatus: () => true,  // no lanzar en 4xx/5xx — parsear el body primero

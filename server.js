@@ -349,12 +349,30 @@ try {
   console.warn('⚠️  Certificado AFIP no encontrado — emisión deshabilitada:', e.message);
 }
 
-// TLS legacy — AFIP usa DH de 1024 bits (OpenSSL 3.x los rechaza por default)
+// ── TLS AFIP FIX ─────────────────────────────────────────────
+// AFIP WSFE usa DH keys de 1024 bits — OpenSSL 3.x (Node 18+) las
+// rechaza con EPROTO. Solución: bajar SECLEVEL a 0 solo para el agent
+// que habla con AFIP. No afecta conexiones entrantes al servidor.
+//
+// Valores de secureOptions:
+//   SSL_OP_LEGACY_SERVER_CONNECT = 0x00000004  (permite DH pequeño)
+//   SSL_OP_NO_SSLv2              = 0x01000000
+const SSL_OP_LEGACY = typeof crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT !== 'undefined'
+  ? crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT
+  : 0x00000004;
+
 const httpsAgent = new https.Agent({
-  secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
+  secureOptions:     SSL_OP_LEGACY,
   rejectUnauthorized: true,
-  keepAlive: true,
+  keepAlive:          true,
+  // SECLEVEL=0 permite DH de cualquier tamaño (incluyendo 1024 bits de AFIP)
+  // DEFAULT: suites estándar + DHE con clave chica
+  ciphers: 'DEFAULT:@SECLEVEL=0',
 });
+
+// Global — aplica a WSAA, WSFE y cualquier llamada axios
+axios.defaults.httpsAgent = httpsAgent;
+console.log('[TLS] Agent AFIP: SSL_OP_LEGACY=' + SSL_OP_LEGACY.toString(16) + ' SECLEVEL=0');
 
 // URLs producción
 const AFIP_URLS = {

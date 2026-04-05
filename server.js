@@ -121,7 +121,7 @@ const UserSchema = new mongoose.Schema({
     // Datos fiscales del usuario (su propio CUIT)
     cuit:          { type: String },          // ej: "27310889518"
     razonSocial:   { type: String },
-    puntoVenta:    { type: Number, default: 1 },
+    puntoVenta:    { type: Number },   // legacy — usar arcaPtoVta
     tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
     // Clave Fiscal AFIP encriptada (para futura emisión directa)
     arcaClave:     { type: String },          // encriptada
@@ -595,7 +595,7 @@ function getTipoComprobante(orden, userSettings) {
 // ── PASO 4: Solicitar CAE al WSFE ────────────────────────────
 async function solicitarCAE(orden, userSettings, token, sign) {
   const cuit    = userSettings.cuit.replace(/\D/g, '');
-  const ptoVta  = parseInt(userSettings.puntoVenta || 1);
+  const ptoVta  = parseInt(userSettings.arcaPtoVta || userSettings.puntoVenta || 1);
   const tipo    = getTipoComprobante(orden, userSettings);
 
   const ultimo  = await getUltimoComprobante(cuit, ptoVta, tipo, token, sign);

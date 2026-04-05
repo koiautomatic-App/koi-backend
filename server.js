@@ -338,15 +338,19 @@ async function upsertOrder(integration, canonical) {
 // ════════════════════════════════════════════════════════════
 
 // Cargar certificado KOI desde archivos montados en Render
+const AFIP_CERT_PATH = process.env.AFIP_CERT_PATH || './cert/afip.crt';
+const AFIP_KEY_PATH  = process.env.AFIP_KEY_PATH  || './cert/afip.key';
+
 let AFIP_CERT, AFIP_KEY;
 try {
-  AFIP_CERT = fs.readFileSync(process.env.AFIP_CERT_PATH || './cert/afip.crt', 'utf8');
-  AFIP_KEY  = fs.readFileSync(process.env.AFIP_KEY_PATH  || './cert/afip.key', 'utf8');
+  AFIP_CERT = fs.readFileSync(AFIP_CERT_PATH, 'utf8');
+  AFIP_KEY  = fs.readFileSync(AFIP_KEY_PATH,  'utf8');
   console.log('✅ Certificado AFIP cargado');
   console.log('   CERT:', AFIP_CERT_PATH, '— size:', AFIP_CERT.length, 'chars');
   console.log('   KEY: ', AFIP_KEY_PATH,  '— size:', AFIP_KEY.length,  'chars');
 } catch(e) {
-  console.warn('⚠️  Certificado AFIP no encontrado — emisión deshabilitada:', e.message);
+  console.warn('⚠️  Certificado AFIP no encontrado:', e.message);
+  console.warn('   Buscando en:', AFIP_CERT_PATH, 'y', AFIP_KEY_PATH);
 }
 
 // ── TLS AFIP FIX ─────────────────────────────────────────────
@@ -547,14 +551,23 @@ async function getUltimoComprobante(cuit, ptoVta, tipoCbte, token, sign) {
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const res = await axios.post(AFIP_URLS.wsfe, soap, {
-    headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
-    httpsAgent,
-    timeout: 20_000,
-  });
-
-  const parser = new DOMParser();
-  const xml    = parser.parseFromString(res.data, 'text/xml');
+  let ultimoData;
+  try {
+    const r = await axios.post(AFIP_URLS.wsfe, soap, {
+      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+      httpsAgent,
+      timeout: 20_000,
+      validateStatus: () => true,
+    });
+    console.log(`[AFIP] UltimoNro HTTP ${r.status}`);
+    if (r.status !== 200) console.error('[AFIP] UltimoNro body:', r.data?.substring(0, 500));
+    ultimoData = r.data;
+  } catch (e) {
+    throw new Error('WSFE UltimoNro error: ' + e.message);
+  }
+  const xml = new DOMParser().parseFromString(ultimoData, 'text/xml');
+  const fault = xml.getElementsByTagName('faultstring')[0]?.textContent;
+  if (fault) throw new Error('WSFE UltimoNro fault: ' + fault);
   return parseInt(xml.getElementsByTagName('CbteNro')[0]?.textContent || '0');
 }
 
@@ -652,34 +665,56 @@ async function solicitarCAE(orden, userSettings, token, sign) {
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-  const res = await axios.post(AFIP_URLS.wsfe, soap, {
-    headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
-    httpsAgent,
-    timeout: 30_000,
-  });
+  // WSFE puede devolver HTTP 500 con el detalle del error en el body XML
+  // No lanzar hasta parsear la respuesta
+  console.log('[AFIP] POST WSFE →', AFIP_URLS.wsfe);
+
+  let wsfeData;
+  try {
+    const wsfeResp = await axios.post(AFIP_URLS.wsfe, soap, {
+      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': '' },
+      httpsAgent,
+      timeout: 30_000,
+      validateStatus: () => true,  // no lanzar en 4xx/5xx — parsear el body primero
+    });
+    console.log(`[AFIP] WSFE HTTP ${wsfeResp.status} — ${wsfeResp.data?.length} chars`);
+    console.log('[AFIP] WSFE body:', wsfeResp.data?.substring(0, 1200));
+    wsfeData = wsfeResp.data;
+  } catch (e) {
+    console.error('[AFIP] WSFE error de red:', e.message);
+    throw new Error('WSFE error de red: ' + e.message);
+  }
 
   const parser  = new DOMParser();
-  const xml     = parser.parseFromString(res.data, 'text/xml');
+  const xml     = parser.parseFromString(wsfeData, 'text/xml');
+
+  // Verificar SOAP Fault (HTTP 500 con detalle)
+  const soapFault = xml.getElementsByTagName('faultstring')[0]?.textContent;
+  if (soapFault) {
+    console.error('[AFIP] SOAP Fault WSFE:', soapFault);
+    throw new Error('WSFE SOAP Fault: ' + soapFault);
+  }
+
   const detResp = xml.getElementsByTagName('FECAEDetResponse')[0];
   const result  = detResp?.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (result !== 'A') {
     // Recopilar todos los errores de AFIP
     const errores = [];
-    xml.getElementsByTagName('Err').forEach?.(e => {});
     const errNodes = xml.getElementsByTagName('Err');
     for (let i = 0; i < errNodes.length; i++) {
       const msg  = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
       const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
       if (msg) errores.push(`[${code}] ${msg}`);
     }
-    // También observaciones
     const obsNodes = xml.getElementsByTagName('Obs');
     for (let i = 0; i < obsNodes.length; i++) {
       const msg = obsNodes[i].getElementsByTagName('Msg')[0]?.textContent;
       if (msg) errores.push(msg);
     }
-    throw new Error('AFIP rechazó: ' + (errores.join(' | ') || 'Error desconocido'));
+    const errMsg = errores.join(' | ') || `Resultado=${result || 'vacío'}`;
+    console.error('[AFIP] WSFE rechazó:', errMsg);
+    throw new Error('AFIP rechazó: ' + errMsg);
   }
 
   const cae     = detResp.getElementsByTagName('CAE')[0]?.textContent;

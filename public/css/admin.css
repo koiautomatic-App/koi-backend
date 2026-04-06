@@ -1,0 +1,8 @@
+/* Admin CSS */
+body { font-family: 'Inter', sans-serif; background-color: #f9fafb; padding: 2rem; }
+.btn-primary { background-color: #2563eb; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; }
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+.status-dot.vinculado { background: #10b981; }
+.status-dot.pendiente { background: #f59e0b; }
+.action-btn { padding: 0.25rem 0.75rem; border-radius: 0.25rem; border: none; cursor: pointer; }
+.action-btn-success { background-color: #10b981; color: white; }

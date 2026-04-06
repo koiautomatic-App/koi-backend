@@ -1,8 +1,330 @@
-/* Admin CSS */
-body { font-family: 'Inter', sans-serif; background-color: #f9fafb; padding: 2rem; }
-.btn-primary { background-color: #2563eb; color: white; padding: 0.5rem 1rem; border-radius: 0.5rem; border: none; cursor: pointer; }
-.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-.status-dot.vinculado { background: #10b981; }
-.status-dot.pendiente { background: #f59e0b; }
-.action-btn { padding: 0.25rem 0.75rem; border-radius: 0.25rem; border: none; cursor: pointer; }
-.action-btn-success { background-color: #10b981; color: white; }
+/* Admin CSS - KOI Factura */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background-color: #f9fafb;
+    padding: 2rem;
+}
+
+.admin-container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+.admin-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 2rem;
+}
+
+.admin-title h1 {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: #1f2937;
+}
+
+.admin-title p {
+    font-size: 0.875rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.btn {
+    padding: 0.5rem 1rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.btn-primary {
+    background-color: #2563eb;
+    color: white;
+}
+
+.btn-primary:hover {
+    background-color: #1d4ed8;
+}
+
+.btn-secondary {
+    background-color: #4b5563;
+    color: white;
+}
+
+.btn-secondary:hover {
+    background-color: #374151;
+}
+
+.card {
+    background: white;
+    border-radius: 0.75rem;
+    box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.admin-table thead {
+    background-color: #f9fafb;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.admin-table th {
+    padding: 1rem 1.5rem;
+    text-align: left;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    color: #6b7280;
+}
+
+.admin-table td {
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid #e5e7eb;
+    vertical-align: top;
+}
+
+.admin-table tbody tr:hover {
+    background-color: #f9fafb;
+}
+
+.text-center {
+    text-align: center;
+}
+
+.text-right {
+    text-align: right;
+}
+
+/* Badges de estado */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    display: inline-block;
+}
+
+.status-dot.vinculado { background: #10b981; box-shadow: 0 0 4px #10b981; }
+.status-dot.pendiente { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+.status-dot.error { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
+.status-dot.desvinculado { background: #6b7280; }
+.status-dot.en_proceso { background: #3b82f6; box-shadow: 0 0 4px #3b82f6; }
+
+.status-text {
+    padding: 0.25rem 0.5rem;
+    border-radius: 9999px;
+    font-size: 0.75rem;
+    font-weight: 600;
+}
+
+.status-text.vinculado { background: #d1fae5; color: #065f46; }
+.status-text.pendiente { background: #fed7aa; color: #92400e; }
+.status-text.error { background: #fee2e2; color: #991b1b; }
+.status-text.desvinculado { background: #f3f4f6; color: #374151; }
+.status-text.en_proceso { background: #dbeafe; color: #1e40af; }
+
+/* Input de punto de venta */
+.pto-input {
+    width: 80px;
+    border: 1px solid #e5e7eb;
+    border-radius: 0.375rem;
+    padding: 0.25rem 0.5rem;
+    text-align: center;
+    font-family: monospace;
+    font-size: 0.875rem;
+}
+
+.pto-input:focus {
+    outline: none;
+    border-color: #3b82f6;
+    box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Grupo de acciones */
+.action-group {
+    display: flex;
+    gap: 0.5rem;
+    justify-content: flex-end;
+}
+
+.action-btn {
+    padding: 0.25rem 0.75rem;
+    border-radius: 0.25rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+}
+
+.action-btn-success {
+    background-color: #10b981;
+    color: white;
+}
+
+.action-btn-success:hover {
+    background-color: #059669;
+}
+
+.action-btn-error {
+    background-color: #fee2e2;
+    color: #dc2626;
+}
+
+.action-btn-error:hover {
+    background-color: #fecaca;
+}
+
+.action-btn-unlink {
+    background-color: #6b7280;
+    color: white;
+}
+
+.action-btn-unlink:hover {
+    background-color: #4b5563;
+}
+
+/* Info de cliente */
+.client-name {
+    font-weight: 500;
+    color: #1f2937;
+}
+
+.client-email {
+    font-size: 0.75rem;
+    color: #6b7280;
+    margin-top: 0.25rem;
+}
+
+/* CUIT y Clave */
+.fiscal-data {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.25rem;
+}
+
+.fiscal-code {
+    font-family: monospace;
+    font-size: 0.875rem;
+    background-color: #f3f4f6;
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+}
+
+.copy-icon {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 1rem;
+    color: #9ca3af;
+    transition: color 0.2s;
+}
+
+.copy-icon:hover {
+    color: #4b5563;
+}
+
+/* Notas */
+.nota-text {
+    font-size: 0.75rem;
+    color: #9ca3af;
+    margin-top: 0.25rem;
+    font-style: italic;
+}
+
+/* Toast notifications */
+.toast-container {
+    position: fixed;
+    bottom: 1.25rem;
+    right: 1.25rem;
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.toast {
+    background-color: #1f2937;
+    color: white;
+    padding: 0.625rem 1.25rem;
+    border-radius: 0.5rem;
+    font-size: 0.875rem;
+    animation: fadeInOut 2s ease;
+    border-left: 3px solid;
+}
+
+.toast-success { border-left-color: #10b981; }
+.toast-error { border-left-color: #ef4444; }
+.toast-warning { border-left-color: #f59e0b; }
+.toast-info { border-left-color: #3b82f6; }
+
+@keyframes fadeInOut {
+    0% { opacity: 0; transform: translateY(20px); }
+    15% { opacity: 1; transform: translateY(0); }
+    85% { opacity: 1; transform: translateY(0); }
+    100% { opacity: 0; transform: translateY(20px); }
+}
+
+/* Estados de carga */
+.loading-row td, .empty-row td, .error-row td {
+    padding: 2rem;
+    text-align: center;
+    color: #9ca3af;
+}
+
+.error-row td {
+    color: #ef4444;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    body {
+        padding: 1rem;
+    }
+    
+    .admin-header {
+        flex-direction: column;
+        gap: 1rem;
+        align-items: stretch;
+    }
+    
+    .admin-actions {
+        justify-content: center;
+    }
+    
+    .admin-table th,
+    .admin-table td {
+        padding: 0.75rem;
+    }
+    
+    .action-group {
+        flex-direction: column;
+    }
+    
+    .pto-input {
+        width: 60px;
+    }
+}

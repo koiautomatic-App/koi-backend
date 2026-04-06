@@ -154,68 +154,16 @@ function cargarDashboard(data){
   renderComps(d.comprobantes);
 }
 
-/* ── ADAPTAR RESPUESTA API ─── */
-function adaptarStats(raw){
-  if(!raw) return null;
-  const ahora=new Date();
-  const mesNom=ahora.toLocaleString('es-AR',{month:'long'});
-  const anio=ahora.getFullYear();
-
-  const ventasPorDia={};
-  (raw.ultimas||[]).forEach(o=>{
-    const fecha=o.orderDate?new Date(o.orderDate):(o.createdAt?new Date(o.createdAt):null);
-    if(!fecha) return;
-    const dia=fecha.toLocaleDateString('es-AR',{day:'2-digit'});
-    ventasPorDia[dia]=(ventasPorDia[dia]||0)+(o.amount||0);
-  });
-  const dias=Object.keys(ventasPorDia).sort().slice(-14);
-
-  const comprobantes=(raw.ultimas||[]).slice(0,20).map(o=>{
-    const fecha=o.orderDate?new Date(o.orderDate):(o.createdAt?new Date(o.createdAt):null);
-    return {
-      id:o.externalId||o._id, _id:o._id,
-      cliente:o.customerName||'Sin nombre',
-      tipo:o.platform||'Venta',
-      fecha:fecha?fecha.toLocaleDateString('es-AR'):'—',
-      monto:o.amount||0,
-      estado:o.status==='invoiced'?'cae-ok':'cae-pend',
-      origen:o.platform==='manual'?'manual':'woo',
-    };
-  });
-
-  return {
-    serverOnline:true,
-    monoCategoria:'C',
-    monoFacturado:raw.totalMonto||0,
-    monoLimite:2432364,
-    monoMes:`Período: ${mesNom.charAt(0).toUpperCase()+mesNom.slice(1)} ${anio}`,
-    hoyFacturado:raw.hoyMonto||0,
-    hoyDelta:raw.hoyCount?`${raw.hoyCount} venta${raw.hoyCount!==1?'s':''} hoy`:'Sin ventas hoy',
-    hoyTipo:raw.hoyMonto>0?'up':'',
-    pendientesCAE:raw.pendientes||0,
-    pendDelta:raw.pendientes>0?`${raw.pendientes} sin emitir`:'Al día ✓',
-    pendTipo:raw.pendientes>0?'warn':'up',
-    mesFacturado:raw.facturadoMonto||0,
-    mesDelta:`${raw.facturadoCount||0} con CAE emitido`,
-    mesTipo:'up',
-    chartTotal:raw.totalMonto||0,
-    chartDias:dias,
-    chartVentas:dias.map(d=>Math.round(ventasPorDia[d]||0)),
-    comprobantes,
-  };
+{
+  id: "123",
+  cliente: "Julio César Rébolo",
+  tipo: "woocommerce",
+  fecha: "6/4/2028",
+  monto: 44000,
+  estado: "cae-pend",
+  itemsSummary: "2x Producto A, 1x Producto B",  // 👈 NUEVO
+  concepto: ""                                     // 👈 NUEVO
 }
-
-/* ── PERÍODO DASHBOARD ─── */
-let _dashDesde=null, _dashHasta=null;
-
-function _initDashPeriod(){
-  const hoy=new Date();
-  _dashDesde=new Date(hoy.getFullYear(),hoy.getMonth(),1);
-  _dashHasta=new Date(hoy.getFullYear(),hoy.getMonth()+1,0);
-  _syncDashInputs();
-  _updatePeriodLabel('Este mes');
-}
-
 function _syncDashInputs(){
   const toISO=d=>d?d.toISOString().split('T')[0]:'';
   const ed=document.getElementById('dashDesde'); if(ed) ed.value=toISO(_dashDesde);

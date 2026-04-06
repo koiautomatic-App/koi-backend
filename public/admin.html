@@ -9,6 +9,42 @@
     <style>
         body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
         .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); }
+        .copy-btn { cursor: pointer; transition: opacity 0.2s; }
+        .copy-btn:hover { opacity: 0.7; }
+        .toast {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            background: #1f2937;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 8px;
+            font-size: 14px;
+            z-index: 1000;
+            animation: fadeInOut 2s ease;
+        }
+        @keyframes fadeInOut {
+            0% { opacity: 0; transform: translateY(20px); }
+            15% { opacity: 1; transform: translateY(0); }
+            85% { opacity: 1; transform: translateY(0); }
+            100% { opacity: 0; transform: translateY(20px); }
+        }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        .status-dot.vinculado { background: #10b981; box-shadow: 0 0 4px #10b981; }
+        .status-dot.pendiente { background: #f59e0b; box-shadow: 0 0 4px #f59e0b; }
+        .status-dot.error { background: #ef4444; box-shadow: 0 0 4px #ef4444; }
+        .status-dot.desvinculado { background: #6b7280; }
+        .status-dot.en_proceso { background: #3b82f6; box-shadow: 0 0 4px #3b82f6; }
     </style>
 </head>
 <body class="p-8">
@@ -18,9 +54,14 @@
                 <h1 class="text-2xl font-semibold text-gray-800">🐟 KOI Admin</h1>
                 <p class="text-gray-500 text-sm">Gestión de Carpeta Fiscal (Conserjería)</p>
             </div>
-            <button onclick="fetchPendientes()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
-                Actualizar Lista
-            </button>
+            <div class="flex gap-2">
+                <button onclick="fetchPendientes()" class="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition">
+                    Actualizar Lista
+                </button>
+                <button onclick="exportarCSV()" class="bg-gray-600 text-white px-4 py-2 rounded-lg hover:bg-gray-700 transition">
+                    Exportar CSV
+                </button>
+            </div>
         </header>
 
         <div class="card overflow-hidden">
@@ -35,78 +76,245 @@
                     </tr>
                 </thead>
                 <tbody id="lista-pendientes">
+                    <tr>
+                        <td colspan="5" class="px-6 py-8 text-center text-gray-400">Cargando usuarios...</td>
+                    </tr>
                 </tbody>
             </table>
         </div>
     </div>
 
-    <script>
-        async function fetchPendientes() {
-            const res = await fetch('/api/admin/pendientes');
-            const data = await res.json();
-            
-            if (!data.ok) {
-                alert("Error: " + (data.error || "No autorizado"));
-                return;
-            }
+    <div id="toast-container"></div>
 
-            const container = document.getElementById('lista-pendientes');
-            container.innerHTML = data.lista.map(item => `
-                <tr class="border-b hover:bg-gray-50 transition">
-                    <td class="px-6 py-4">
-                        <div class="font-medium text-gray-800">${item.cliente}</div>
-                        <div class="text-xs text-gray-500">${item.email}</div>
-                    </td>
-                    <td class="px-6 py-4">
-                        <div class="text-sm font-mono bg-gray-100 p-1 rounded inline-block mb-1">${item.cuit}</div>
-                        <div class="text-sm text-blue-600 font-semibold select-all cursor-pointer" title="Click para copiar">${item.claveFiscal}</div>
-                    </td>
-                    <td class="px-6 py-4 text-center">
-                        <input type="number" id="pv-${item.id}" value="${item.puntoVenta || 1}" 
-                               class="w-16 border rounded px-2 py-1 text-center font-mono text-sm focus:border-blue-500 outline-none" 
-                               placeholder="Ej: 3">
-                    </td>
-                    <td class="px-6 py-4">
-                        <span class="px-2 py-1 text-xs rounded-full ${item.status === 'pendiente' ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'}">
-                            ${item.status}
-                        </span>
-                        <p class="text-xs text-gray-400 mt-1 italic">${item.notas || ''}</p>
-                    </td>
-                    <td class="px-6 py-4 text-right">
-                        <button onclick="updateStatus('${item.id}', 'vinculado')" class="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 mr-2">Vincular OK</button>
-                        <button onclick="updateStatus('${item.id}', 'error')" class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200">Error</button>
-                    </td>
-                </tr>
-            `).join('');
+    <script>
+        // Mostrar toast de notificación
+        function mostrarToast(mensaje, tipo = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            toast.className = 'toast';
+            const colores = {
+                success: '#10b981',
+                error: '#ef4444',
+                warning: '#f59e0b',
+                info: '#3b82f6'
+            };
+            toast.style.borderLeft = `4px solid ${colores[tipo] || colores.success}`;
+            toast.innerHTML = mensaje;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 2000);
         }
 
+        // Copiar texto al portapapeles
+        async function copiarTexto(texto, label) {
+            try {
+                await navigator.clipboard.writeText(texto);
+                mostrarToast(`${label} copiado al portapapeles`, 'success');
+            } catch (err) {
+                mostrarToast('Error al copiar', 'error');
+            }
+        }
+
+        // Obtener clase CSS para el estado
+        function getStatusClass(status) {
+            const classes = {
+                'vinculado': 'bg-green-100 text-green-700',
+                'pendiente': 'bg-orange-100 text-orange-700',
+                'error': 'bg-red-100 text-red-700',
+                'desvinculado': 'bg-gray-100 text-gray-700',
+                'en_proceso': 'bg-blue-100 text-blue-700'
+            };
+            return classes[status] || 'bg-gray-100 text-gray-700';
+        }
+
+        // Obtener texto legible del estado
+        function getStatusText(status) {
+            const textos = {
+                'vinculado': '✓ Vinculado',
+                'pendiente': '⏳ Pendiente',
+                'error': '✗ Error',
+                'desvinculado': '○ Desvinculado',
+                'en_proceso': '⟳ En proceso'
+            };
+            return textos[status] || status;
+        }
+
+        // Obtener clase del dot para el estado
+        function getStatusDotClass(status) {
+            return `status-dot ${status || 'pendiente'}`;
+        }
+
+        // Cargar lista de usuarios pendientes
+        async function fetchPendientes() {
+            const container = document.getElementById('lista-pendientes');
+            container.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">Cargando usuarios...</td></tr>`;
+            
+            try {
+                const res = await fetch('/api/admin/pendientes');
+                const data = await res.json();
+                
+                if (!data.ok) {
+                    container.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">Error: ${data.error || "No autorizado"}</td></tr>`;
+                    mostrarToast(data.error || "Error al cargar usuarios", 'error');
+                    return;
+                }
+
+                if (!data.lista || data.lista.length === 0) {
+                    container.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-gray-400">No hay usuarios con CUIT registrados</td></tr>`;
+                    return;
+                }
+
+                container.innerHTML = data.lista.map(item => {
+                    const statusClass = getStatusClass(item.status);
+                    const statusText = getStatusText(item.status);
+                    const statusDotClass = getStatusDotClass(item.status);
+                    
+                    return `
+                    <tr class="border-b hover:bg-gray-50 transition">
+                        <td class="px-6 py-4">
+                            <div class="font-medium text-gray-800">${escapeHtml(item.cliente)}</div>
+                            <div class="text-xs text-gray-500">${escapeHtml(item.email)}</div>
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="flex items-center gap-2">
+                                <span class="text-sm font-mono bg-gray-100 p-1 rounded">${escapeHtml(item.cuit)}</span>
+                                <button onclick="copiarTexto('${escapeHtml(item.cuit)}', 'CUIT')" class="text-gray-400 hover:text-gray-600" title="Copiar CUIT">📋</button>
+                            </div>
+                            <div class="flex items-center gap-2 mt-1">
+                                <span class="text-sm text-blue-600 font-semibold select-all">${escapeHtml(item.claveFiscal)}</span>
+                                <button onclick="copiarTexto('${escapeHtml(item.claveFiscal)}', 'Clave fiscal')" class="text-gray-400 hover:text-gray-600" title="Copiar clave">📋</button>
+                            </div>
+                        </td>
+                        <td class="px-6 py-4 text-center">
+                            <input type="number" id="pv-${item.id}" value="${item.puntoVenta || 1}" 
+                                   class="w-20 border rounded px-2 py-1 text-center font-mono text-sm focus:border-blue-500 outline-none" 
+                                   placeholder="Ej: 3">
+                        </td>
+                        <td class="px-6 py-4">
+                            <div class="status-badge">
+                                <span class="${statusDotClass}"></span>
+                                <span class="px-2 py-1 text-xs rounded-full ${statusClass}">${statusText}</span>
+                            </div>
+                            ${item.notas ? `<p class="text-xs text-gray-400 mt-1 italic">${escapeHtml(item.notas)}</p>` : ''}
+                        </td>
+                        <td class="px-6 py-4 text-right">
+                            <div class="flex gap-2 justify-end">
+                                <button onclick="updateStatus('${item.id}', 'vinculado')" 
+                                        class="text-xs bg-green-500 text-white px-3 py-1 rounded hover:bg-green-600 transition">
+                                    Vincular OK
+                                </button>
+                                <button onclick="updateStatus('${item.id}', 'error')" 
+                                        class="text-xs bg-red-100 text-red-600 px-3 py-1 rounded hover:bg-red-200 transition">
+                                    Error
+                                </button>
+                                <button onclick="updateStatus('${item.id}', 'desvinculado')" 
+                                        class="text-xs bg-gray-500 text-white px-3 py-1 rounded hover:bg-gray-600 transition">
+                                    Desvincular
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `}).join('');
+            } catch (error) {
+                console.error('Error:', error);
+                container.innerHTML = `<tr><td colspan="5" class="px-6 py-8 text-center text-red-400">Error de conexión: ${error.message}</td></tr>`;
+                mostrarToast('Error de conexión con el servidor', 'error');
+            }
+        }
+
+        // Actualizar estado de un usuario
         async function updateStatus(userId, nuevoStatus) {
-            // Capturamos el Punto de Venta desde el input
             const ptoVta = document.getElementById(`pv-${userId}`).value;
             
-            const notas = prompt("Notas para el cliente (ej: Todo listo):");
+            let mensajePredeterminado = '';
+            if (nuevoStatus === 'vinculado') mensajePredeterminado = 'Vinculación aprobada - Cliente puede facturar';
+            if (nuevoStatus === 'error') mensajePredeterminado = 'Error en la vinculación - Revisar datos';
+            if (nuevoStatus === 'desvinculado') mensajePredeterminado = 'Usuario desvinculado del sistema';
+            
+            const notas = prompt("Notas para el cliente (opcional):", mensajePredeterminado);
             if (notas === null) return;
 
-            const res = await fetch('/api/admin/update-status', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    userId, 
-                    nuevoStatus, 
-                    notas, 
-                    puntoVenta: ptoVta // Enviamos el dato al servidor
-                })
-            });
+            const btn = event.target;
+            const textoOriginal = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = '...';
 
-            if (res.ok) {
-                alert("Estado actualizado correctamente");
-                fetchPendientes();
-            } else {
-                alert("Error al actualizar");
+            try {
+                const res = await fetch('/api/admin/update-status', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        userId, 
+                        nuevoStatus, 
+                        notas: notas || mensajePredeterminado,
+                        puntoVenta: ptoVta
+                    })
+                });
+
+                const data = await res.json();
+                
+                if (res.ok) {
+                    mostrarToast(`✅ Usuario actualizado a "${nuevoStatus}"`, 'success');
+                    fetchPendientes();
+                } else {
+                    mostrarToast(`❌ Error: ${data.error || 'No se pudo actualizar'}`, 'error');
+                }
+            } catch (error) {
+                mostrarToast(`❌ Error de red: ${error.message}`, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerText = textoOriginal;
             }
         }
 
+        // Exportar lista a CSV
+        function exportarCSV() {
+            const table = document.getElementById('lista-pendientes');
+            const rows = table.querySelectorAll('tr');
+            let csvContent = "Cliente,Email,CUIT,Clave Fiscal,Punto Venta,Estado,Notas\n";
+            
+            for (let row of rows) {
+                const cells = row.querySelectorAll('td');
+                if (cells.length >= 5) {
+                    const cliente = cells[0].innerText.replace(/\n/g, ' ').trim();
+                    const email = cells[0].querySelector('.text-xs')?.innerText || '';
+                    const cuit = cells[1].querySelector('.font-mono')?.innerText || '';
+                    const clave = cells[1].querySelector('.text-blue-600')?.innerText || '';
+                    const ptoVenta = cells[2].querySelector('input')?.value || '';
+                    const estado = cells[3].querySelector('.rounded-full')?.innerText || '';
+                    const notas = cells[3].querySelector('.italic')?.innerText || '';
+                    
+                    csvContent += `"${cliente}","${email}","${cuit}","${clave}","${ptoVenta}","${estado}","${notas}"\n`;
+                }
+            }
+            
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+            link.setAttribute('href', url);
+            link.setAttribute('download', `koi_admin_${new Date().toISOString().slice(0,19)}.csv`);
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            mostrarToast('CSV exportado correctamente', 'success');
+        }
+
+        // Escape HTML para prevenir XSS
+        function escapeHtml(str) {
+            if (!str) return '';
+            return str
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Cargar datos al iniciar
         fetchPendientes();
+
+        // Auto-refresh cada 30 segundos
+        setInterval(fetchPendientes, 30000);
     </script>
 </body>
 </html>

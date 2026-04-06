@@ -1515,7 +1515,7 @@ app.get('/api/admin/pendientes', requireAdmin, async (req, res) => {
         email: user.email,
         cuit: settings.cuit || '—',
         claveFiscal: claveFiscal,
-        puntoVenta: settings.puntoVenta || settings.arcaPtoVta || 1,
+        puntoVenta: settings.arcaPtoVta || settings.puntoVenta || 1,
         status: status,
         notas: notas,
       };

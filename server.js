@@ -197,7 +197,23 @@ const OrderSchema = new mongoose.Schema({
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
   createdAt:      { type: Date, default: Date.now },
-  concepto:       { type: String, default: '' },  // 👈 AGREGAR ESTA LÍNEA
+  concepto:       { type: String, default: '' },
+  
+  // 👇 NUEVO: Items de la orden (productos y cantidades) 👇
+  items: [{
+    productId:   { type: String, default: '' },
+    name:        { type: String, required: true },
+    quantity:    { type: Number, required: true, min: 1 },
+    unitPrice:   { type: Number, required: true },
+    subtotal:    { type: Number, required: true },
+    sku:         { type: String, default: '' }
+  }]
+});
+
+// Virtual para obtener resumen de items (ej: "2x Producto A, 1x Producto B")
+OrderSchema.virtual('itemsSummary').get(function() {
+  if (!this.items || this.items.length === 0) return '';
+  return this.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
 });
 
 // Virtual para formatear el número de comprobante
@@ -210,8 +226,8 @@ OrderSchema.virtual('nroFormatted').get(function() {
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
+OrderSchema.index({ 'items.name': 1 }); // índice para búsqueda por producto
 
-// 👇 MODELO al final 👇
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
@@ -230,6 +246,17 @@ const normalize = {
   woocommerce: (raw) => {
     const b = raw.billing || {};
     const doc = _cleanDoc(b.dni || b.identification || b.cpf || '');
+    
+    // Extraer items
+    const items = (raw.line_items || []).map(item => ({
+      productId: String(item.product_id),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.price),
+      subtotal: parseFloat(item.subtotal),
+      sku: item.sku || ''
+    }));
+    
     return {
       externalId:    String(raw.id),
       customerName:  `${b.first_name||''} ${b.last_name||''}`.trim(),
@@ -237,10 +264,23 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total)||0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
+      items: items
     };
   },
+  
   tiendanube: (raw) => {
     const doc = _cleanDoc(raw.billing_info?.document || '');
+    
+    // Extraer items
+    const items = (raw.products || []).map(item => ({
+      productId: String(item.product_id),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.price),
+      subtotal: parseFloat(item.price) * item.quantity,
+      sku: item.sku || ''
+    }));
+    
     return {
       externalId:    String(raw.id),
       customerName:  raw.contact?.name || '',
@@ -248,10 +288,23 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total)||0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
+      items: items
     };
   },
+  
   mercadolibre: (raw) => {
     const doc = _cleanDoc(raw.billing_info?.doc_number || '');
+    
+    // Extraer items
+    const items = (raw.order_items || []).map(item => ({
+      productId: String(item.item?.id || ''),
+      name: item.item?.title || 'Producto',
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.unit_price),
+      subtotal: parseFloat(item.unit_price) * item.quantity,
+      sku: item.item?.seller_sku || ''
+    }));
+    
     return {
       externalId:    String(raw.id),
       customerName:  raw.buyer?.nickname || '',
@@ -259,11 +312,24 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount)||0),
       amount:        parseFloat(raw.total_amount) || 0,
       currency:      raw.currency_id || 'ARS',
+      items: items
     };
   },
+  
   vtex: (raw) => {
     const c = raw.clientProfileData || {};
     const doc = _cleanDoc(c.document || '');
+    
+    // Extraer items
+    const items = (raw.items || []).map(item => ({
+      productId: String(item.id),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.price) / 100,
+      subtotal: parseFloat(item.sellingPrice) / 100,
+      sku: item.skuName || ''
+    }));
+    
     return {
       externalId:    raw.orderId || String(raw.id),
       customerName:  `${c.firstName||''} ${c.lastName||''}`.trim(),
@@ -271,10 +337,23 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, (parseFloat(raw.value)||0)/100),
       amount:        (parseFloat(raw.value)||0) / 100,
       currency:      raw.currencyCode || 'ARS',
+      items: items
     };
   },
+  
   empretienda: (raw) => {
     const doc = _cleanDoc(raw.customer?.dni || '');
+    
+    // Extraer items
+    const items = (raw.items || []).map(item => ({
+      productId: String(item.product_id),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.price),
+      subtotal: parseFloat(item.subtotal),
+      sku: item.sku || ''
+    }));
+    
     return {
       externalId:    String(raw.order_id || raw.id),
       customerName:  raw.customer?.name || '',
@@ -282,10 +361,23 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price||raw.total)||0),
       amount:        parseFloat(raw.total_price || raw.total) || 0,
       currency:      'ARS',
+      items: items
     };
   },
+  
   rappi: (raw) => {
     const o = raw.order || raw;
+    
+    // Rappi generalmente no da items detallados
+    const items = [{
+      productId: '',
+      name: o.description || 'Pedido Rappi',
+      quantity: 1,
+      unitPrice: parseFloat(o.total_products || o.total) || 0,
+      subtotal: parseFloat(o.total_products || o.total) || 0,
+      sku: ''
+    }];
+    
     return {
       externalId:    String(o.id),
       customerName:  o.user?.name || '',
@@ -293,11 +385,24 @@ const normalize = {
       customerDoc:   CUIT_CF,
       amount:        parseFloat(o.total_products || o.total) || 0,
       currency:      'ARS',
+      items: items
     };
   },
+  
   shopify: (raw) => {
     const a = raw.billing_address || raw.shipping_address || {};
     const doc = _cleanDoc(raw.note_attributes?.find(x => x.name==='dni')?.value || '');
+    
+    // Extraer items
+    const items = (raw.line_items || []).map(item => ({
+      productId: String(item.product_id),
+      name: item.name,
+      quantity: item.quantity,
+      unitPrice: parseFloat(item.price),
+      subtotal: parseFloat(item.price) * item.quantity,
+      sku: item.sku || ''
+    }));
+    
     return {
       externalId:    String(raw.id),
       customerName:  `${a.first_name||''} ${a.last_name||''}`.trim(),
@@ -305,10 +410,10 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price)||0),
       amount:        parseFloat(raw.total_price) || 0,
       currency:      raw.currency || 'ARS',
+      items: items
     };
   },
 };
-
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
 // ════════════════════════════════════════════════════════════

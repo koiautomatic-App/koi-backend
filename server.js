@@ -119,12 +119,20 @@ const UserSchema = new mongoose.Schema({
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
     // Datos fiscales del usuario (su propio CUIT)
-    cuit:          { type: String },          // ej: "27310889518"
+    cuit:          { type: String },
     razonSocial:   { type: String },
-    puntoVenta:    { type: Number },   // legacy — usar arcaPtoVta
-    tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
-    // Clave Fiscal AFIP encriptada (para futura emisión directa)
-    arcaClave:     { type: String },          // encriptada
+    puntoVenta:    { type: Number },
+    tipoComprobante: { type: Number, default: 11 },
+    // Clave Fiscal AFIP encriptada
+    arcaClave:     { type: String },
+    
+    // 👇 ESTOS CAMPOS VAN DENTRO DE settings 👇
+    arcaStatus: { type: String, enum: ['pendiente', 'vinculado', 'error', 'en_proceso'], default: 'pendiente' },
+    arcaPtoVta: { type: Number },
+    arcaNotas: { type: String },
+    arcaError: { type: String },
+    arcaVinculadoEn: { type: Date },
+    arcaUpdatedAt: { type: Date },
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
@@ -189,10 +197,21 @@ const OrderSchema = new mongoose.Schema({
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
   createdAt:      { type: Date, default: Date.now },
+  concepto:       { type: String, default: '' },  // 👈 AGREGAR ESTA LÍNEA
 });
+
+// Virtual para formatear el número de comprobante
+OrderSchema.virtual('nroFormatted').get(function() {
+  if (!this.puntoVenta || !this.nroComprobante) return '';
+  const tipo = this.tipoComprobante === 11 ? 'C' : this.tipoComprobante === 1 ? 'A' : 'B';
+  return `FC ${tipo} ${String(this.puntoVenta).padStart(5, '0')}-${String(this.nroComprobante).padStart(8, '0')}`;
+});
+
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
+
+// 👇 MODELO al final 👇
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
@@ -761,7 +780,6 @@ async function emitirCAE(orderId, userOverride = null) {
       tipoComprobante: result.tipo,
       puntoVenta:      result.ptoVta,
       nroComprobante:  result.nroCbte,
-      nroFormatted:    `FC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr}`,
       fechaEmision:    new Date(),
       impNeto:         result.impNeto,
       impIVA:          result.impIVA,
@@ -1430,6 +1448,118 @@ setTimeout(() => {
   ping();
   setInterval(ping, 10 * 60 * 1000);
 }, 30_000);
+
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN PANEL ENDPOINTS (para admin.html)
+// ════════════════════════════════════════════════════════════
+
+// CAMBIAR ESTOS EMAILS por los que tengan acceso de admin
+const ADMIN_EMAILS = ['koi.automatic@gmail.com'];
+
+const requireAdmin = async (req, res, next) => {
+  try {
+    const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
+    const { id } = jwt.verify(token, JWT_SECRET);
+    const user = await User.findById(id);
+    
+    if (!ADMIN_EMAILS.includes(user.email)) {
+      return res.status(403).json({ error: 'Acceso no autorizado - Solo administradores' });
+    }
+    
+    req.adminId = id;
+    next();
+  } catch(e) {
+    res.status(401).json({ error: 'No autenticado' });
+  }
+};
+
+// GET /api/admin/pendientes - Listar usuarios con CUIT/clave fiscal
+app.get('/api/admin/pendientes', requireAdmin, async (req, res) => {
+  try {
+    const usuarios = await User.find({
+      $or: [
+        { 'settings.cuit': { $exists: true, $ne: null, $ne: '' } },
+        { 'settings.arcaClave': { $exists: true, $ne: null, $ne: '' } }
+      ]
+    }).select('nombre email settings _id createdAt').lean();
+
+    const lista = usuarios.map(user => {
+      const settings = user.settings || {};
+      let status = 'pendiente';
+      let notas = '';
+      
+      if (settings.arcaStatus === 'vinculado') {
+        status = 'vinculado';
+        notas = '✓ AFIP vinculado correctamente';
+      } else if (settings.arcaStatus === 'error') {
+        status = 'error';
+        notas = settings.arcaError || 'Error en la vinculación';
+      } else if (settings.cuit && settings.arcaClave) {
+        status = 'pendiente';
+        notas = 'Esperando validación del equipo KOI';
+      }
+
+      let claveFiscal = '—';
+      if (settings.arcaClave) {
+        try {
+          claveFiscal = decrypt(settings.arcaClave);
+        } catch(e) {
+          claveFiscal = 'Error al desencriptar';
+        }
+      }
+
+      return {
+        id: user._id,
+        cliente: user.nombre || 'Sin nombre',
+        email: user.email,
+        cuit: settings.cuit || '—',
+        claveFiscal: claveFiscal,
+        puntoVenta: settings.puntoVenta || settings.arcaPtoVta || 1,
+        status: status,
+        notas: notas,
+      };
+    });
+
+    res.json({ ok: true, lista });
+  } catch(e) {
+    console.error('Admin pendientes error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// POST /api/admin/update-status - Actualizar estado de vinculación
+app.post('/api/admin/update-status', requireAdmin, async (req, res) => {
+  try {
+    const { userId, nuevoStatus, notas, puntoVenta } = req.body;
+    
+    if (!userId || !nuevoStatus) {
+      return res.status(400).json({ error: 'userId y nuevoStatus requeridos' });
+    }
+
+    const update = {
+      'settings.arcaStatus': nuevoStatus,
+      'settings.arcaUpdatedAt': new Date()
+    };
+
+    if (notas) update['settings.arcaNotas'] = notas;
+    if (puntoVenta && !isNaN(parseInt(puntoVenta))) {
+      update['settings.arcaPtoVta'] = parseInt(puntoVenta);
+      update['settings.puntoVenta'] = parseInt(puntoVenta);
+    }
+    if (nuevoStatus === 'vinculado') update['settings.arcaVinculadoEn'] = new Date();
+    if (nuevoStatus === 'error') update['settings.arcaError'] = notas || 'Error en la vinculación';
+
+    const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
+    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
+
+    console.log(`✅ Admin: Usuario ${user.email} actualizado a ${nuevoStatus}`);
+    res.json({ ok: true, message: `Usuario actualizado a ${nuevoStatus}` });
+  } catch(e) {
+    console.error('Admin update error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ════════════════════════════════════════════════════════════
 //  START

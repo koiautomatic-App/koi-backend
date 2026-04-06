@@ -1549,6 +1549,12 @@ app.post('/api/admin/update-status', requireAdmin, async (req, res) => {
     }
     if (nuevoStatus === 'vinculado') update['settings.arcaVinculadoEn'] = new Date();
     if (nuevoStatus === 'error') update['settings.arcaError'] = notas || 'Error en la vinculación';
+    if (nuevoStatus === 'desvinculado') {
+      update['settings.arcaVinculadoEn'] = null;
+      update['settings.arcaError'] = null;
+      update['settings.arcaNotas'] = notas || 'Usuario desvinculado por el administrador';
+    }
+
 
     const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
     if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });

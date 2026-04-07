@@ -696,6 +696,17 @@
     .neg-status-ok     { background:var(--green-soft); color:var(--green); border:1px solid rgba(0,230,118,.2); }
     .neg-status-error  { background:rgba(255,61,87,.08); color:var(--red); border:1px solid rgba(255,61,87,.2); }
     .neg-status-pending{ background:rgba(255,179,0,.08); color:var(--yellow); border:1px solid rgba(255,179,0,.2); }
+    .neg-backfill-btn {
+      display:inline-flex; align-items:center; gap:6px;
+      background:none; border:1px solid rgba(232,98,42,.2);
+      color:var(--orange-2); border-radius:var(--r-sm);
+      padding:6px 11px; cursor:pointer;
+      font-size:11px; font-weight:600; font-family:var(--font-ui);
+      transition:all .15s; white-space:nowrap;
+    }
+    .neg-backfill-btn:hover {
+      background:rgba(232,98,42,.1); border-color:rgba(232,98,42,.4);
+    }
     .neg-disconnect-btn {
       background:none; border:1px solid rgba(255,61,87,.15);
       color:var(--text-3); border-radius:var(--r-sm); padding:6px 10px;

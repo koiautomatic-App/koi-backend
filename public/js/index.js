@@ -123,7 +123,6 @@ function renderComps(lista){
       ?`<button class="act-btn act-done" disabled title="CAE emitido ✓"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round'/></svg></button>`
       :`<button class="act-btn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
     
-    // 👇 NUEVO: Generar HTML de items si existen
     const itemsHtml = c.itemsSummary 
       ? `<div class="comp-items" style="font-size:10px; color:var(--text-3); margin-top:4px;">🛒 ${c.itemsSummary}</div>`
       : (c.concepto ? `<div class="comp-items" style="font-size:10px; color:var(--text-3); margin-top:4px;">📝 ${c.concepto}</div>` : '');
@@ -154,16 +153,82 @@ function cargarDashboard(data){
   renderComps(d.comprobantes);
 }
 
-{
-  id: "123",
-  cliente: "Julio César Rébolo",
-  tipo: "woocommerce",
-  fecha: "6/4/2028",
-  monto: 44000,
-  estado: "cae-pend",
-  itemsSummary: "2x Producto A, 1x Producto B",  // 👈 NUEVO
-  concepto: ""                                     // 👈 NUEVO
+/* ── ADAPTAR RESPUESTA API ─── */
+function adaptarStats(raw){
+  if(!raw) return null;
+  const ahora=new Date();
+  const mesNom=ahora.toLocaleString('es-AR',{month:'long'});
+  const anio=ahora.getFullYear();
+
+  const ventasPorDia={};
+  (raw.ultimas||[]).forEach(o=>{
+    const fecha=o.orderDate?new Date(o.orderDate):(o.createdAt?new Date(o.createdAt):null);
+    if(!fecha) return;
+    const dia=fecha.toLocaleDateString('es-AR',{day:'2-digit'});
+    ventasPorDia[dia]=(ventasPorDia[dia]||0)+(o.amount||0);
+  });
+  const dias=Object.keys(ventasPorDia).sort().slice(-14);
+
+  const comprobantes=(raw.ultimas||[]).slice(0,20).map(o=>{
+    const fecha=o.orderDate?new Date(o.orderDate):(o.createdAt?new Date(o.createdAt):null);
+    
+    // Generar itemsSummary desde items
+    let itemsSummary = '';
+    if (o.itemsSummary) {
+      itemsSummary = o.itemsSummary;
+    } else if (o.items && o.items.length > 0) {
+      itemsSummary = o.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
+    } else if (o.concepto) {
+      itemsSummary = o.concepto;
+    }
+    
+    return {
+      id: o.externalId || o._id,
+      _id: o._id,
+      cliente: o.customerName || 'Sin nombre',
+      tipo: o.platform || 'Venta',
+      fecha: fecha ? fecha.toLocaleDateString('es-AR') : '—',
+      monto: o.amount || 0,
+      estado: o.status === 'invoiced' ? 'cae-ok' : 'cae-pend',
+      origen: o.platform === 'manual' ? 'manual' : 'woo',
+      itemsSummary: itemsSummary,
+      concepto: o.concepto || ''
+    };
+  });
+
+  return {
+    serverOnline: true,
+    monoCategoria: 'C',
+    monoFacturado: raw.totalMonto || 0,
+    monoLimite: 2432364,
+    monoMes: `Período: ${mesNom.charAt(0).toUpperCase() + mesNom.slice(1)} ${anio}`,
+    hoyFacturado: raw.hoyMonto || 0,
+    hoyDelta: raw.hoyCount ? `${raw.hoyCount} venta${raw.hoyCount !== 1 ? 's' : ''} hoy` : 'Sin ventas hoy',
+    hoyTipo: raw.hoyMonto > 0 ? 'up' : '',
+    pendientesCAE: raw.pendientes || 0,
+    pendDelta: raw.pendientes > 0 ? `${raw.pendientes} sin emitir` : 'Al día ✓',
+    pendTipo: raw.pendientes > 0 ? 'warn' : 'up',
+    mesFacturado: raw.facturadoMonto || 0,
+    mesDelta: `${raw.facturadoCount || 0} con CAE emitido`,
+    mesTipo: 'up',
+    chartTotal: raw.totalMonto || 0,
+    chartDias: dias,
+    chartVentas: dias.map(d => Math.round(ventasPorDia[d] || 0)),
+    comprobantes: comprobantes,
+  };
 }
+
+/* ── PERÍODO DASHBOARD ─── */
+let _dashDesde=null, _dashHasta=null;
+
+function _initDashPeriod(){
+  const hoy=new Date();
+  _dashDesde=new Date(hoy.getFullYear(),hoy.getMonth(),1);
+  _dashHasta=new Date(hoy.getFullYear(),hoy.getMonth()+1,0);
+  _syncDashInputs();
+  _updatePeriodLabel('Este mes');
+}
+
 function _syncDashInputs(){
   const toISO=d=>d?d.toISOString().split('T')[0]:'';
   const ed=document.getElementById('dashDesde'); if(ed) ed.value=toISO(_dashDesde);
@@ -268,7 +333,6 @@ async function cargarConfigVista(){
     const c2=document.getElementById('cfgCuit2');      if(c2)  c2.value  =s.cuit      ||'';
     const e2=document.getElementById('cfgEmail2');     if(e2)  e2.value  =user.email  ||'';
     const cat2=document.getElementById('cfgCategoria2');if(cat2)cat2.value=s.categoria ||'C';
-    // Cargar estado real de los switches
     const swF=document.getElementById('switchFactAuto2');  if(swF)  swF.checked =s.factAuto !==false;
     const swE=document.getElementById('switchEnvioAuto2'); if(swE)  swE.checked =s.envioAuto!==false;
   }catch(e){console.warn('cargarConfigVista:',e.message);}
@@ -286,7 +350,6 @@ async function guardarPerfilVista(){
   }catch(e){toast('Error: '+e.message,'error');}
 }
 
-/* guardarSwitch — guarda factAuto o envioAuto via PATCH /api/me/settings */
 async function guardarSwitch(key,value){
   try{
     await api.patch('/api/me/settings',{[key]:value});
@@ -296,7 +359,6 @@ async function guardarSwitch(key,value){
     toast(`${nombre} ${value?'activado':'desactivado'}`,value?'success':'warn');
   }catch(e){
     toast('Error al guardar: '+e.message,'error');
-    // revertir toggle
     const swId=key==='factAuto'?'switchFactAuto2':'switchEnvioAuto2';
     const sw=document.getElementById(swId); if(sw) sw.checked=!value;
   }
@@ -354,7 +416,6 @@ async function iniciarSyncArca(){
   try{
     const res=await api.patch('/api/me/arca',{cuit,arcaClave:clave});
     if(!res.ok) throw new Error(res.error||'Error del servidor');
-    // Animación de pasos
     const steps=['astep1','astep2','astep3','astep4','astep5'];
     const labels=['Validando CUIT…','Registrando con AFIP…','Verificando certificados…','Configurando punto de venta…','¡Enviado!'];
     let cur=0;
@@ -797,12 +858,10 @@ function exportarIvaVentas(){ toast('Exportando IVA Ventas…','info'); }
 
 /* ── INIT ─── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  // Mobile sidebar
   document.querySelectorAll('.nav-item').forEach(item=>{
     item.addEventListener('click',()=>{if(window.innerWidth<=720)cerrarSidebar();});
   });
 
-  // OAuth return
   const params=new URLSearchParams(window.location.search);
   if(params.get('woo')==='connected'){
     toast('✅ WooCommerce conectado. Sincronizando historial…','success');
@@ -819,14 +878,11 @@ document.addEventListener('DOMContentLoaded',async()=>{
     history.replaceState({},'','/dashboard');
   }
 
-  // Inicializar período
   _initDashPeriod();
 
-  // Cargar usuario
   try{
     const {user}=await api.get('/api/me');
     window.currentUser=user;
-    // Estado AFIP en topbar
     if(user?.settings?.arcaStatus==='vinculado') renderStatus(true);
   }catch(e){
     if(e.message.includes('401')||e.message.includes('autenticado')){
@@ -834,10 +890,8 @@ document.addEventListener('DOMContentLoaded',async()=>{
     }
   }
 
-  // Dashboard inicial
   await _recargarDashConPeriodo();
 
-  // Estado AFIP en background
   api.get('/api/afip/estado')
     .then(r=>renderStatus(r.online))
     .catch(()=>renderStatus(false));

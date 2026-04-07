@@ -1242,11 +1242,14 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
 
       // Últimas 50 órdenes del período
       Order.find(match)
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante')
-        .lean(),
-
+  .sort({ createdAt: -1 })
+  .limit(50)
+  .lean()  // ✅ Trae todos los campos, incluyendo 'items'
+  .then(orders => orders.map(o => ({
+    ...o,
+    itemsSummary: o.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || ''
+  }))),
+      
       // Pendientes sin CAE (de todos los tiempos, no solo del período)
       Order.countDocuments({ userId: req.userId, status: 'pending_invoice' }),
     ]);

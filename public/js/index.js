@@ -117,15 +117,23 @@ function renderComps(lista){
   const cont=document.getElementById('compList');
   if(!cont) return;
   if(!lista.length){cont.innerHTML=`<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas en este período</div>`;return;}
+  
+  console.log('renderComps - itemsSummary del primero:', lista[0]?.itemsSummary);
+  
   cont.innerHTML=lista.map((c,i)=>{
     const emitido=c.estado==='cae-ok';
     const btnEmitir=emitido
       ?`<button class="act-btn act-done" disabled title="CAE emitido ✓"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round'/></svg></button>`
       :`<button class="act-btn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
     
-    const itemsHtml = c.itemsSummary 
-      ? `<div class="comp-items" style="font-size:10px; color:var(--text-3); margin-top:4px;">🛒 ${c.itemsSummary}</div>`
-      : (c.concepto ? `<div class="comp-items" style="font-size:10px; color:var(--text-3); margin-top:4px;">📝 ${c.concepto}</div>` : '');
+    // Forzar itemsHtml aunque c.itemsSummary sea undefined
+    let itemsHtml = '';
+    if (c.itemsSummary) {
+      itemsHtml = `<div class="comp-items" style="font-size:11px; color:#8888aa; margin-top:5px; display:block;">🛒 ${c.itemsSummary}</div>`;
+    } else if (c.items && c.items.length > 0) {
+      const summary = c.items.map(i => `${i.quantity}x ${i.name}`).join(', ');
+      itemsHtml = `<div class="comp-items" style="font-size:11px; color:#8888aa; margin-top:5px; display:block;">🛒 ${summary}</div>`;
+    }
     
     return `<div class="comp-row" style="animation-delay:${i*55}ms">
       <div class="cae-dot ${c.estado}"></div>

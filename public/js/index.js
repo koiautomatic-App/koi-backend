@@ -634,6 +634,16 @@ function cargarIntegraciones() {
     .catch(() => {});
 }
 
+async function backfillConcepto(integrationId) {
+  toast('Actualizando productos en órdenes históricas…', 'info');
+  try {
+    const res = await api.post(`/api/integrations/${integrationId}/backfill-concepto`, {});
+    toast(`✅ ${res.message || 'Actualización iniciada'}`, 'success');
+  } catch(e) {
+    toast('Error: ' + e.message, 'error');
+  }
+}
+
 function desconectar(id) {
   if (!confirm('¿Desconectar esta tienda? Se dejarán de recibir nuevas órdenes.')) return;
   fetch(`/api/integrations/${id}`, { method:'DELETE', credentials:'include' })

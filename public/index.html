@@ -899,42 +899,53 @@ function adaptarStats(raw){
 
   const comprobantes=(raw.ultimas||[]).slice(0,20).map(o=>{
     const fecha=o.orderDate?new Date(o.orderDate):(o.createdAt?new Date(o.createdAt):null);
+    
+    // 👇 NUEVO: Generar itemsSummary desde los items
+    let itemsSummary = '';
+    if (o.itemsSummary) {
+      itemsSummary = o.itemsSummary;
+    } else if (o.items && o.items.length > 0) {
+      itemsSummary = o.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
+    } else if (o.concepto) {
+      itemsSummary = o.concepto;
+    }
+    
     return {
-      id:o.externalId||o._id, _id:o._id,
-      cliente:o.customerName||'Sin nombre',
-      tipo:o.platform||'Venta',
-      fecha:fecha?fecha.toLocaleDateString('es-AR'):'—',
-      monto:o.amount||0,
-      estado:o.status==='invoiced'?'cae-ok':'cae-pend',
-      origen:o.platform==='manual'?'manual':'woo',
+      id: o.externalId || o._id,
+      _id: o._id,
+      cliente: o.customerName || 'Sin nombre',
+      tipo: o.platform || 'Venta',
+      fecha: fecha ? fecha.toLocaleDateString('es-AR') : '—',
+      monto: o.amount || 0,
+      estado: o.status === 'invoiced' ? 'cae-ok' : 'cae-pend',
+      origen: o.platform === 'manual' ? 'manual' : 'woo',
+      itemsSummary: itemsSummary,  // 👈 AGREGAR ESTO
+      concepto: o.concepto || ''
     };
   });
 
   return {
-    serverOnline:true,
-    monoCategoria:'C',
-    monoFacturado:raw.totalMonto||0,
-    monoLimite:2432364,
-    monoMes:`Período: ${mesNom.charAt(0).toUpperCase()+mesNom.slice(1)} ${anio}`,
-    hoyFacturado:raw.hoyMonto||0,
-    hoyDelta:raw.hoyCount?`${raw.hoyCount} venta${raw.hoyCount!==1?'s':''} hoy`:'Sin ventas hoy',
-    hoyTipo:raw.hoyMonto>0?'up':'',
-    pendientesCAE:raw.pendientes||0,
-    pendDelta:raw.pendientes>0?`${raw.pendientes} sin emitir`:'Al día ✓',
-    pendTipo:raw.pendientes>0?'warn':'up',
-    mesFacturado:raw.facturadoMonto||0,
-    mesDelta:`${raw.facturadoCount||0} con CAE emitido`,
-    mesTipo:'up',
-    chartTotal:raw.totalMonto||0,
-    chartDias:dias,
-    chartVentas:dias.map(d=>Math.round(ventasPorDia[d]||0)),
-    comprobantes,
+    serverOnline: true,
+    monoCategoria: 'C',
+    monoFacturado: raw.totalMonto || 0,
+    monoLimite: 2432364,
+    monoMes: `Período: ${mesNom.charAt(0).toUpperCase() + mesNom.slice(1)} ${anio}`,
+    hoyFacturado: raw.hoyMonto || 0,
+    hoyDelta: raw.hoyCount ? `${raw.hoyCount} venta${raw.hoyCount !== 1 ? 's' : ''} hoy` : 'Sin ventas hoy',
+    hoyTipo: raw.hoyMonto > 0 ? 'up' : '',
+    pendientesCAE: raw.pendientes || 0,
+    pendDelta: raw.pendientes > 0 ? `${raw.pendientes} sin emitir` : 'Al día ✓',
+    pendTipo: raw.pendientes > 0 ? 'warn' : 'up',
+    mesFacturado: raw.facturadoMonto || 0,
+    mesDelta: `${raw.facturadoCount || 0} con CAE emitido`,
+    mesTipo: 'up',
+    chartTotal: raw.totalMonto || 0,
+    chartDias: dias,
+    chartVentas: dias.map(d => Math.round(ventasPorDia[d] || 0)),
+    comprobantes: comprobantes,
   };
 }
-
-/* ── PERÍODO DASHBOARD ─── */
-let _dashDesde=null, _dashHasta=null;
-
+    
 function _initDashPeriod(){
   const hoy=new Date();
   _dashDesde=new Date(hoy.getFullYear(),hoy.getMonth(),1);

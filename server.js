@@ -1285,10 +1285,19 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(Math.min(parseInt(limit), 500))
       .lean();
-    res.json({ ok: true, orders });
-  } catch(e) { res.status(500).json({ error: 'Error interno' }); }
+    
+    // Agregar itemsSummary a cada orden
+    const ordersWithSummary = orders.map(order => ({
+      ...order,
+      itemsSummary: order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || order.concepto || ''
+    }));
+    
+    res.json({ ok: true, orders: ordersWithSummary });
+  } catch(e) { 
+    console.error('Orders error:', e.message);
+    res.status(500).json({ error: 'Error interno' }); 
+  }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════

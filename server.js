@@ -119,20 +119,12 @@ const UserSchema = new mongoose.Schema({
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
     // Datos fiscales del usuario (su propio CUIT)
-    cuit:          { type: String },
+    cuit:          { type: String },          // ej: "27310889518"
     razonSocial:   { type: String },
-    puntoVenta:    { type: Number },
-    tipoComprobante: { type: Number, default: 11 },
-    // Clave Fiscal AFIP encriptada
-    arcaClave:     { type: String },
-    
-    // 👇 ESTOS CAMPOS VAN DENTRO DE settings 👇
-    arcaStatus: { type: String, enum: ['pendiente', 'vinculado', 'error', 'en_proceso'], default: 'pendiente' },
-    arcaPtoVta: { type: Number },
-    arcaNotas: { type: String },
-    arcaError: { type: String },
-    arcaVinculadoEn: { type: Date },
-    arcaUpdatedAt: { type: Date },
+    puntoVenta:    { type: Number },   // legacy — usar arcaPtoVta
+    tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
+    // Clave Fiscal AFIP encriptada (para futura emisión directa)
+    arcaClave:     { type: String },          // encriptada
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
@@ -183,6 +175,14 @@ const OrderSchema = new mongoose.Schema({
   customerDoc:   { type: String, default: '0' },
   amount:        { type: Number, required: true },
   currency:      { type: String, default: 'ARS' },
+  concepto:      { type: String, default: '' },   // descripción del producto/servicio
+  items: [{                                        // líneas de detalle del pedido
+    nombre:   { type: String },
+    cantidad: { type: Number, default: 1 },
+    precio:   { type: Number },
+    sku:      { type: String },
+  }],
+  orderDate:     { type: Date },                  // fecha real de la orden en la plataforma
   status: {
     type:    String,
     default: 'pending_invoice',
@@ -197,37 +197,10 @@ const OrderSchema = new mongoose.Schema({
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
   createdAt:      { type: Date, default: Date.now },
-  concepto:       { type: String, default: '' },
-  
-  // 👇 NUEVO: Items de la orden (productos y cantidades) 👇
-  items: [{
-    productId:   { type: String, default: '' },
-    name:        { type: String, required: true },
-    quantity:    { type: Number, required: true, min: 1 },
-    unitPrice:   { type: Number, required: true },
-    subtotal:    { type: Number, required: true },
-    sku:         { type: String, default: '' }
-  }]
 });
-
-// Virtual para obtener resumen de items (ej: "2x Producto A, 1x Producto B")
-OrderSchema.virtual('itemsSummary').get(function() {
-  if (!this.items || this.items.length === 0) return '';
-  return this.items.map(item => `${item.quantity}x ${item.name}`).join(', ');
-});
-
-// Virtual para formatear el número de comprobante
-OrderSchema.virtual('nroFormatted').get(function() {
-  if (!this.puntoVenta || !this.nroComprobante) return '';
-  const tipo = this.tipoComprobante === 11 ? 'C' : this.tipoComprobante === 1 ? 'A' : 'B';
-  return `FC ${tipo} ${String(this.puntoVenta).padStart(5, '0')}-${String(this.nroComprobante).padStart(8, '0')}`;
-});
-
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
-OrderSchema.index({ 'items.name': 1 }); // índice para búsqueda por producto
-
 const Order = mongoose.model('Order', OrderSchema);
 
 // ════════════════════════════════════════════════════════════
@@ -244,19 +217,17 @@ const _resolveDoc = (doc, amount) => {
 
 const normalize = {
   woocommerce: (raw) => {
-    const b = raw.billing || {};
-    const doc = _cleanDoc(b.dni || b.identification || b.cpf || '');
-    
-    // Extraer items
-    const items = (raw.line_items || []).map(item => ({
-      productId: String(item.product_id),
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.price),
-      subtotal: parseFloat(item.subtotal),
-      sku: item.sku || ''
+    const b    = raw.billing || {};
+    const doc  = _cleanDoc(b.dni || b.identification || b.cpf || '');
+    const items = (raw.line_items || []).map(i => ({
+      nombre:   i.name   || 'Producto',
+      cantidad: i.quantity || 1,
+      precio:   parseFloat(i.price || i.subtotal || 0),
+      sku:      i.sku    || '',
     }));
-    
+    const concepto = items.length
+      ? items.map(i => i.nombre).join(', ')
+      : 'Venta WooCommerce';
     return {
       externalId:    String(raw.id),
       customerName:  `${b.first_name||''} ${b.last_name||''}`.trim(),
@@ -264,23 +235,22 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total)||0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
-      items: items
+      concepto,
+      items,
+      orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
     };
   },
-  
   tiendanube: (raw) => {
-    const doc = _cleanDoc(raw.billing_info?.document || '');
-    
-    // Extraer items
-    const items = (raw.products || []).map(item => ({
-      productId: String(item.product_id),
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.price),
-      subtotal: parseFloat(item.price) * item.quantity,
-      sku: item.sku || ''
+    const doc   = _cleanDoc(raw.billing_info?.document || '');
+    const items = (raw.products || []).map(i => ({
+      nombre:   i.name    || i.product_name || 'Producto',
+      cantidad: i.quantity || 1,
+      precio:   parseFloat(i.price || 0),
+      sku:      i.sku || '',
     }));
-    
+    const concepto = items.length
+      ? items.map(i => i.nombre).join(', ')
+      : 'Venta Tienda Nube';
     return {
       externalId:    String(raw.id),
       customerName:  raw.contact?.name || '',
@@ -288,23 +258,22 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total)||0),
       amount:        parseFloat(raw.total) || 0,
       currency:      raw.currency || 'ARS',
-      items: items
+      concepto,
+      items,
+      orderDate:     raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
-  
   mercadolibre: (raw) => {
-    const doc = _cleanDoc(raw.billing_info?.doc_number || '');
-    
-    // Extraer items
-    const items = (raw.order_items || []).map(item => ({
-      productId: String(item.item?.id || ''),
-      name: item.item?.title || 'Producto',
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.unit_price),
-      subtotal: parseFloat(item.unit_price) * item.quantity,
-      sku: item.item?.seller_sku || ''
+    const doc   = _cleanDoc(raw.billing_info?.doc_number || '');
+    const items = (raw.order_items || []).map(i => ({
+      nombre:   i.item?.title || 'Producto',
+      cantidad: i.quantity    || 1,
+      precio:   parseFloat(i.unit_price || 0),
+      sku:      i.item?.seller_sku || '',
     }));
-    
+    const concepto = items.length
+      ? items.map(i => i.nombre).join(', ')
+      : 'Venta Mercado Libre';
     return {
       externalId:    String(raw.id),
       customerName:  raw.buyer?.nickname || '',
@@ -312,24 +281,11 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount)||0),
       amount:        parseFloat(raw.total_amount) || 0,
       currency:      raw.currency_id || 'ARS',
-      items: items
     };
   },
-  
   vtex: (raw) => {
     const c = raw.clientProfileData || {};
     const doc = _cleanDoc(c.document || '');
-    
-    // Extraer items
-    const items = (raw.items || []).map(item => ({
-      productId: String(item.id),
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.price) / 100,
-      subtotal: parseFloat(item.sellingPrice) / 100,
-      sku: item.skuName || ''
-    }));
-    
     return {
       externalId:    raw.orderId || String(raw.id),
       customerName:  `${c.firstName||''} ${c.lastName||''}`.trim(),
@@ -337,23 +293,10 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, (parseFloat(raw.value)||0)/100),
       amount:        (parseFloat(raw.value)||0) / 100,
       currency:      raw.currencyCode || 'ARS',
-      items: items
     };
   },
-  
   empretienda: (raw) => {
     const doc = _cleanDoc(raw.customer?.dni || '');
-    
-    // Extraer items
-    const items = (raw.items || []).map(item => ({
-      productId: String(item.product_id),
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.price),
-      subtotal: parseFloat(item.subtotal),
-      sku: item.sku || ''
-    }));
-    
     return {
       externalId:    String(raw.order_id || raw.id),
       customerName:  raw.customer?.name || '',
@@ -361,23 +304,10 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price||raw.total)||0),
       amount:        parseFloat(raw.total_price || raw.total) || 0,
       currency:      'ARS',
-      items: items
     };
   },
-  
   rappi: (raw) => {
     const o = raw.order || raw;
-    
-    // Rappi generalmente no da items detallados
-    const items = [{
-      productId: '',
-      name: o.description || 'Pedido Rappi',
-      quantity: 1,
-      unitPrice: parseFloat(o.total_products || o.total) || 0,
-      subtotal: parseFloat(o.total_products || o.total) || 0,
-      sku: ''
-    }];
-    
     return {
       externalId:    String(o.id),
       customerName:  o.user?.name || '',
@@ -385,24 +315,11 @@ const normalize = {
       customerDoc:   CUIT_CF,
       amount:        parseFloat(o.total_products || o.total) || 0,
       currency:      'ARS',
-      items: items
     };
   },
-  
   shopify: (raw) => {
     const a = raw.billing_address || raw.shipping_address || {};
     const doc = _cleanDoc(raw.note_attributes?.find(x => x.name==='dni')?.value || '');
-    
-    // Extraer items
-    const items = (raw.line_items || []).map(item => ({
-      productId: String(item.product_id),
-      name: item.name,
-      quantity: item.quantity,
-      unitPrice: parseFloat(item.price),
-      subtotal: parseFloat(item.price) * item.quantity,
-      sku: item.sku || ''
-    }));
-    
     return {
       externalId:    String(raw.id),
       customerName:  `${a.first_name||''} ${a.last_name||''}`.trim(),
@@ -410,10 +327,10 @@ const normalize = {
       customerDoc:   _resolveDoc(doc, parseFloat(raw.total_price)||0),
       amount:        parseFloat(raw.total_price) || 0,
       currency:      raw.currency || 'ARS',
-      items: items
     };
   },
 };
+
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
 // ════════════════════════════════════════════════════════════
@@ -885,6 +802,7 @@ async function emitirCAE(orderId, userOverride = null) {
       tipoComprobante: result.tipo,
       puntoVenta:      result.ptoVta,
       nroComprobante:  result.nroCbte,
+      nroFormatted:    `FC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr}`,
       fechaEmision:    new Date(),
       impNeto:         result.impNeto,
       impIVA:          result.impIVA,
@@ -1180,6 +1098,278 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+//  API — PDF DE FACTURA (template Sono Handmade)
+// ════════════════════════════════════════════════════════════
+app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
+  try {
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    const user = await User.findById(req.userId)
+      .select('nombre apellido settings').lean();
+
+    // ── Datos del emisor ────────────────────────────────────
+    const nombreFantasia = user?.settings?.razonSocial
+      || `${user?.nombre||''} ${user?.apellido||''}`.trim()
+      || 'Sono Handmade';
+    const razonSocial = user?.settings?.razonSocial || nombreFantasia;
+    const cuitRaw     = user?.settings?.cuit || '';
+    const cuitFmt     = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+
+    // ── Datos del comprobante ───────────────────────────────
+    const ptoVta  = String(orden.puntoVenta  || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
+    const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
+    const nroComp = `${ptoVta}-${nroCbte}`;
+    const fecha   = (orden.orderDate || orden.createdAt)
+      ? new Date(orden.orderDate || orden.createdAt)
+          .toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '—';
+
+    // ── Importes ────────────────────────────────────────────
+    const fmtARS = n => new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n || 0);
+
+    // ── Items / líneas de detalle ───────────────────────────
+    const items = orden.items?.length
+      ? orden.items
+      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+
+    const filasItems = items.map(item => {
+      const subtotal = (item.precio || 0) * (item.cantidad || 1);
+      return `<tr>
+        <td>${item.nombre || 'Producto'}</td>
+        <td>${item.cantidad || 1}</td>
+        <td>$ ${fmtARS(item.precio || 0)}</td>
+        <td>$ ${fmtARS(subtotal)}</td>
+      </tr>`;
+    }).join('');
+
+    // ── CAE ─────────────────────────────────────────────────
+    const caeNum = orden.caeNumber || null;
+    const caeVto = orden.caeExpiry
+      ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '—';
+    const caeDisplay = caeNum || '(pendiente)';
+
+    // ── QR AFIP ─────────────────────────────────────────────
+    // URL según spec AFIP: https://www.afip.gob.ar/fe/qr/?p=BASE64(json)
+    let urlQrAfip = null;
+    if (caeNum && cuitRaw) {
+      const qrData = {
+        ver:  1,
+        fecha,
+        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+        ptoVta: parseInt(ptoVta),
+        tipoCmp: orden.tipoComprobante || 11,
+        nroCmp:  orden.nroComprobante  || 0,
+        importe: orden.amount,
+        moneda:  'PES',
+        ctz:     1,
+        tipoDocRec: 99,
+        nroDocRec:  0,
+        tipoCodAut: 'E',
+        codAut: parseInt(caeNum),
+      };
+      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+    }
+
+    const html = _templateSono({
+      nombreFantasia, razonSocial, cuitFmt, nroComp, fecha,
+      filasItems,
+      total:      fmtARS(orden.amount),
+      caeDisplay,
+      caeVto,
+      urlQrAfip,
+      sinCae:     !caeNum,
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);
+    res.send(html);
+  } catch(e) {
+    console.error('PDF error:', e.message);
+    res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
+  }
+});
+
+function _templateSono(d) {
+  return `<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Factura C N° ${d.nroComp}</title>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap');
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:'DM Sans',sans-serif;background:#f0ebe3;padding:24px;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+    .page{max-width:780px;margin:auto;background:#fff;border-radius:4px;overflow:hidden}
+    .no-print{text-align:center;padding:20px;font-family:'DM Sans',sans-serif}
+    .no-print button{background:#e28a71;color:#fff;border:none;padding:12px 28px;border-radius:6px;font-size:14px;font-weight:600;cursor:pointer;margin-right:8px}
+    .no-print button.sec{background:#f0ebe3;color:#6b4f3a}
+
+    /* ── BORRADOR ── */
+    .draft-banner{background:#fff3cd;border-bottom:2px solid #ffc107;padding:10px 36px;font-size:12px;font-weight:600;color:#856404;text-align:center}
+
+    /* ── BARRA COLOR ── */
+    .color-bar{height:6px;background:linear-gradient(90deg,#e28a71 0%,#c9a882 50%,#b2936f 100%)}
+
+    /* ── HEADER ── */
+    .header{padding:44px 52px 36px;display:flex;justify-content:space-between;align-items:flex-start;border-bottom:1px solid #f0ebe3}
+    .marca{font-family:'Syne',sans-serif;font-size:36px;font-weight:800;color:#e28a71;letter-spacing:-1.5px;line-height:1;margin-bottom:8px}
+    .razon{font-size:11px;font-weight:400;color:#b2936f;letter-spacing:.5px;margin-bottom:2px}
+    .cuit-line{font-size:11px;color:#c9b8a8}
+    .comp-block{text-align:right}
+    .comp-label{font-size:10px;font-weight:600;letter-spacing:3px;text-transform:uppercase;color:#c9a882;margin-bottom:4px}
+    .comp-nro{font-family:'Syne',sans-serif;font-size:32px;font-weight:800;color:#2e1f14;letter-spacing:-1px;line-height:1;margin-bottom:10px}
+    .comp-fecha{font-size:12px;color:#8c7060;line-height:1.8}
+
+    /* ── BODY ── */
+    .body{padding:40px 52px}
+
+    /* ── TABLA ── */
+    .tabla-items{width:100%;border-collapse:collapse;margin-bottom:0}
+    .tabla-items thead tr th{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#c9a882;padding:0 0 14px;border-bottom:1px solid #f0ebe3}
+    .tabla-items thead tr th:not(:first-child){text-align:right}
+    .tabla-items tbody tr td{padding:18px 0;font-size:14px;color:#2e1f14;border-bottom:1px solid #f9f5f0;vertical-align:top}
+    .tabla-items tbody tr td:not(:first-child){text-align:right;color:#6b4f3a}
+    .tabla-items tbody tr:last-child td{border-bottom:none}
+
+    /* ── TOTAL ── */
+    .total-section{display:flex;justify-content:flex-end;padding:24px 0 40px;border-top:1px solid #f0ebe3}
+    .total-inner{display:flex;align-items:baseline;gap:16px}
+    .total-label{font-size:11px;font-weight:600;letter-spacing:2px;text-transform:uppercase;color:#c9a882}
+    .total-amount{font-family:'Syne',sans-serif;font-size:38px;font-weight:800;color:#e28a71;letter-spacing:-1.5px;line-height:1}
+
+    /* ── FOOTER AFIP ── */
+    .footer-afip{margin:0 52px 40px;padding:20px 24px;background:#fdf8f4;border:1px solid #f0ebe3;border-left:3px solid #e28a71;border-radius:0 4px 4px 0;display:flex;align-items:center;gap:24px}
+    .qr-wrap{flex-shrink:0;width:90px;height:90px;background:#fff;border:1px solid #e8ddd5;border-radius:4px;display:flex;align-items:center;justify-content:center;overflow:hidden}
+    .qr-wrap img{width:90px;height:90px;display:block}
+    .qr-placeholder{font-size:9px;color:#c9b8a8;text-align:center;padding:8px}
+    .cae-info{flex:1}
+    .cae-label{font-size:9px;font-weight:600;letter-spacing:2.5px;text-transform:uppercase;color:#e28a71;margin-bottom:6px}
+    .cae-num{font-family:'Syne',sans-serif;font-size:15px;font-weight:700;color:#2e1f14;margin-bottom:3px;letter-spacing:-.3px}
+    .cae-vto{font-size:12px;color:#8c7060;margin-bottom:10px}
+    .cae-ok{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:#2d6a4f;letter-spacing:.5px}
+    .cae-ok::before{content:'';width:6px;height:6px;border-radius:50%;background:#2d6a4f;flex-shrink:0}
+    .cae-pending{display:inline-flex;align-items:center;gap:5px;font-size:10px;font-weight:600;color:#856404;letter-spacing:.5px}
+    .cae-pending::before{content:'';width:6px;height:6px;border-radius:50%;background:#ffc107;flex-shrink:0}
+
+    /* ── KOI BADGE ── */
+    .koi-inline{display:flex;align-items:center;gap:7px;margin-top:12px;padding:6px 12px;background:#080810;border-radius:6px;width:fit-content;border:1px solid rgba(0,230,118,0.2)}
+    .koi-inline-txt{font-size:10px;font-weight:500;color:#00e676;white-space:nowrap;letter-spacing:.2px}
+    .koi-inline-txt strong{font-weight:700}
+
+    /* ── KOI STRIP ── */
+    .koi-strip{background:#080810;padding:14px 52px;display:flex;align-items:center;gap:10px}
+    .koi-text{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;color:#00e676;letter-spacing:.3px;white-space:nowrap}
+    .koi-text strong{font-weight:700}
+    .koi-dot{width:3px;height:3px;border-radius:50%;background:rgba(0,230,118,0.3);flex-shrink:0}
+    .koi-url{font-size:10px;color:rgba(0,230,118,0.4);letter-spacing:.5px}
+
+    @media print{
+      body{background:#fff;padding:0}
+      .page{box-shadow:none;border-radius:0;max-width:100%}
+      .no-print{display:none}
+    }
+  </style>
+</head>
+<body>
+
+  <div class="no-print">
+    <button onclick="window.print()">🖨 Imprimir / Guardar PDF</button>
+    <button class="sec" onclick="window.close()">Cerrar</button>
+  </div>
+
+  <div class="page">
+
+    <div class="color-bar"></div>
+
+    ${d.sinCae ? '<div class="draft-banner">⚠ BORRADOR — Comprobante sin CAE. No tiene validez fiscal hasta ser emitido.</div>' : ''}
+
+    <!-- HEADER -->
+    <div class="header">
+      <div>
+        <div class="marca">${d.nombreFantasia}</div>
+        <div class="razon">${d.razonSocial}</div>
+        <div class="cuit-line">CUIT ${d.cuitFmt}</div>
+      </div>
+      <div class="comp-block">
+        <div class="comp-label">Factura C</div>
+        <div class="comp-nro">N° ${d.nroComp}</div>
+        <div class="comp-fecha">${d.fecha}</div>
+      </div>
+    </div>
+
+    <!-- BODY -->
+    <div class="body">
+      <table class="tabla-items">
+        <thead>
+          <tr>
+            <th style="text-align:left;width:55%">Descripción</th>
+            <th>Cant.</th>
+            <th>P. Unitario</th>
+            <th>Subtotal</th>
+          </tr>
+        </thead>
+        <tbody>${d.filasItems}</tbody>
+      </table>
+
+      <div class="total-section">
+        <div class="total-inner">
+          <span class="total-label">Total</span>
+          <span class="total-amount">$${d.total}</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- FOOTER AFIP -->
+    <div class="footer-afip">
+      <div class="qr-wrap">
+        ${d.urlQrAfip
+          ? `<img src="${d.urlQrAfip}" width="90" height="90" alt="QR AFIP">`
+          : '<div class="qr-placeholder">QR AFIP<br>disponible<br>al emitir</div>'}
+      </div>
+      <div class="cae-info">
+        <div class="cae-label">Validación AFIP</div>
+        <div class="cae-num">${d.caeDisplay}</div>
+        <div class="cae-vto">Vencimiento ${d.caeVto}</div>
+        <div class="${d.sinCae ? 'cae-pending' : 'cae-ok'}">${d.sinCae ? 'Pendiente de emisión' : 'Comprobante autorizado'}</div>
+
+        <div class="koi-inline">
+          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+            <path d="M15.5 5C14 3.5 11.5 3 9 4.5c-1.5.9-2.8 2.2-3.5 3.5H2l2.5 2-2.5 2h3.5c.7 1.3 2 2.6 3.5 3.5C11.5 17 14 16.5 15.5 15L18 10l-2.5-5z" fill="url(#kqr)"/>
+            <circle cx="13.5" cy="8.5" r=".9" fill="#08081099"/>
+            <defs><linearGradient id="kqr" x1="2" y1="5" x2="18" y2="15"><stop stop-color="#e8622a"/><stop offset=".55" stop-color="#f5a623"/><stop offset="1" stop-color="#00e676"/></linearGradient></defs>
+          </svg>
+          <span class="koi-inline-txt">Generada por <strong>KOI-FACTURA</strong> — Sistema de Facturación Electrónica</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- KOI STRIP -->
+    <div class="koi-strip">
+      <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+        <path d="M15.5 5C14 3.5 11.5 3 9 4.5c-1.5.9-2.8 2.2-3.5 3.5H2l2.5 2-2.5 2h3.5c.7 1.3 2 2.6 3.5 3.5C11.5 17 14 16.5 15.5 15L18 10l-2.5-5z" fill="url(#kst)"/>
+        <circle cx="13.5" cy="8.5" r=".9" fill="#08081099"/>
+        <defs><linearGradient id="kst" x1="2" y1="5" x2="18" y2="15"><stop stop-color="#e8622a"/><stop offset=".55" stop-color="#f5a623"/><stop offset="1" stop-color="#00e676"/></linearGradient></defs>
+      </svg>
+      <span class="koi-text"><strong>KOI-FACTURA</strong> · Sistema de Facturación Electrónica</span>
+      <div class="koi-dot"></div>
+      <span class="koi-url">koi-backend-zzoc.onrender.com</span>
+    </div>
+
+  </div>
+
+</body>
+</html>`;
+}
+
+
+// ════════════════════════════════════════════════════════════
 //  API — STATS CON FILTRO DE PERÍODO
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
@@ -1242,14 +1432,11 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
 
       // Últimas 50 órdenes del período
       Order.find(match)
-  .sort({ createdAt: -1 })
-  .limit(50)
-  .lean()  // ✅ Trae todos los campos, incluyendo 'items'
-  .then(orders => orders.map(o => ({
-    ...o,
-    itemsSummary: o.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || ''
-  }))),
-      
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante')
+        .lean(),
+
       // Pendientes sin CAE (de todos los tiempos, no solo del período)
       Order.countDocuments({ userId: req.userId, status: 'pending_invoice' }),
     ]);
@@ -1288,19 +1475,10 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       .sort({ createdAt: -1 })
       .limit(Math.min(parseInt(limit), 500))
       .lean();
-    
-    // Agregar itemsSummary a cada orden
-    const ordersWithSummary = orders.map(order => ({
-      ...order,
-      itemsSummary: order.items?.map(i => `${i.quantity}x ${i.name}`).join(', ') || order.concepto || ''
-    }));
-    
-    res.json({ ok: true, orders: ordersWithSummary });
-  } catch(e) { 
-    console.error('Orders error:', e.message);
-    res.status(500).json({ error: 'Error interno' }); 
-  }
+    res.json({ ok: true, orders });
+  } catch(e) { res.status(500).json({ error: 'Error interno' }); }
 });
+
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════
@@ -1383,6 +1561,111 @@ app.post('/api/integrations/:platform', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error al conectar' });
   }
 });
+
+// ════════════════════════════════════════════════════════════
+//  API — BACKFILL CONCEPTO (rellenar productos en órdenes históricas)
+//
+//  Para cada orden sin concepto real, consulta la API de WooCommerce
+//  y actualiza los campos concepto + items.
+//  Responde inmediato y procesa en background.
+// ════════════════════════════════════════════════════════════
+app.post('/api/integrations/:id/backfill-concepto', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ _id: req.params.id, userId: req.userId });
+    if (!integration) return res.status(404).json({ error: 'Integración no encontrada' });
+    if (integration.platform !== 'woocommerce')
+      return res.status(400).json({ error: 'Solo disponible para WooCommerce por ahora' });
+
+    // Contar órdenes sin concepto real
+    const sinConcepto = await Order.countDocuments({
+      userId:   req.userId,
+      platform: 'woocommerce',
+      $or: [
+        { concepto: { $exists: false } },
+        { concepto: '' },
+        { concepto: 'woocommerce' },
+        { concepto: 'Venta WooCommerce' },
+        { items:    { $size: 0 } },
+        { items:    { $exists: false } },
+      ],
+    });
+
+    res.json({ ok: true, pendientes: sinConcepto, message: `Actualizando ${sinConcepto} órdenes en background…` });
+
+    // Procesar en background
+    _backfillConceptoWoo(integration, req.userId).catch(e =>
+      console.error('[Backfill] Error:', e.message)
+    );
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+async function _backfillConceptoWoo(integration, userId) {
+  const key    = integration.getKey('consumerKey');
+  const secret = integration.getKey('consumerSecret');
+  const base   = integration.storeUrl;
+
+  // Traer órdenes sin concepto real
+  const ordenes = await Order.find({
+    userId,
+    platform: 'woocommerce',
+    $or: [
+      { concepto: { $exists: false } },
+      { concepto: '' },
+      { concepto: 'woocommerce' },
+      { concepto: 'Venta WooCommerce' },
+      { items:    { $size: 0 } },
+      { items:    { $exists: false } },
+    ],
+  }).select('externalId').lean();
+
+  console.log(`[Backfill] ${ordenes.length} órdenes WooCommerce para actualizar`);
+
+  let ok = 0, err = 0;
+
+  // Procesar en lotes de 10 para no saturar la API
+  const LOTE = 10;
+  for (let i = 0; i < ordenes.length; i += LOTE) {
+    const lote = ordenes.slice(i, i + LOTE);
+
+    await Promise.all(lote.map(async (orden) => {
+      try {
+        const { data } = await axios.get(
+          `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
+          { auth: { username: key, password: secret }, timeout: 15_000 }
+        );
+
+        const items = (data.line_items || []).map(i => ({
+          nombre:   i.name     || 'Producto',
+          cantidad: i.quantity || 1,
+          precio:   parseFloat(i.price || i.subtotal || 0),
+          sku:      i.sku      || '',
+        }));
+
+        const concepto = items.length
+          ? items.map(i => i.nombre).join(', ')
+          : 'Venta WooCommerce';
+
+        await Order.updateOne(
+          { _id: orden._id || undefined, userId, platform: 'woocommerce', externalId: orden.externalId },
+          { $set: { concepto, items, orderDate: data.date_created ? new Date(data.date_created) : undefined } }
+        );
+        ok++;
+      } catch(e) {
+        err++;
+        console.warn(`[Backfill] Error orden ${orden.externalId}:`, e.message);
+      }
+    }));
+
+    // Pausa entre lotes para no saturar WooCommerce
+    if (i + LOTE < ordenes.length) {
+      await new Promise(r => setTimeout(r, 500));
+    }
+  }
+
+  console.log(`[Backfill] Completado: ${ok} OK, ${err} errores`);
+}
 
 // ════════════════════════════════════════════════════════════
 //  WOOCOMMERCE OAUTH
@@ -1565,124 +1848,6 @@ setTimeout(() => {
   ping();
   setInterval(ping, 10 * 60 * 1000);
 }, 30_000);
-
-
-// ════════════════════════════════════════════════════════════
-//  ADMIN PANEL ENDPOINTS (para admin.html)
-// ════════════════════════════════════════════════════════════
-
-// CAMBIAR ESTOS EMAILS por los que tengan acceso de admin
-const ADMIN_EMAILS = ['koi.automatic@gmail.com'];
-
-const requireAdmin = async (req, res, next) => {
-  try {
-    const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
-    const { id } = jwt.verify(token, JWT_SECRET);
-    const user = await User.findById(id);
-    
-    if (!ADMIN_EMAILS.includes(user.email)) {
-      return res.status(403).json({ error: 'Acceso no autorizado - Solo administradores' });
-    }
-    
-    req.adminId = id;
-    next();
-  } catch(e) {
-    res.status(401).json({ error: 'No autenticado' });
-  }
-};
-
-// GET /api/admin/pendientes - Listar usuarios con CUIT/clave fiscal
-app.get('/api/admin/pendientes', requireAdmin, async (req, res) => {
-  try {
-    const usuarios = await User.find({
-      $or: [
-        { 'settings.cuit': { $exists: true, $ne: null, $ne: '' } },
-        { 'settings.arcaClave': { $exists: true, $ne: null, $ne: '' } }
-      ]
-    }).select('nombre email settings _id createdAt').lean();
-
-    const lista = usuarios.map(user => {
-      const settings = user.settings || {};
-      let status = 'pendiente';
-      let notas = '';
-      
-      if (settings.arcaStatus === 'vinculado') {
-        status = 'vinculado';
-        notas = '✓ AFIP vinculado correctamente';
-      } else if (settings.arcaStatus === 'error') {
-        status = 'error';
-        notas = settings.arcaError || 'Error en la vinculación';
-      } else if (settings.cuit && settings.arcaClave) {
-        status = 'pendiente';
-        notas = 'Esperando validación del equipo KOI';
-      }
-
-      let claveFiscal = '—';
-      if (settings.arcaClave) {
-        try {
-          claveFiscal = decrypt(settings.arcaClave);
-        } catch(e) {
-          claveFiscal = 'Error al desencriptar';
-        }
-      }
-
-      return {
-        id: user._id,
-        cliente: user.nombre || 'Sin nombre',
-        email: user.email,
-        cuit: settings.cuit || '—',
-        claveFiscal: claveFiscal,
-        puntoVenta: settings.arcaPtoVta || settings.puntoVenta || 1,
-        status: status,
-        notas: notas,
-      };
-    });
-
-    res.json({ ok: true, lista });
-  } catch(e) {
-    console.error('Admin pendientes error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
-
-// POST /api/admin/update-status - Actualizar estado de vinculación
-app.post('/api/admin/update-status', requireAdmin, async (req, res) => {
-  try {
-    const { userId, nuevoStatus, notas, puntoVenta } = req.body;
-    
-    if (!userId || !nuevoStatus) {
-      return res.status(400).json({ error: 'userId y nuevoStatus requeridos' });
-    }
-
-    const update = {
-      'settings.arcaStatus': nuevoStatus,
-      'settings.arcaUpdatedAt': new Date()
-    };
-
-    if (notas) update['settings.arcaNotas'] = notas;
-    if (puntoVenta && !isNaN(parseInt(puntoVenta))) {
-      update['settings.arcaPtoVta'] = parseInt(puntoVenta);
-      update['settings.puntoVenta'] = parseInt(puntoVenta);
-    }
-    if (nuevoStatus === 'vinculado') update['settings.arcaVinculadoEn'] = new Date();
-    if (nuevoStatus === 'error') update['settings.arcaError'] = notas || 'Error en la vinculación';
-    if (nuevoStatus === 'desvinculado') {
-      update['settings.arcaVinculadoEn'] = null;
-      update['settings.arcaError'] = null;
-      update['settings.arcaNotas'] = notas || 'Usuario desvinculado por el administrador';
-    }
-
-
-    const user = await User.findByIdAndUpdate(userId, { $set: update }, { new: true });
-    if (!user) return res.status(404).json({ error: 'Usuario no encontrado' });
-
-    console.log(`✅ Admin: Usuario ${user.email} actualizado a ${nuevoStatus}`);
-    res.json({ ok: true, message: `Usuario actualizado a ${nuevoStatus}` });
-  } catch(e) {
-    console.error('Admin update error:', e.message);
-    res.status(500).json({ error: e.message });
-  }
-});
 
 // ════════════════════════════════════════════════════════════
 //  START

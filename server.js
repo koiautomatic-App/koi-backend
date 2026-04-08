@@ -175,14 +175,15 @@ const OrderSchema = new mongoose.Schema({
   customerDoc:   { type: String, default: '0' },
   amount:        { type: Number, required: true },
   currency:      { type: String, default: 'ARS' },
-  concepto:      { type: String, default: '' },   // descripción del producto/servicio
-  items: [{                                        // líneas de detalle del pedido
+  concepto:      { type: String, default: '' },
+  items: [{
     nombre:   { type: String },
     cantidad: { type: Number, default: 1 },
     precio:   { type: Number },
     sku:      { type: String },
   }],
-  orderDate:     { type: Date },                  // fecha real de la orden en la plataforma
+  orderDate:     { type: Date },
+  rawPayload:    { type: mongoose.Schema.Types.Mixed, default: null },  // 👈 AGREGAR ESTA LÍNEA
   status: {
     type:    String,
     default: 'pending_invoice',
@@ -238,6 +239,7 @@ const normalize = {
       concepto,
       items,
       orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
+      rawPayload:    raw,  // 👈 AGREGAR ESTA LÍNEA
     };
   },
   tiendanube: (raw) => {

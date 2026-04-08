@@ -628,7 +628,13 @@ function cargarIntegraciones() {
           <span class="neg-integration-status ${i.status === 'active' ? 'neg-status-ok' : 'neg-status-error'}">
             ${i.status === 'active' ? '● Activa' : '✕ Error'}
           </span>
-          <button class="neg-disconnect-btn" onclick="desconectar('${i._id}')">Desconectar</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-shrink:0">
+            ${i.platform === 'woocommerce' ? `<button class="neg-backfill-btn" onclick="backfillConcepto('${i._id}')">
+              <svg width="12" height="12" viewBox="0 0 14 14" fill="none"><path d="M12 7A5 5 0 1 1 7 2" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M12 2v3H9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Actualizar productos
+            </button>` : ''}
+            <button class="neg-disconnect-btn" onclick="desconectar('${i._id}')">Desconectar</button>
+          </div>
         </div>`).join('');
     })
     .catch(() => {});

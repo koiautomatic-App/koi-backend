@@ -1576,16 +1576,14 @@ app.post('/api/integrations/:id/backfill-concepto', requireAuthAPI, async (req, 
     if (integration.platform !== 'woocommerce')
       return res.status(400).json({ error: 'Solo disponible para WooCommerce por ahora' });
 
-    // Contar órdenes sin concepto real
+    // Contar órdenes sin concepto real (misma query que usa el backfill)
     const sinConcepto = await Order.countDocuments({
-      userId:   req.userId,
+      userId:   new mongoose.Types.ObjectId(req.userId),
       platform: 'woocommerce',
+      status:   { $ne: 'skipped' },
       $or: [
         { concepto: { $exists: false } },
-        { concepto: '' },
-        { concepto: 'woocommerce' },
-        { concepto: 'Venta WooCommerce' },
-        { items:    { $size: 0 } },
+        { concepto: { $in: ['', 'woocommerce', 'Venta WooCommerce'] } },
         { items:    { $exists: false } },
       ],
     });
@@ -1606,75 +1604,109 @@ async function _backfillConceptoWoo(integration, userId) {
   const secret = integration.getKey('consumerSecret');
   const base   = integration.storeUrl;
 
-  // Traer órdenes sin concepto real
+  // Buscar todas las órdenes WooCommerce del usuario que no tienen concepto real
+  // Usamos regex para detectar valores genéricos/vacíos
   const ordenes = await Order.find({
-    userId,
+    userId:   new mongoose.Types.ObjectId(userId),
     platform: 'woocommerce',
+    status:   { $ne: 'skipped' },
     $or: [
       { concepto: { $exists: false } },
-      { concepto: '' },
-      { concepto: 'woocommerce' },
-      { concepto: 'Venta WooCommerce' },
-      { items:    { $size: 0 } },
+      { concepto: { $in: ['', 'woocommerce', 'Venta WooCommerce'] } },
       { items:    { $exists: false } },
     ],
-  }).select('externalId').lean();
+  }).select('_id externalId').lean();
 
-  console.log(`[Backfill] ${ordenes.length} órdenes WooCommerce para actualizar`);
+  console.log(`[Backfill] Iniciando — ${ordenes.length} órdenes a procesar`);
+  if (!ordenes.length) {
+    console.log('[Backfill] No hay órdenes pendientes');
+    return;
+  }
 
-  let ok = 0, err = 0;
+  let ok = 0, skipped = 0, err = 0;
 
-  // Procesar en lotes de 10 para no saturar la API
-  const LOTE = 10;
-  for (let i = 0; i < ordenes.length; i += LOTE) {
-    const lote = ordenes.slice(i, i + LOTE);
-
-    await Promise.all(lote.map(async (orden) => {
-      try {
-        const { data } = await axios.get(
-          `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
-          { auth: { username: key, password: secret }, timeout: 15_000 }
-        );
-
-        // Si la orden no está completada, marcarla como skipped
-        if (data.status && data.status !== 'completed') {
-          await Order.updateOne(
-            { userId, platform: 'woocommerce', externalId: orden.externalId },
-            { $set: { status: 'skipped', concepto: `Pago no acreditado (${data.status})` } }
-          );
-          ok++;
-          return;
+  // Procesar DE A UNA para no saturar WooCommerce y que cada error sea aislado
+  for (const orden of ordenes) {
+    try {
+      // Obtener detalle completo de la orden desde WooCommerce
+      const resp = await axios.get(
+        `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
+        {
+          auth:    { username: key, password: secret },
+          timeout: 20_000,
+          validateStatus: () => true,  // no lanzar en 404 etc
         }
+      );
 
-        const items = (data.line_items || []).map(i => ({
-          nombre:   i.name     || 'Producto',
-          cantidad: i.quantity || 1,
-          precio:   parseFloat(i.price || i.subtotal || 0),
-          sku:      i.sku      || '',
-        }));
-
-        const concepto = items.length
-          ? items.map(i => i.nombre).join(', ')
-          : 'Venta WooCommerce';
-
+      if (resp.status === 404) {
+        // Orden eliminada en WooCommerce
         await Order.updateOne(
-          { _id: orden._id || undefined, userId, platform: 'woocommerce', externalId: orden.externalId },
-          { $set: { concepto, items, orderDate: data.date_created ? new Date(data.date_created) : undefined } }
+          { _id: orden._id },
+          { $set: { concepto: 'Orden eliminada en WooCommerce', status: 'skipped' } }
         );
-        ok++;
-      } catch(e) {
-        err++;
-        console.warn(`[Backfill] Error orden ${orden.externalId}:`, e.message);
+        skipped++;
+        continue;
       }
-    }));
 
-    // Pausa entre lotes para no saturar WooCommerce
-    if (i + LOTE < ordenes.length) {
-      await new Promise(r => setTimeout(r, 500));
+      if (resp.status !== 200) {
+        console.warn(`[Backfill] HTTP ${resp.status} para orden ${orden.externalId}`);
+        err++;
+        continue;
+      }
+
+      const raw = resp.data;
+
+      // Solo procesar órdenes con pago acreditado
+      if (raw.status && raw.status !== 'completed') {
+        await Order.updateOne(
+          { _id: orden._id },
+          { $set: { concepto: `Sin acreditar (${raw.status})`, status: 'skipped' } }
+        );
+        skipped++;
+        continue;
+      }
+
+      // Extraer líneas de producto
+      const items = (raw.line_items || []).map(li => ({
+        nombre:   li.name     || 'Producto',
+        cantidad: li.quantity || 1,
+        precio:   parseFloat(li.price || (parseFloat(li.subtotal || 0) / (li.quantity || 1)) || 0),
+        sku:      li.sku      || '',
+      }));
+
+      const concepto = items.length
+        ? items.map(li => li.nombre).join(', ')
+        : 'Productos WooCommerce';
+
+      const orderDate = raw.date_paid
+        ? new Date(raw.date_paid)
+        : raw.date_completed
+          ? new Date(raw.date_completed)
+          : raw.date_created
+            ? new Date(raw.date_created)
+            : undefined;
+
+      await Order.updateOne(
+        { _id: orden._id },
+        { $set: { concepto, items, ...(orderDate ? { orderDate } : {}) } }
+      );
+
+      ok++;
+
+      // Log cada 50 órdenes
+      if (ok % 50 === 0) console.log(`[Backfill] Progreso: ${ok}/${ordenes.length}`);
+
+      // Pequeña pausa para no saturar WooCommerce
+      await new Promise(r => setTimeout(r, 150));
+
+    } catch(e) {
+      err++;
+      console.warn(`[Backfill] Error orden ${orden.externalId}:`, e.message);
+      await new Promise(r => setTimeout(r, 500)); // pausa extra tras error
     }
   }
 
-  console.log(`[Backfill] Completado: ${ok} OK, ${err} errores`);
+  console.log(`[Backfill] ✅ Completado — OK: ${ok} | Skipped: ${skipped} | Errores: ${err}`);
 }
 
 // ════════════════════════════════════════════════════════════

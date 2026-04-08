@@ -1378,8 +1378,19 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
     const { platform, desde, hasta } = req.query;
 
-    const match = { userId: new mongoose.Types.ObjectId(req.userId) };
-    if (platform) match.platform = platform;
+   const match = { 
+  userId: new mongoose.Types.ObjectId(req.userId),
+  $and: [
+    { status: { $ne: 'skipped' } },
+    { 
+      $or: [
+        { 'rawPayload.status': { $exists: false } },
+        { 'rawPayload.status': { $nin: ['cancelled', 'failed', 'refunded', 'pending'] } }
+      ]
+    }
+  ]
+};
+if (platform) match.platform = platform;
 
     // Período — por defecto mes actual
     const ahora  = new Date();
@@ -1464,7 +1475,20 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
 app.get('/api/orders', requireAuthAPI, async (req, res) => {
   try {
     const { platform, status, desde, hasta, limit = 100 } = req.query;
-    const filter = { userId: req.userId };
+    
+    const filter = { 
+      userId: req.userId,
+      $and: [
+        { status: { $ne: 'skipped' } },
+        { 
+          $or: [
+            { 'rawPayload.status': { $exists: false } },
+            { 'rawPayload.status': { $nin: ['cancelled', 'failed', 'refunded', 'pending'] } }
+          ]
+        }
+      ]
+    };
+    
     if (platform) filter.platform = platform;
     if (status)   filter.status   = status;
     if (desde || hasta) {
@@ -1472,12 +1496,17 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       if (desde) filter.createdAt.$gte = new Date(desde);
       if (hasta) filter.createdAt.$lte = new Date(hasta);
     }
+    
     const orders = await Order.find(filter)
       .sort({ createdAt: -1 })
       .limit(Math.min(parseInt(limit), 500))
       .lean();
+      
     res.json({ ok: true, orders });
-  } catch(e) { res.status(500).json({ error: 'Error interno' }); }
+  } catch(e) { 
+    console.error('Orders error:', e.message);
+    res.status(500).json({ error: 'Error interno' }); 
+  }
 });
 
 // ════════════════════════════════════════════════════════════

@@ -847,7 +847,7 @@ const BULK_SYNC = {
     while (true) {
       const { data } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
         auth:   { username: key, password: secret },
-        params: { per_page: 100, page, status: 'completed,processing', orderby: 'date', order: 'desc' },
+        params: { per_page: 100, page, status: 'completed', orderby: 'date', order: 'desc' },
         timeout: 30_000,
       });
       if (!data?.length) break;
@@ -1635,6 +1635,16 @@ async function _backfillConceptoWoo(integration, userId) {
           `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
           { auth: { username: key, password: secret }, timeout: 15_000 }
         );
+
+        // Si la orden no está completada, marcarla como skipped
+        if (data.status && data.status !== 'completed') {
+          await Order.updateOne(
+            { userId, platform: 'woocommerce', externalId: orden.externalId },
+            { $set: { status: 'skipped', concepto: `Pago no acreditado (${data.status})` } }
+          );
+          ok++;
+          return;
+        }
 
         const items = (data.line_items || []).map(i => ({
           nombre:   i.name     || 'Producto',

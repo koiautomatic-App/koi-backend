@@ -1604,8 +1604,7 @@ async function _backfillConceptoWoo(integration, userId) {
   const secret = integration.getKey('consumerSecret');
   const base   = integration.storeUrl;
 
-  // Buscar todas las órdenes WooCommerce del usuario que no tienen concepto real
-  // Usamos regex para detectar valores genéricos/vacíos
+  // Buscar órdenes sin concepto real — incluyendo rawPayload para aprovechar datos ya guardados
   const ordenes = await Order.find({
     userId:   new mongoose.Types.ObjectId(userId),
     platform: 'woocommerce',
@@ -1615,62 +1614,51 @@ async function _backfillConceptoWoo(integration, userId) {
       { concepto: { $in: ['', 'woocommerce', 'Venta WooCommerce'] } },
       { items:    { $exists: false } },
     ],
-  }).select('_id externalId').lean();
+  }).select('_id externalId rawPayload').lean();
 
   console.log(`[Backfill] Iniciando — ${ordenes.length} órdenes a procesar`);
-  if (!ordenes.length) {
-    console.log('[Backfill] No hay órdenes pendientes');
-    return;
-  }
+  if (!ordenes.length) { console.log('[Backfill] Todo actualizado'); return; }
 
   let ok = 0, skipped = 0, err = 0;
 
-  // Procesar DE A UNA para no saturar WooCommerce y que cada error sea aislado
   for (const orden of ordenes) {
     try {
-      // Obtener detalle completo de la orden desde WooCommerce
-      const resp = await axios.get(
-        `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
-        {
-          auth:    { username: key, password: secret },
-          timeout: 20_000,
-          validateStatus: () => true,  // no lanzar en 404 etc
+      let raw = null;
+
+      // ── PASO 1: usar rawPayload si ya tiene line_items ──────
+      if (orden.rawPayload?.line_items?.length) {
+        raw = orden.rawPayload;
+        console.log(`[Backfill] Usando rawPayload para orden ${orden.externalId}`);
+      } else {
+        // ── PASO 2: consultar WooCommerce solo si no hay rawPayload
+        const resp = await axios.get(
+          `${base}/wp-json/wc/v3/orders/${orden.externalId}`,
+          { auth: { username: key, password: secret }, timeout: 20_000, validateStatus: () => true }
+        );
+
+        if (resp.status === 404) {
+          await Order.updateOne({ _id: orden._id }, { $set: { concepto: 'Orden eliminada', status: 'skipped' } });
+          skipped++; continue;
         }
-      );
-
-      if (resp.status === 404) {
-        // Orden eliminada en WooCommerce
-        await Order.updateOne(
-          { _id: orden._id },
-          { $set: { concepto: 'Orden eliminada en WooCommerce', status: 'skipped' } }
-        );
-        skipped++;
-        continue;
+        if (resp.status !== 200) {
+          console.warn(`[Backfill] HTTP ${resp.status} orden ${orden.externalId}`);
+          err++; continue;
+        }
+        raw = resp.data;
+        await new Promise(r => setTimeout(r, 150)); // pausa solo cuando llama a la API
       }
 
-      if (resp.status !== 200) {
-        console.warn(`[Backfill] HTTP ${resp.status} para orden ${orden.externalId}`);
-        err++;
-        continue;
-      }
-
-      const raw = resp.data;
-
-      // Solo procesar órdenes con pago acreditado
+      // Saltar si no está completada
       if (raw.status && raw.status !== 'completed') {
-        await Order.updateOne(
-          { _id: orden._id },
-          { $set: { concepto: `Sin acreditar (${raw.status})`, status: 'skipped' } }
-        );
-        skipped++;
-        continue;
+        await Order.updateOne({ _id: orden._id }, { $set: { concepto: `Sin acreditar (${raw.status})`, status: 'skipped' } });
+        skipped++; continue;
       }
 
-      // Extraer líneas de producto
+      // Extraer productos
       const items = (raw.line_items || []).map(li => ({
         nombre:   li.name     || 'Producto',
         cantidad: li.quantity || 1,
-        precio:   parseFloat(li.price || (parseFloat(li.subtotal || 0) / (li.quantity || 1)) || 0),
+        precio:   parseFloat(li.price || (parseFloat(li.subtotal||0) / (li.quantity||1)) || 0),
         sku:      li.sku      || '',
       }));
 
@@ -1678,13 +1666,10 @@ async function _backfillConceptoWoo(integration, userId) {
         ? items.map(li => li.nombre).join(', ')
         : 'Productos WooCommerce';
 
-      const orderDate = raw.date_paid
-        ? new Date(raw.date_paid)
-        : raw.date_completed
-          ? new Date(raw.date_completed)
-          : raw.date_created
-            ? new Date(raw.date_created)
-            : undefined;
+      const orderDate = raw.date_paid       ? new Date(raw.date_paid)
+                      : raw.date_completed  ? new Date(raw.date_completed)
+                      : raw.date_created    ? new Date(raw.date_created)
+                      : undefined;
 
       await Order.updateOne(
         { _id: orden._id },
@@ -1692,17 +1677,11 @@ async function _backfillConceptoWoo(integration, userId) {
       );
 
       ok++;
-
-      // Log cada 50 órdenes
-      if (ok % 50 === 0) console.log(`[Backfill] Progreso: ${ok}/${ordenes.length}`);
-
-      // Pequeña pausa para no saturar WooCommerce
-      await new Promise(r => setTimeout(r, 150));
+      if (ok % 100 === 0) console.log(`[Backfill] Progreso: ${ok}/${ordenes.length}`);
 
     } catch(e) {
       err++;
       console.warn(`[Backfill] Error orden ${orden.externalId}:`, e.message);
-      await new Promise(r => setTimeout(r, 500)); // pausa extra tras error
     }
   }
 

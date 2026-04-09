@@ -1474,7 +1474,15 @@ if (platform) match.platform = platform;
 
 app.get('/api/orders', requireAuthAPI, async (req, res) => {
   try {
-    const { platform, status, desde, hasta, limit = 100 } = req.query;
+    const { 
+      platform, 
+      status, 
+      desde, 
+      hasta, 
+      page = 1, 
+      limit = 50, 
+      search = '' 
+    } = req.query;
     
     const filter = { 
       userId: req.userId,
@@ -1497,12 +1505,48 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       if (hasta) filter.createdAt.$lte = new Date(hasta);
     }
     
-    const orders = await Order.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Math.min(parseInt(limit), 500))
-      .lean();
-      
-    res.json({ ok: true, orders });
+    // 👇 BÚSQUEDA (nuevo)
+    if (search && search.trim()) {
+      filter.$and = filter.$and || [];
+      filter.$and.push({
+        $or: [
+          { customerName: { $regex: search, $options: 'i' } },
+          { customerEmail: { $regex: search, $options: 'i' } },
+          { concepto: { $regex: search, $options: 'i' } },
+          { externalId: { $regex: search, $options: 'i' } }
+        ]
+      });
+    }
+    
+    // 👇 PAGINACIÓN (nuevo)
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const limitNum = Math.min(parseInt(limit), 100);
+    
+    const [orders, total] = await Promise.all([
+      Order.find(filter)
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limitNum)
+        .lean(),
+      Order.countDocuments(filter)
+    ]);
+    
+    // Agregar itemsSummary (nuevo)
+    const ordersWithSummary = orders.map(order => ({
+      ...order,
+      itemsSummary: order.items?.map(i => `${i.cantidad}x ${i.nombre}`).join(', ') || order.concepto || ''
+    }));
+    
+    res.json({ 
+      ok: true, 
+      orders: ordersWithSummary,
+      pagination: {
+        page: parseInt(page),
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum)
+      }
+    });
   } catch(e) { 
     console.error('Orders error:', e.message);
     res.status(500).json({ error: 'Error interno' }); 

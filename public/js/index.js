@@ -440,18 +440,36 @@ let _todosComp   = [];  // todos sin filtrar
 let _filtroTipo  = 'todos';
 let _filtroMes   = '';
 
-function cargarTodosComprobantes() {
+// Variables globales para paginación
+let paginaActual = 1;
+let totalPaginas = 1;
+let busquedaActual = '';
+
+function cargarTodosComprobantes(page = 1, search = '') {
+  paginaActual = page;
+  busquedaActual = search;
+  
   document.getElementById('manualesBody').innerHTML =
-    `<table><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
+    `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
       <span class="material-icons" style="font-size:18px!important;opacity:.4;display:block;margin-bottom:8px">hourglass_empty</span>
       Cargando comprobantes…
     </td>`;
 
-  // Cargar desde la API REST
-  api.get('/api/orders?limit=200')
+  // Construir URL con parámetros de paginación y búsqueda
+  const params = new URLSearchParams({
+    limit: 50,
+    page: paginaActual
+  });
+  if (busquedaActual) params.set('search', busquedaActual);
+  
+  // Cargar desde la API REST con paginación
+  api.get(`/api/orders?${params.toString()}`)
     .then(raw => {
-      _todosComp = (raw.orders || []).map(o => {
-        // 👇 GENERAR CONCEPTO desde items si existe
+      const orders = raw.orders || [];
+      totalPaginas = raw.pagination?.pages || 1;
+      
+      _todosComp = orders.map(o => {
+        // Generar concepto desde items si existe
         let conceptoMostrar = o.concepto || '';
         if (!conceptoMostrar && o.items && o.items.length > 0) {
           conceptoMostrar = o.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
@@ -462,17 +480,20 @@ function cargarTodosComprobantes() {
         
         return {
           id:      o.externalId || o._id,
+          _id:     o._id,
           cliente: o.customerName  || 'Sin nombre',
           email:   o.customerEmail || '',
-          concepto: conceptoMostrar,  // 👈 AHORA USA items
+          concepto: conceptoMostrar,
           fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
           tipo:    'Factura C',
           monto:   o.amount || 0,
           estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
           origen:  o.platform === 'manual' ? 'manual' : 'woo',
         };
-      }).sort((a,b) => _parseFecha(b.fecha) - _parseFecha(a.fecha));
+      });
+      
       filtrarComprobantes();
+      renderPaginadorComprobantes();
     })
     .catch(err => {
       document.getElementById('manualesBody').innerHTML =
@@ -480,6 +501,58 @@ function cargarTodosComprobantes() {
           Error: ${err.message}
         </td>`;
     });
+}
+
+function renderPaginadorComprobantes() {
+  // Buscar o crear contenedor del paginador
+  let container = document.getElementById('paginadorComprobantes');
+  if (!container) {
+    const tablaContainer = document.querySelector('.comp-tabla-wrap');
+    if (tablaContainer) {
+      const div = document.createElement('div');
+      div.id = 'paginadorComprobantes';
+      div.style.marginTop = '16px';
+      div.style.marginBottom = '16px';
+      tablaContainer.insertAdjacentElement('afterend', div);
+      container = div;
+    }
+  }
+  
+  if (!container) return;
+  
+  if (totalPaginas <= 1) {
+    container.innerHTML = '';
+    return;
+  }
+  
+  let html = '<div style="display:flex;gap:8px;justify-content:center;align-items:center;">';
+  
+  if (paginaActual > 1) {
+    html += `<button onclick="cargarTodosComprobantes(${paginaActual - 1}, '${busquedaActual}')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">◀ Anterior</button>`;
+  }
+  
+  html += `<span style="padding:6px 12px;">Página ${paginaActual} de ${totalPaginas}</span>`;
+  
+  if (paginaActual < totalPaginas) {
+    html += `<button onclick="cargarTodosComprobantes(${paginaActual + 1}, '${busquedaActual}')" style="padding:6px 12px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">Siguiente ▶</button>`;
+  }
+  
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+// Conectar la caja de búsqueda existente
+function conectarBusquedaComprobantes() {
+  const inputBusqueda = document.getElementById('compBuscar');
+  if (inputBusqueda) {
+    let timeout;
+    inputBusqueda.addEventListener('input', (e) => {
+      clearTimeout(timeout);
+      timeout = setTimeout(() => {
+        cargarTodosComprobantes(1, e.target.value);
+      }, 500);
+    });
+  }
 }
 
 function _parseFecha(str) {
@@ -1473,4 +1546,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     toast('Error al conectar Mercado Libre', 'error');
     history.replaceState({}, '', '/dashboard');
   }
+  
+  // 👇 AGREGAR ESTA LÍNEA 👇
+  conectarBusquedaComprobantes();
 });

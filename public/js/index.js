@@ -457,7 +457,7 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
 
   // Construir URL con parámetros de paginación, búsqueda y FECHAS
   const params = new URLSearchParams({
-    limit: 10,
+    limit: 25,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);

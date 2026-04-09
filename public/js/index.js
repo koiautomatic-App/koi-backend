@@ -457,7 +457,7 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
 
   // Construir URL con parámetros de paginación y búsqueda
   const params = new URLSearchParams({
-    limit: 25,
+    limit: 10,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
@@ -500,7 +500,7 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
       
       if (intento < 3) {
         // Reintentar después de 1, 2 segundos
-        const delay = intento * 1000;
+        const delay = intento * 2000;
         setTimeout(() => {
           cargarTodosComprobantes(page, search, intento + 1);
         }, delay);

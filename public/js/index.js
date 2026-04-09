@@ -445,7 +445,7 @@ let paginaActual = 1;
 let totalPaginas = 1;
 let busquedaActual = '';
 
-function cargarTodosComprobantes(page = 1, search = '') {
+function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
   busquedaActual = search;
   
@@ -457,7 +457,7 @@ function cargarTodosComprobantes(page = 1, search = '') {
 
   // Construir URL con parámetros de paginación y búsqueda
   const params = new URLSearchParams({
-    limit: 50,
+    limit: 25,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
@@ -496,13 +496,27 @@ function cargarTodosComprobantes(page = 1, search = '') {
       renderPaginadorComprobantes();
     })
     .catch(err => {
-      document.getElementById('manualesBody').innerHTML =
-        `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
-          Error: ${err.message}
-        </td>`;
+      console.error(`Error (intento ${intento}/3):`, err.message);
+      
+      if (intento < 3) {
+        // Reintentar después de 1, 2 segundos
+        const delay = intento * 1000;
+        setTimeout(() => {
+          cargarTodosComprobantes(page, search, intento + 1);
+        }, delay);
+      } else {
+        document.getElementById('manualesBody').innerHTML =
+          `<table><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
+            ⚠️ Error de conexión. Recargá la página o intentá más tarde.
+            <br><br>
+            <button onclick="cargarTodosComprobantes(1, '')" style="padding:8px 16px;margin-top:10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">
+              Reintentar
+            </button>
+           </div>
+          `;
+      }
     });
 }
-
 function renderPaginadorComprobantes() {
   // Buscar o crear contenedor del paginador
   let container = document.getElementById('paginadorComprobantes');

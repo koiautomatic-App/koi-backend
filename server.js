@@ -1480,22 +1480,23 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       desde, 
       hasta, 
       page = 1, 
-      limit = 50, 
+      limit = 25,  // 👈 Cambiado de 50 a 25
       search = '' 
     } = req.query;
     
+    // 👇 FILTRO SIMPLIFICADO
     const filter = { 
       userId: req.userId,
-      $and: [
-        { status: { $ne: 'skipped' } },
-        { 
-          $or: [
-            { 'rawPayload.status': { $exists: false } },
-            { 'rawPayload.status': { $nin: ['cancelled', 'failed', 'refunded', 'pending'] } }
-          ]
-        }
-      ]
+      // Solo excluir órdenes que ya marcamos como skipped
+      status: { $ne: 'skipped' }
     };
+    
+    // 👇 Si la orden tiene concepto que indica cancelación, también la excluimos
+    // (esto captura órdenes viejas que no tienen rawPayload)
+    filter.$or = [
+      { concepto: { $not: { $regex: 'cancelado|cancelled|failed|rechazado', $options: 'i' } } },
+      { concepto: { $exists: false } }
+    ];
     
     if (platform) filter.platform = platform;
     if (status)   filter.status   = status;
@@ -1505,20 +1506,18 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       if (hasta) filter.createdAt.$lte = new Date(hasta);
     }
     
-    // 👇 BÚSQUEDA (nuevo)
+    // Búsqueda
     if (search && search.trim()) {
-      filter.$and = filter.$and || [];
-      filter.$and.push({
-        $or: [
+      filter.$and = [
+        { $or: [
           { customerName: { $regex: search, $options: 'i' } },
           { customerEmail: { $regex: search, $options: 'i' } },
           { concepto: { $regex: search, $options: 'i' } },
           { externalId: { $regex: search, $options: 'i' } }
-        ]
-      });
+        ] }
+      ];
     }
     
-    // 👇 PAGINACIÓN (nuevo)
     const skip = (parseInt(page) - 1) * parseInt(limit);
     const limitNum = Math.min(parseInt(limit), 100);
     
@@ -1531,7 +1530,6 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       Order.countDocuments(filter)
     ]);
     
-    // Agregar itemsSummary (nuevo)
     const ordersWithSummary = orders.map(order => ({
       ...order,
       itemsSummary: order.items?.map(i => `${i.cantidad}x ${i.nombre}`).join(', ') || order.concepto || ''

@@ -1480,23 +1480,23 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       desde, 
       hasta, 
       page = 1, 
-      limit = 25,  // 👈 Cambiado de 50 a 25
+      limit = 25,
       search = '' 
     } = req.query;
     
-    // 👇 FILTRO SIMPLIFICADO
+    // 👇 FILTRO CORREGIDO
     const filter = { 
       userId: req.userId,
-      // Solo excluir órdenes que ya marcamos como skipped
-      status: { $ne: 'skipped' }
+      status: { $ne: 'skipped' },
+      $and: [
+        {
+          $or: [
+            { items: { $exists: true, $ne: [] } },
+            { concepto: { $exists: true, $ne: '', $nin: ['Venta WooCommerce', 'woocommerce', null] } }
+          ]
+        }
+      ]
     };
-    
-    // 👇 Si la orden tiene concepto que indica cancelación, también la excluimos
-    // (esto captura órdenes viejas que no tienen rawPayload)
-    filter.$or = [
-      { concepto: { $not: { $regex: 'cancelado|cancelled|failed|rechazado', $options: 'i' } } },
-      { concepto: { $exists: false } }
-    ];
     
     if (platform) filter.platform = platform;
     if (status)   filter.status   = status;
@@ -1508,14 +1508,14 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     
     // Búsqueda
     if (search && search.trim()) {
-      filter.$and = [
-        { $or: [
+      filter.$and.push({
+        $or: [
           { customerName: { $regex: search, $options: 'i' } },
           { customerEmail: { $regex: search, $options: 'i' } },
           { concepto: { $regex: search, $options: 'i' } },
           { externalId: { $regex: search, $options: 'i' } }
-        ] }
-      ];
+        ]
+      });
     }
     
     const skip = (parseInt(page) - 1) * parseInt(limit);

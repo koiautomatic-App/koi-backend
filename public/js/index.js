@@ -442,32 +442,43 @@ let _filtroMes   = '';
 
 function cargarTodosComprobantes() {
   document.getElementById('manualesBody').innerHTML =
-    `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
+    `<table><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
       <span class="material-icons" style="font-size:18px!important;opacity:.4;display:block;margin-bottom:8px">hourglass_empty</span>
       Cargando comprobantes…
-    </td></tr>`;
+    </td>`;
 
   // Cargar desde la API REST
   api.get('/api/orders?limit=200')
     .then(raw => {
-      _todosComp = (raw.orders || []).map(o => ({
-        id:      o.externalId || o._id,
-        cliente: o.customerName  || 'Sin nombre',
-        email:   o.customerEmail || '',
-        concepto: o.platform || '',
-        fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
-        tipo:    'Factura C',
-        monto:   o.amount || 0,
-        estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
-        origen:  o.platform === 'manual' ? 'manual' : 'woo',
-      })).sort((a,b) => _parseFecha(b.fecha) - _parseFecha(a.fecha));
+      _todosComp = (raw.orders || []).map(o => {
+        // 👇 GENERAR CONCEPTO desde items si existe
+        let conceptoMostrar = o.concepto || '';
+        if (!conceptoMostrar && o.items && o.items.length > 0) {
+          conceptoMostrar = o.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
+        }
+        if (!conceptoMostrar) {
+          conceptoMostrar = o.platform || 'Venta';
+        }
+        
+        return {
+          id:      o.externalId || o._id,
+          cliente: o.customerName  || 'Sin nombre',
+          email:   o.customerEmail || '',
+          concepto: conceptoMostrar,  // 👈 AHORA USA items
+          fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+          tipo:    'Factura C',
+          monto:   o.amount || 0,
+          estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
+          origen:  o.platform === 'manual' ? 'manual' : 'woo',
+        };
+      }).sort((a,b) => _parseFecha(b.fecha) - _parseFecha(a.fecha));
       filtrarComprobantes();
     })
     .catch(err => {
       document.getElementById('manualesBody').innerHTML =
         `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
           Error: ${err.message}
-        </td></tr>`;
+        </td>`;
     });
 }
 

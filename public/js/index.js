@@ -453,14 +453,18 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
     `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
       <span class="material-icons" style="font-size:18px!important;opacity:.4;display:block;margin-bottom:8px">hourglass_empty</span>
       Cargando comprobantes…
-    </td>`;
+    </tr>`;
 
-  // Construir URL con parámetros de paginación y búsqueda
+  // Construir URL con parámetros de paginación, búsqueda y FECHAS
   const params = new URLSearchParams({
     limit: 10,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
+  
+  // 👇 AGREGAR ESTAS DOS LÍNEAS PARA LAS FECHAS
+  if (_rangoDesde) params.set('desde', _rangoDesde.toISOString().split('T')[0]);
+  if (_rangoHasta) params.set('hasta', _rangoHasta.toISOString().split('T')[0]);
   
   // Cargar desde la API REST con paginación
   api.get(`/api/orders?${params.toString()}`)
@@ -499,14 +503,13 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
       console.error(`Error (intento ${intento}/3):`, err.message);
       
       if (intento < 3) {
-        // Reintentar después de 1, 2 segundos
         const delay = intento * 2000;
         setTimeout(() => {
           cargarTodosComprobantes(page, search, intento + 1);
         }, delay);
       } else {
         document.getElementById('manualesBody').innerHTML =
-          `<table><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
+          `<td><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
             ⚠️ Error de conexión. Recargá la página o intentá más tarde.
             <br><br>
             <button onclick="cargarTodosComprobantes(1, '')" style="padding:8px 16px;margin-top:10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">
@@ -1241,10 +1244,10 @@ function filtrarComprobantes() {
     if (_filtroTipo === 'manual'    && c.origen !== 'manual')          return false;
     if (_filtroTipo === 'woo'       && c.origen !== 'woo')             return false;
 
-    // Filtro rango de fechas
-    const ts = _parseFecha(c.fecha);
-    if (_rangoDesde && ts < _rangoDesde.getTime()) return false;
-    if (_rangoHasta && ts > _rangoHasta.getTime()) return false;
+    // 👇 ELIMINAR ESTAS LÍNEAS (el backend ya filtra por fechas)
+    // const ts = _parseFecha(c.fecha);
+    // if (_rangoDesde && ts < _rangoDesde.getTime()) return false;
+    // if (_rangoHasta && ts > _rangoHasta.getTime()) return false;
 
     // Búsqueda texto
     if (q) {
@@ -1256,7 +1259,6 @@ function filtrarComprobantes() {
 
   renderComprobantes(lista);
 }
-
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');
   if (!lista.length) {

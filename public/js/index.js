@@ -211,12 +211,6 @@ function adaptarStats(raw) {
   const ahora  = new Date();
   const mesNom = ahora.toLocaleString('es-AR', { month:'long', year:'numeric' });
 
-  // Calcular ventas de HOY
-  const hoyStr   = ahora.toISOString().slice(0,10);
-  const hoyTotal = (raw.ultimas || [])
-    .filter(o => o.createdAt?.slice(0,10) === hoyStr)
-    .reduce((s, o) => s + (o.amount || 0), 0);
-
   // Comprobantes para la bandeja — enriquecidos con datos de CAE
   const comprobantes = (raw.ultimas || []).map(o => ({
     _id:         o._id,
@@ -247,16 +241,16 @@ function adaptarStats(raw) {
   return {
     serverOnline:    true,
     monoCategoria:   'C',
-    monoFacturado:   raw.totalMonto     || 0,   // ingresos del período
+    monoFacturado:   raw.totalMonto     || 0,
     monoLimite:      2432364,
     monoMes:         `Período: ${periodoLabel}`,
-    hoyFacturado:    hoyTotal,
-    hoyDelta:        '',
-    hoyTipo:         'up',
-    pendientesCAE:   raw.pendientesCAE  || 0,   // viene del server (todos los tiempos)
+    hoyFacturado:    raw.hoyMonto || 0,
+    hoyDelta:        raw.hoyCount > 0 ? `${raw.hoyCount} factura${raw.hoyCount !== 1 ? 's' : ''} emitida${raw.hoyCount !== 1 ? 's' : ''} hoy` : 'Sin facturar hoy',
+    hoyTipo:         raw.hoyCount > 0 ? 'up' : '',
+    pendientesCAE:   raw.pendientesCAE  || 0,
     pendDelta:       raw.pendientesCAE > 0 ? `${raw.pendientesCAE} sin emitir` : 'Al día ✓',
     pendTipo:        raw.pendientesCAE > 0 ? 'warn' : 'up',
-    mesFacturado:    raw.totalFacturado || 0,   // SOLO facturas con CAE emitido en el período
+    mesFacturado:    raw.totalFacturado || 0,
     mesDelta:        `${raw.totalFacturas || 0} facturas emitidas`,
     mesTipo:         'up',
     chartTotal:      raw.totalMonto     || 0,

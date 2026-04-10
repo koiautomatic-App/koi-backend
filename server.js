@@ -1378,18 +1378,23 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
     const { platform, desde, hasta } = req.query;
 
-   const match = { 
-  userId: new mongoose.Types.ObjectId(req.userId),
-  $and: [
-    { status: { $ne: 'skipped' } },
-    { 
-      $or: [
-        { 'rawPayload.status': { $exists: false } },
-        { 'rawPayload.status': { $nin: ['cancelled', 'failed', 'refunded', 'pending'] } }
-      ]
-    }
-  ]
-};
+    const match = { 
+      userId: new mongoose.Types.ObjectId(req.userId),
+      status: { $ne: 'skipped' }
+    };
+    if (platform) match.platform = platform;
+
+    // Período — por defecto mes actual
+    const ahora  = new Date();
+    const initMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    const finMes  = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0, 23, 59, 59);
+
+    match.createdAt = {
+      $gte: desde ? new Date(desde) : initMes,
+      $lte: hasta ? new Date(hasta) : finMes,
+    };
+
+    // ... el resto del código (matchFacturado, matchIngresos, agregaciones, etc.) se mantiene igual ...
 if (platform) match.platform = platform;
 
     // Período — por defecto mes actual

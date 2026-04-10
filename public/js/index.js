@@ -1229,31 +1229,24 @@ function setFiltro(tipo, btn) {
   _filtroTipo = tipo;
   document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  filtrarComprobantes();
+  
+  // 👇 Recargar desde el backend con el nuevo filtro
+  cargarTodosComprobantes(1, busquedaActual);
 }
 
 function filtrarComprobantes() {
-  const q = (document.getElementById('compBuscar').value || '').toLowerCase();
-  document.getElementById('btnClearSearch').style.display = q ? 'flex' : 'none';
-
   let lista = _todosComp.filter(c => {
-    // Filtro tipo
-    if (_filtroTipo === 'factura'   && c.tipo !== 'Factura C')         return false;
-    if (_filtroTipo === 'nota'      && c.tipo !== 'Nota de Crédito C') return false;
-    if (_filtroTipo === 'pendiente' && c.estado !== 'pendiente')       return false;
-    if (_filtroTipo === 'manual'    && c.origen !== 'manual')          return false;
-    if (_filtroTipo === 'woo'       && c.origen !== 'woo')             return false;
-
-    // 👇 ELIMINAR ESTAS LÍNEAS (el backend ya filtra por fechas)
-    // const ts = _parseFecha(c.fecha);
-    // if (_rangoDesde && ts < _rangoDesde.getTime()) return false;
-    // if (_rangoHasta && ts > _rangoHasta.getTime()) return false;
-
-    // Búsqueda texto
-    if (q) {
-      const hay = [c.id, c.cliente, c.concepto, c.fecha].join(' ').toLowerCase();
-      if (!hay.includes(q)) return false;
-    }
+    // Filtro por tipo de comprobante
+    if (_filtroTipo === 'factura' && c.tipo !== 'Factura C') return false;
+    if (_filtroTipo === 'nota' && c.tipo !== 'Nota de Crédito C') return false;
+    
+    // Filtro por estado
+    if (_filtroTipo === 'pendiente' && c.estado !== 'pendiente') return false;
+    
+    // Filtro por origen (plataforma)
+    if (_filtroTipo === 'manual' && c.origen !== 'manual') return false;
+    if (_filtroTipo === 'woo' && c.origen !== 'woo') return false;
+    
     return true;
   });
 

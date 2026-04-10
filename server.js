@@ -1476,7 +1476,11 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
         .lean(),
 
       // Pendientes sin CAE
-      Order.countDocuments({ userId: req.userId, status: 'pending_invoice' }),
+     Order.countDocuments({ 
+  userId: req.userId, 
+  status: 'pending_invoice',
+  createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
+}),
     ]);
 
     res.json({

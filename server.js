@@ -1394,19 +1394,6 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       $lte: hasta ? new Date(hasta) : finMes,
     };
 
-    // ... el resto del código (matchFacturado, matchIngresos, agregaciones, etc.) se mantiene igual ...
-if (platform) match.platform = platform;
-
-    // Período — por defecto mes actual
-    const ahora  = new Date();
-    const initMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-    const finMes  = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0, 23, 59, 59);
-
-    match.createdAt = {
-      $gte: desde ? new Date(desde) : initMes,
-      $lte: hasta ? new Date(hasta) : finMes,
-    };
-
     const matchFacturado = {
       ...match,
       status: 'invoiced',  // solo facturas efectivamente emitidas
@@ -1449,11 +1436,12 @@ if (platform) match.platform = platform;
       ]),
 
       // Últimas 50 órdenes del período
-     Order.find(match)
-     .sort({ createdAt: -1 })
-    .limit(50)
-    .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante items concepto')
-    .lean(),
+      Order.find(match)
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante items concepto')
+        .lean(),
+
       // Pendientes sin CAE (de todos los tiempos, no solo del período)
       Order.countDocuments({ userId: req.userId, status: 'pending_invoice' }),
     ]);
@@ -1461,9 +1449,9 @@ if (platform) match.platform = platform;
     res.json({
       ok:             true,
       periodo:        { desde: match.createdAt.$gte, hasta: match.createdAt.$lte },
-      totalMonto:     totalesIngresos[0]?.total  || 0,  // ingresos período
+      totalMonto:     totalesIngresos[0]?.total  || 0,
       totalOrden:     totalesIngresos[0]?.count  || 0,
-      totalFacturado: totalesFacturado[0]?.total || 0,  // solo con CAE
+      totalFacturado: totalesFacturado[0]?.total || 0,
       totalFacturas:  totalesFacturado[0]?.count || 0,
       pendientesCAE:  pendientes,
       plataformas:    porPlataforma,
@@ -1477,6 +1465,9 @@ if (platform) match.platform = platform;
   }
 });
 
+// ════════════════════════════════════════════════════════════
+//  API — ORDERS
+// ════════════════════════════════════════════════════════════
 app.get('/api/orders', requireAuthAPI, async (req, res) => {
   try {
     const { 
@@ -1489,7 +1480,6 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       search = '' 
     } = req.query;
     
-    // 👇 FILTRO CORREGIDO
     const filter = { 
       userId: req.userId,
       status: { $ne: 'skipped' },
@@ -1511,7 +1501,6 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       if (hasta) filter.createdAt.$lte = new Date(hasta);
     }
     
-    // Búsqueda
     if (search && search.trim()) {
       filter.$and.push({
         $or: [

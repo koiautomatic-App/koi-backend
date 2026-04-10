@@ -979,8 +979,8 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 /* ── SELECTOR DE PERÍODO GLOBAL ─────────────────────── */
-let _dashDesde = null;
-let _dashHasta = null;
+// let _dashDesde = null;  // ELIMINADO - usar _rangoDesde
+// let _dashHasta = null;  // ELIMINADO - usar _rangoHasta
 
 const DASH_PRESETS = {
   mes:  'Este mes',
@@ -991,10 +991,11 @@ const DASH_PRESETS = {
 
 function _initDashPeriod() {
   const hoy = new Date();
-  _dashDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  _dashHasta = new Date(hoy.getFullYear(), hoy.getMonth()+1, 0);
+  _rangoDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+  _rangoHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
   _syncDashInputs();
   _updateTopbarBadge('Este mes');
+  _recargarDashConPeriodo();  // 👈 Agregar esta línea para cargar datos
 }
 
 function toggleDashCalendario() {
@@ -1048,88 +1049,57 @@ function aplicarDashRangoCustom() {
 
 function _syncDashInputs() {
   const toISO = d => d ? d.toISOString().split('T')[0] : '';
-  document.getElementById('dashDesde').value = toISO(_dashDesde);
-  document.getElementById('dashHasta').value = toISO(_dashHasta);
+  const dashDesde = document.getElementById('dashDesde');
+  const dashHasta = document.getElementById('dashHasta');
+  if (dashDesde) dashDesde.value = toISO(_rangoDesde);
+  if (dashHasta) dashHasta.value = toISO(_rangoHasta);
 }
 
 function _updateTopbarBadge(label) {
-  document.getElementById('dashPeriodoLabel').textContent = label;
+  const el = document.getElementById('dashPeriodoLabel');
+  if (el) el.textContent = label;
+  
   // Update chart subtitle
   const chartSub = document.getElementById('chartSub');
   if (chartSub) chartSub.textContent = label;
+  
   // Update active label in dropdown
   const al = document.getElementById('tcalActiveLabel');
-  if (al && _dashDesde && _dashHasta) {
-    const fmt = d => d.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-    al.textContent = fmt(_dashDesde) + '  →  ' + fmt(_dashHasta);
-  } else if (al) { al.textContent = 'Todo el historial'; }
+  if (al && _rangoDesde && _rangoHasta) {
+    const fmt = d => d.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    al.textContent = fmt(_rangoDesde) + '  →  ' + fmt(_rangoHasta);
+  } else if (al) { 
+    al.textContent = 'Todo el historial'; 
+  }
 }
 
-function _recargarDashConPeriodo() {
-  // Filtra TODOS los datos del dashboard según el período global
-  const loader = data => {
-    if (!data) return;
-    const desde = _dashDesde ? _dashDesde.getTime() : 0;
-    const hasta  = _dashHasta ? _dashHasta.getTime() : Infinity;
-
-    // Filtrar comprobantes
-    if (data.comprobantes) {
-      data.comprobantes = data.comprobantes.filter(c => {
-        const ts = _parseFecha(c.fecha);
-        return ts >= desde && ts <= hasta;
-      });
-    }
-
-    // Filtrar chart data (days inside range)
-    if (data.chartDias && data.chartVentas) {
-      const filteredDias = [], filteredVentas = [];
-      const desdeD = _dashDesde, hastaD = _dashHasta;
-      data.chartDias.forEach((dia, i) => {
-        // dia is "dd" format, reconstruct date using period year/month
-        const mesRef = desdeD.getMonth(), anioRef = desdeD.getFullYear();
-        const fecha = new Date(anioRef, mesRef, parseInt(dia));
-        if (fecha >= desdeD && fecha <= hastaD) {
-          filteredDias.push(dia);
-          filteredVentas.push(data.chartVentas[i]);
-        }
-      });
-      if (filteredDias.length) {
-        data.chartDias   = filteredDias;
-        data.chartVentas = filteredVentas;
+async function _recargarDashConPeriodo() {
+  // Construir URL con filtros de período (solo backend)
+  const qs = new URLSearchParams();
+  if (_rangoDesde) qs.set('desde', _rangoDesde.toISOString().split('T')[0]);
+  if (_rangoHasta) qs.set('hasta', _rangoHasta.toISOString().split('T')[0]);
+  
+  try {
+    const raw = await api.get('/api/stats/dashboard?' + qs.toString());
+    const data = adaptarStats(raw);
+    if (data) {
+      cargarDashboard(data);
+      
+      // Actualizar etiquetas del período
+      if (_rangoDesde && _rangoHasta) {
+        const fmt = dt => dt.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+        document.getElementById('chartSub').textContent = `${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`;
+        document.getElementById('topbarPeriod').textContent = `Período: ${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`;
+      } else {
+        document.getElementById('chartSub').textContent = 'Todo el historial';
+        document.getElementById('topbarPeriod').textContent = 'Período: Todo el historial';
       }
     }
-
-    // Recalculate period total from filtered comprobantes
-    if (data.comprobantes) {
-      data.chartTotal = data.comprobantes.reduce((s,c) => s + (c.monto||0), 0);
-    }
-
-    cargarDashboard(data);
-
-    // Update chart labels
-    if (_dashDesde && _dashHasta) {
-      const fmt = dt => dt.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
-      document.getElementById('chartTitle').textContent = 'Ingresos';
-      document.getElementById('chartSub').textContent   = fmt(_dashDesde) + ' → ' + fmt(_dashHasta);
-    }
-  };
-
-  // Construir URL con filtros de período
-  const qs = new URLSearchParams();
-  if (_dashDesde) qs.set('desde', _dashDesde.toISOString());
-  if (_dashHasta) qs.set('hasta', _dashHasta.toISOString());
-
-  api.get('/api/stats/dashboard?' + qs.toString())
-    .then(raw => {
-      const data = adaptarStats(raw);
-      if (data) cargarDashboard(data);
-    })
-    .catch(err => { toast('Error cargando datos: ' + err.message, 'error'); });
+  } catch(err) { 
+    console.error('Dashboard error:', err.message);
+    toast('Error cargando datos: ' + err.message, 'error'); 
+  }
 }
-
-/* ── CALENDARIO / PERÍODO ───────────────────────────── */
-let _rangoDesde = null;  // Date
-let _rangoHasta = null;  // Date
 
 function _iniciarPeriodo() {
   // Por defecto: este mes

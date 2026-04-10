@@ -1022,46 +1022,52 @@ function aplicarDashPreset(preset, btn) {
   const hoy = new Date(), y = hoy.getFullYear(), m = hoy.getMonth();
   
   let label = '';
+  
   if (preset === 'mes') { 
     _rangoDesde = new Date(y, m, 1);
     _rangoHasta = new Date(y, m+1, 0);
     _dashDesde = _rangoDesde;
     _dashHasta = _rangoHasta;
     label = 'Este mes';
-  }
-  if (preset === 'ant') { 
+  } else if (preset === 'ant') { 
     _rangoDesde = new Date(y, m-1, 1);
     _rangoHasta = new Date(y, m, 0);
     _dashDesde = _rangoDesde;
     _dashHasta = _rangoHasta;
     label = 'Mes anterior';
-  }
-  if (preset === 'trim') { 
-    const ts = Math.floor(m/3)*3;
-    _rangoDesde = new Date(y, ts, 1);
-    _rangoHasta = new Date(y, ts+3, 0);
+  } else if (preset === 'trim') {
+    // Últimos 90 días desde hoy
+    _rangoDesde = new Date(hoy);
+    _rangoDesde.setDate(hoy.getDate() - 90);
+    _rangoHasta = new Date(hoy);
+    _rangoHasta.setHours(23, 59, 59, 999);
     _dashDesde = _rangoDesde;
     _dashHasta = _rangoHasta;
-    label = 'Trimestre';
-  }
-  if (preset === 'anio') { 
+    label = 'Últimos 90 días';
+  } else if (preset === 'anio') { 
     _rangoDesde = new Date(y, 0, 1);
     _rangoHasta = new Date(y, 11, 31);
     _dashDesde = _rangoDesde;
     _dashHasta = _rangoHasta;
     label = 'Este año';
+  } else if (preset === 'todo') {
+    _rangoDesde = null;
+    _rangoHasta = null;
+    _dashDesde = null;
+    _dashHasta = null;
+    label = 'Todo el tiempo';
   }
   
   _syncDashInputs();
   _updateTopbarBadge(label);
-  _syncDateInputs();  // 👈 Sincronizar inputs de comprobantes
+  _syncDateInputs();
   
   // Close dropdown
   document.getElementById('dashCalDropdown').classList.remove('open');
   document.getElementById('btnDashPeriodo').classList.remove('open');
   
   _recargarDashConPeriodo();
-  cargarTodosComprobantes(1, '');  // 👈 Recargar comprobantes
+  cargarTodosComprobantes(1, '');
 }
 
 function aplicarDashRangoCustom() {
@@ -1069,7 +1075,6 @@ function aplicarDashRangoCustom() {
   const h = document.getElementById('dashHasta').value;
   if (!d || !h) return;
   
-  // 👇 Sincronizar ambas variables
   _rangoDesde = new Date(d);
   _rangoHasta = new Date(h + 'T23:59:59');
   _dashDesde = _rangoDesde;
@@ -1080,14 +1085,13 @@ function aplicarDashRangoCustom() {
   const label = fmt(_dashDesde) + ' → ' + fmt(_dashHasta);
   _updateTopbarBadge(label);
   
-  // 👇 Sincronizar inputs de comprobantes
   _syncDateInputs();
   
   document.getElementById('dashCalDropdown').classList.remove('open');
   document.getElementById('btnDashPeriodo').classList.remove('open');
   
   _recargarDashConPeriodo();
-  cargarTodosComprobantes(1, '');  // 👈 Recargar comprobantes
+  cargarTodosComprobantes(1, '');
 }
 
 function _syncDashInputs() {
@@ -1193,10 +1197,12 @@ function aplicarPreset(preset, btn) {
     _rangoHasta = new Date(y, m, 0);
     document.getElementById('btnPeriodoLabel').textContent = 'Mes anterior';
   } else if (preset === 'trim') {
-    const trimStart = Math.floor(m/3)*3;
-    _rangoDesde = new Date(y, trimStart, 1);
-    _rangoHasta = new Date(y, trimStart+3, 0);
-    document.getElementById('btnPeriodoLabel').textContent = 'Trimestre';
+    // Últimos 90 días desde hoy
+    _rangoDesde = new Date(hoy);
+    _rangoDesde.setDate(hoy.getDate() - 90);
+    _rangoHasta = new Date(hoy);
+    _rangoHasta.setHours(23, 59, 59, 999);
+    document.getElementById('btnPeriodoLabel').textContent = 'Últimos 90 días';
   } else if (preset === 'anio') {
     _rangoDesde = new Date(y, 0, 1);
     _rangoHasta = new Date(y, 11, 31);
@@ -1208,8 +1214,6 @@ function aplicarPreset(preset, btn) {
   }
 
   _syncDateInputs();
-  
-  // 👇 CAMBIAR ESTA LÍNEA
   cargarTodosComprobantes(1, busquedaActual);
 }
 

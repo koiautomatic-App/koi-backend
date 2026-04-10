@@ -1952,16 +1952,36 @@ app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirnam
 app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 
 // ════════════════════════════════════════════════════════════
-//  KEEP-ALIVE — Anti cold-start Render free tier
+//  HEALTH CHECK — Para keep-alive y monitoreo
+// ════════════════════════════════════════════════════════════
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
+
+
+// ════════════════════════════════════════════════════════════
+//  KEEP-ALIVE — Anti cold-start Render free tier (MEJORADO)
 // ════════════════════════════════════════════════════════════
 setTimeout(() => {
   if (!process.env.BASE_URL) return;
-  const ping = () => axios.get(`${BASE}/health`, { timeout: 10_000 })
-    .then(() => console.log(`🏓 Keep-alive [${new Date().toISOString()}]`))
-    .catch(e  => console.warn(`⚠️  Ping: ${e.message}`));
+  
+  const ping = async () => {
+    try {
+      const res = await axios.get(`${BASE}/health`, { timeout: 15000 });
+      if (res.status === 200) {
+        console.log(`🏓 Keep-alive OK [${new Date().toISOString()}]`);
+      }
+    } catch (e) {
+      console.warn(`⚠️ Ping falló: ${e.message}`);
+      // Si falla, reintentar después de 30 segundos
+      setTimeout(ping, 30000);
+    }
+  };
+  
+  // Ping cada 5 minutos (más frecuente)
   ping();
-  setInterval(ping, 10 * 60 * 1000);
-}, 30_000);
+  setInterval(ping, 5 * 60 * 1000);
+}, 5000); // Empezar a los 5 segundos
 
 // ════════════════════════════════════════════════════════════
 //  START

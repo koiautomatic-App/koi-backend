@@ -1404,6 +1404,23 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       status: { $in: ['pending_invoice', 'invoiced'] },
     };
 
+    // 👇 FACTURADO DE HOY (usando fechaEmision)
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+
+    const hoyFacturado = await Order.aggregate([
+      { 
+        $match: { 
+          userId: new mongoose.Types.ObjectId(req.userId),
+          status: 'invoiced',
+          fechaEmision: { $gte: hoy, $lt: manana }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+    ]);
+
     // 👇 DETERMINAR SI EL PERÍODO ES LARGO (> 31 días)
     const duracionPeriodo = match.createdAt.$lte - match.createdAt.$gte;
     const esPeriodoLargo = duracionPeriodo > 31 * 24 * 60 * 60 * 1000;
@@ -1474,12 +1491,15 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       chartDias:      chartLabels,
       chartVentas:    chartValues,
       ultimas,
+      hoyMonto:       hoyFacturado[0]?.total || 0,
+      hoyCount:       hoyFacturado[0]?.count || 0,
     });
   } catch(e) {
     console.error('Stats error:', e.message);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 });
+
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════

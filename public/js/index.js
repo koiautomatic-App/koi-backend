@@ -1195,7 +1195,9 @@ function aplicarPreset(preset, btn) {
   }
 
   _syncDateInputs();
-  filtrarComprobantes();
+  
+  // 👇 CAMBIAR ESTA LÍNEA
+  cargarTodosComprobantes(1, busquedaActual);
 }
 
 function aplicarRangoCustom() {

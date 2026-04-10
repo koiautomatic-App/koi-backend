@@ -1396,7 +1396,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
 
     const matchFacturado = {
       ...match,
-      status: 'invoiced',  // solo facturas efectivamente emitidas
+      status: 'invoiced',
     };
 
     const matchIngresos = {
@@ -1404,15 +1404,41 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       status: { $in: ['pending_invoice', 'invoiced'] },
     };
 
-    const [totalesIngresos, totalesFacturado, porPlataforma, porDia, ultimas, pendientes] = await Promise.all([
+    // 👇 DETERMINAR SI EL PERÍODO ES LARGO (> 31 días)
+    const duracionPeriodo = match.createdAt.$lte - match.createdAt.$gte;
+    const esPeriodoLargo = duracionPeriodo > 31 * 24 * 60 * 60 * 1000;
 
-      // Total ingresos del período (todas las órdenes)
+    // 👇 VENTAS PARA EL GRÁFICO (agrupar por día o mes)
+    const ventasAgrupadas = await Order.aggregate([
+      { $match: matchIngresos },
+      { $group: {
+        _id: esPeriodoLargo 
+          ? { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: '-03:00' } }
+          : { $dateToString: { format: '%d', date: '$createdAt', timezone: '-03:00' } },
+        total: { $sum: '$amount' },
+      }},
+      { $sort: { _id: 1 } },
+    ]);
+
+    // 👇 FORMATEAR ETIQUETAS
+    const chartLabels = ventasAgrupadas.map(v => {
+      if (esPeriodoLargo) {
+        const [year, month] = v._id.split('-');
+        return new Date(year, month-1).toLocaleDateString('es-AR', { month: 'short' });
+      }
+      return v._id;
+    });
+    const chartValues = ventasAgrupadas.map(v => Math.round(v.total));
+
+    const [totalesIngresos, totalesFacturado, porPlataforma, ultimas, pendientes] = await Promise.all([
+
+      // Total ingresos del período
       Order.aggregate([
         { $match: matchIngresos },
         { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
       ]),
 
-      // Total facturado del período (solo con CAE emitido)
+      // Total facturado del período
       Order.aggregate([
         { $match: matchFacturado },
         { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
@@ -1425,16 +1451,6 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
         { $sort: { total: -1 } },
       ]),
 
-      // Ventas por día para el gráfico
-      Order.aggregate([
-        { $match: matchIngresos },
-        { $group: {
-          _id:   { $dateToString: { format: '%d', date: '$createdAt', timezone: '-03:00' } },
-          total: { $sum: '$amount' },
-        }},
-        { $sort: { _id: 1 } },
-      ]),
-
       // Últimas 50 órdenes del período
       Order.find(match)
         .sort({ createdAt: -1 })
@@ -1442,7 +1458,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
         .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante items concepto')
         .lean(),
 
-      // Pendientes sin CAE (de todos los tiempos, no solo del período)
+      // Pendientes sin CAE
       Order.countDocuments({ userId: req.userId, status: 'pending_invoice' }),
     ]);
 
@@ -1455,8 +1471,8 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       totalFacturas:  totalesFacturado[0]?.count || 0,
       pendientesCAE:  pendientes,
       plataformas:    porPlataforma,
-      chartDias:      porDia.map(d => d._id),
-      chartVentas:    porDia.map(d => Math.round(d.total)),
+      chartDias:      chartLabels,
+      chartVentas:    chartValues,
       ultimas,
     });
   } catch(e) {
@@ -1464,7 +1480,6 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════

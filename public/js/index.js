@@ -1020,31 +1020,74 @@ function aplicarDashPreset(preset, btn) {
   document.querySelectorAll('#dashCalDropdown .tcal-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   const hoy = new Date(), y = hoy.getFullYear(), m = hoy.getMonth();
-  if (preset === 'mes')  { _dashDesde = new Date(y,m,1);                 _dashHasta = new Date(y,m+1,0); }
-  if (preset === 'ant')  { _dashDesde = new Date(y,m-1,1);               _dashHasta = new Date(y,m,0); }
-  if (preset === 'trim') { const ts=Math.floor(m/3)*3; _dashDesde=new Date(y,ts,1); _dashHasta=new Date(y,ts+3,0); }
-  if (preset === 'anio') { _dashDesde = new Date(y,0,1);                 _dashHasta = new Date(y,11,31); }
+  
+  let label = '';
+  if (preset === 'mes') { 
+    _rangoDesde = new Date(y, m, 1);
+    _rangoHasta = new Date(y, m+1, 0);
+    _dashDesde = _rangoDesde;
+    _dashHasta = _rangoHasta;
+    label = 'Este mes';
+  }
+  if (preset === 'ant') { 
+    _rangoDesde = new Date(y, m-1, 1);
+    _rangoHasta = new Date(y, m, 0);
+    _dashDesde = _rangoDesde;
+    _dashHasta = _rangoHasta;
+    label = 'Mes anterior';
+  }
+  if (preset === 'trim') { 
+    const ts = Math.floor(m/3)*3;
+    _rangoDesde = new Date(y, ts, 1);
+    _rangoHasta = new Date(y, ts+3, 0);
+    _dashDesde = _rangoDesde;
+    _dashHasta = _rangoHasta;
+    label = 'Trimestre';
+  }
+  if (preset === 'anio') { 
+    _rangoDesde = new Date(y, 0, 1);
+    _rangoHasta = new Date(y, 11, 31);
+    _dashDesde = _rangoDesde;
+    _dashHasta = _rangoHasta;
+    label = 'Este año';
+  }
+  
   _syncDashInputs();
-  _updateTopbarBadge(DASH_PRESETS[preset]);
+  _updateTopbarBadge(label);
+  _syncDateInputs();  // 👈 Sincronizar inputs de comprobantes
+  
   // Close dropdown
   document.getElementById('dashCalDropdown').classList.remove('open');
   document.getElementById('btnDashPeriodo').classList.remove('open');
+  
   _recargarDashConPeriodo();
+  cargarTodosComprobantes(1, '');  // 👈 Recargar comprobantes
 }
 
 function aplicarDashRangoCustom() {
   const d = document.getElementById('dashDesde').value;
   const h = document.getElementById('dashHasta').value;
   if (!d || !h) return;
-  _dashDesde = new Date(d);
-  _dashHasta = new Date(h + 'T23:59:59');
+  
+  // 👇 Sincronizar ambas variables
+  _rangoDesde = new Date(d);
+  _rangoHasta = new Date(h + 'T23:59:59');
+  _dashDesde = _rangoDesde;
+  _dashHasta = _rangoHasta;
+  
   document.querySelectorAll('#dashCalDropdown .tcal-preset').forEach(b => b.classList.remove('active'));
-  const fmt = dt => dt.toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'});
+  const fmt = dt => dt.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: '2-digit' });
   const label = fmt(_dashDesde) + ' → ' + fmt(_dashHasta);
   _updateTopbarBadge(label);
+  
+  // 👇 Sincronizar inputs de comprobantes
+  _syncDateInputs();
+  
   document.getElementById('dashCalDropdown').classList.remove('open');
   document.getElementById('btnDashPeriodo').classList.remove('open');
+  
   _recargarDashConPeriodo();
+  cargarTodosComprobantes(1, '');  // 👈 Recargar comprobantes
 }
 
 function _syncDashInputs() {

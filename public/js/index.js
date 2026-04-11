@@ -732,7 +732,8 @@ function cargarIntegraciones() {
           </div>
         </div>`).join('');
     })
-    .catch(() => {});
+    .cat
+    ch(() => {});
 }
 
 async function backfillConcepto(integrationId) {
@@ -912,18 +913,35 @@ async function confirmarConexion() {
 
 /* ── CONFIGURACIÓN VISTA ────────────────────────────── */
 function cargarConfigVista() {
-  // Cargar valores guardados (ScriptProperties en GAS / API en web)
-  if (typeof google !== 'undefined') {
-    gasRun('obtenerConfiguracion', null, data => {
-      if (!data) return;
-      if (data.nombre)    document.getElementById('cfgNombre2').value    = data.nombre;
-      if (data.cuit)      document.getElementById('cfgCuit2').value      = data.cuit;
-      if (data.email)     document.getElementById('cfgEmail2').value     = data.email;
-      if (data.categoria) document.getElementById('cfgCategoria2').value = data.categoria;
-      if (typeof data.factAuto  !== 'undefined') document.getElementById('switchFactAuto2').checked  = data.factAuto;
-      if (typeof data.envioAuto !== 'undefined') document.getElementById('switchEnvioAuto2').checked = data.envioAuto;
-    }, null);
-  }
+  // Cargar valores desde la API REST
+  fetch('/api/me', { credentials: 'include' })
+    .then(r => r.json())
+    .then(data => {
+      if (!data.user) return;
+      const user = data.user;
+      const s = user.settings || {};
+      
+      // Perfil
+      const nombreInput = document.getElementById('cfgNombre2');
+      if (nombreInput) nombreInput.value = user.nombre || '';
+      
+      const cuitInput = document.getElementById('cfgCuit2');
+      if (cuitInput) cuitInput.value = s.cuit || '';
+      
+      const emailInput = document.getElementById('cfgEmail2');
+      if (emailInput) emailInput.value = user.email || '';
+      
+      const categoriaSelect = document.getElementById('cfgCategoria2');
+      if (categoriaSelect) categoriaSelect.value = s.categoria || 'C';
+      
+      // Switches
+      const swFactAuto = document.getElementById('switchFactAuto2');
+      if (swFactAuto) swFactAuto.checked = s.factAuto === true;
+      
+      const swEnvioAuto = document.getElementById('switchEnvioAuto2');
+      if (swEnvioAuto) swEnvioAuto.checked = s.envioAuto === true;
+    })
+    .catch(err => console.warn('cargarConfigVista error:', err.message));
 }
 
 function guardarPerfilVista() {

@@ -963,6 +963,39 @@ function guardarPerfilVista() {
   }
 }
 
+async function guardarSwitch(key, value) {
+  try {
+    const res = await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ [key]: value })
+    });
+    
+    if (!res.ok) throw new Error('Error al guardar');
+    
+    // Asegurar que el switch visual refleje el estado guardado
+    const swId = key === 'factAuto' ? 'switchFactAuto2' : 'switchEnvioAuto2';
+    const sw = document.getElementById(swId);
+    if (sw) sw.checked = value;
+    
+    const nombre = key === 'factAuto' ? 'Facturación automática' : 'Envío automático';
+    toast(`${nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
+    
+    const statusDiv = document.getElementById('cfgAutoStatus2');
+    if (statusDiv) {
+      statusDiv.style.display = 'block';
+      setTimeout(() => statusDiv.style.display = 'none', 2000);
+    }
+  } catch(e) {
+    toast('Error al guardar: ' + e.message, 'error');
+    // Revertir el switch visual
+    const swId = key === 'factAuto' ? 'switchFactAuto2' : 'switchEnvioAuto2';
+    const sw = document.getElementById(swId);
+    if (sw) sw.checked = !value;
+  }
+}
+
 /* ── MOBILE SIDEBAR ────────────────────────────────── */
 function toggleSidebar() {
   const sidebar  = document.querySelector('.sidebar');

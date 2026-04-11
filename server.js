@@ -1102,145 +1102,107 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
 //  API — PDF DE FACTURA (usando EJS)
 // ════════════════════════════════════════════════════════════
 
-// Configurar EJS (path ya está declarado al inicio del archivo)
-const ejs = require('ejs');
-app.set('view engine', 'ejs');
-app.set('views', path.join(__dirname, 'views'));
-
-// ... resto del código igual
-// ════════════════════════════════════════════════════════════
-//  API — STATS CON FILTRO DE PERÍODO
-// ════════════════════════════════════════════════════════════
-app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
   try {
-    const { platform, desde, hasta } = req.query;
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
 
-    const match = { 
-      userId: new mongoose.Types.ObjectId(req.userId),
-      status: { $ne: 'skipped' }
+    const user = await User.findById(req.userId)
+      .select('nombre apellido settings').lean();
+
+    // Datos del emisor
+    const nombreFantasia = user?.settings?.razonSocial
+      || `${user?.nombre||''} ${user?.apellido||''}`.trim()
+      || 'Sono Handmade';
+    const razonSocial = user?.settings?.razonSocial || nombreFantasia;
+    const cuitRaw = user?.settings?.cuit || '';
+    const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+
+    // Datos del comprobante
+    const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
+    const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
+    const nroComp = `${ptoVta}-${nroCbte}`;
+    const fecha = (orden.orderDate || orden.createdAt)
+      ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '—';
+
+    // Importes
+    const fmtARS = n => new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n || 0);
+
+    // Items
+    const items = orden.items?.length
+      ? orden.items
+      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
     };
-    if (platform) match.platform = platform;
 
-    // Período — por defecto mes actual
-    const ahora  = new Date();
-    const initMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
-    const finMes  = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0, 23, 59, 59);
+    const filasItems = items.map(item => {
+      const subtotal = (item.precio || 0) * (item.cantidad || 1);
+      return `<tr>
+        <td>${escapeHtml(item.nombre || 'Producto')}</td>
+        <td>${item.cantidad || 1}</td>
+        <td>$ ${fmtARS(item.precio || 0)}</td>
+        <td>$ ${fmtARS(subtotal)}</td>
+      </tr>`;
+    }).join('');
 
-    match.createdAt = {
-      $gte: desde ? new Date(desde) : initMes,
-      $lte: hasta ? new Date(hasta) : finMes,
-    };
+    // CAE
+    const caeNum = orden.caeNumber || null;
+    const caeVto = orden.caeExpiry
+      ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+      : '—';
+    const caeDisplay = caeNum || '(pendiente)';
 
-    const matchFacturado = {
-      ...match,
-      status: 'invoiced',
-    };
+    // QR AFIP
+    let urlQrAfip = null;
+    if (caeNum && cuitRaw) {
+      const qrData = {
+        ver: 1,
+        fecha,
+        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+        ptoVta: parseInt(ptoVta),
+        tipoCmp: orden.tipoComprobante || 11,
+        nroCmp: orden.nroComprobante || 0,
+        importe: orden.amount,
+        moneda: 'PES',
+        ctz: 1,
+        tipoDocRec: 99,
+        nroDocRec: 0,
+        tipoCodAut: 'E',
+        codAut: parseInt(caeNum),
+      };
+      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+    }
 
-    const matchIngresos = {
-      ...match,
-      status: { $in: ['pending_invoice', 'invoiced'] },
-    };
-
-    // 👇 FACTURADO DE HOY (usando fechaEmision)
-    const hoy = new Date();
-    hoy.setHours(0, 0, 0, 0);
-    const manana = new Date(hoy);
-    manana.setDate(manana.getDate() + 1);
-
-    const hoyFacturado = await Order.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(req.userId),
-          status: 'invoiced',
-          fechaEmision: { $gte: hoy, $lt: manana }
-        }
-      },
-      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
-    ]);
-
-    // 👇 DETERMINAR SI EL PERÍODO ES LARGO (> 31 días)
-    const duracionPeriodo = match.createdAt.$lte - match.createdAt.$gte;
-    const esPeriodoLargo = duracionPeriodo > 31 * 24 * 60 * 60 * 1000;
-
-    // 👇 VENTAS PARA EL GRÁFICO (agrupar por día o mes)
-    const ventasAgrupadas = await Order.aggregate([
-      { $match: matchIngresos },
-      { $group: {
-        _id: esPeriodoLargo 
-          ? { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: '-03:00' } }
-          : { $dateToString: { format: '%d', date: '$createdAt', timezone: '-03:00' } },
-        total: { $sum: '$amount' },
-      }},
-      { $sort: { _id: 1 } },
-    ]);
-
-    // 👇 FORMATEAR ETIQUETAS
-    const chartLabels = ventasAgrupadas.map(v => {
-      if (esPeriodoLargo) {
-        const [year, month] = v._id.split('-');
-        return new Date(year, month-1).toLocaleDateString('es-AR', { month: 'short' });
-      }
-      return v._id;
+    // Renderizar con EJS
+    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+      nombreFantasia,
+      razonSocial,
+      cuitFmt,
+      nroComp,
+      fecha,
+      filasItems,
+      total: fmtARS(orden.amount),
+      caeDisplay,
+      caeVto,
+      urlQrAfip,
+      sinCae: !caeNum
     });
-    const chartValues = ventasAgrupadas.map(v => Math.round(v.total));
 
-    const [totalesIngresos, totalesFacturado, porPlataforma, ultimas, pendientes] = await Promise.all([
-
-      // Total ingresos del período
-      Order.aggregate([
-        { $match: matchIngresos },
-        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
-      ]),
-
-      // Total facturado del período
-      Order.aggregate([
-        { $match: matchFacturado },
-        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
-      ]),
-
-      // Desglose por plataforma
-      Order.aggregate([
-        { $match: matchIngresos },
-        { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } },
-        { $sort: { total: -1 } },
-      ]),
-
-      // Últimas 50 órdenes del período
-      Order.find(match)
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante items concepto')
-        .lean(),
-
-      // Pendientes sin CAE
-     Order.countDocuments({ 
-  userId: req.userId, 
-  status: 'pending_invoice',
-  createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
-}),
-    ]);
-
-    res.json({
-      ok:             true,
-      periodo:        { desde: match.createdAt.$gte, hasta: match.createdAt.$lte },
-      totalMonto:     totalesIngresos[0]?.total  || 0,
-      totalOrden:     totalesIngresos[0]?.count  || 0,
-      totalFacturado: totalesFacturado[0]?.total || 0,
-      totalFacturas:  totalesFacturado[0]?.count || 0,
-      pendientesCAE:  pendientes,
-      plataformas:    porPlataforma,
-      chartDias:      chartLabels,
-      chartVentas:    chartValues,
-      ultimas,
-      hoyMonto:       hoyFacturado[0]?.total || 0,
-      hoyCount:       hoyFacturado[0]?.count || 0,
-    });
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);
+    res.send(html);
   } catch(e) {
-    console.error('Stats error:', e.message);
-    res.status(500).json({ error: 'Error al obtener estadísticas' });
+    console.error('PDF error:', e.message);
+    res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════

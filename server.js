@@ -1674,7 +1674,7 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — STATS DASHBOARD (endpoint unificado para el frontend)
+//  API — STATS DASHBOARD (corregido)
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
@@ -1693,10 +1693,10 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       fechaHasta.setHours(23, 59, 59, 999);
     }
     
-    // 1. Total facturado en el período (facturas emitidas)
+    // 📊 1. TOTAL FACTURADO (solo facturas emitidas)
     const matchFacturado = {
       userId,
-      status: 'invoiced'
+      status: 'invoiced'  // 👈 CLAVE: solo facturas emitidas
     };
     if (fechaDesde || fechaHasta) {
       matchFacturado.fechaEmision = {};
@@ -1712,7 +1712,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const totalFacturado = totalResult[0]?.total || 0;
     const totalFacturas = totalResult[0]?.count || 0;
     
-    // 2. Emitido hoy
+    // 📅 2. EMITIDO HOY (solo facturas emitidas hoy)
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
     const hoyFin = new Date();
@@ -1722,7 +1722,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       { 
         $match: { 
           userId,
-          status: 'invoiced',
+          status: 'invoiced',  // 👈 CLAVE: solo facturas emitidas
           fechaEmision: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -1732,17 +1732,16 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const hoyMonto = hoyResult[0]?.total || 0;
     const hoyCount = hoyResult[0]?.count || 0;
     
-    // 3. Pendientes CAE
+    // ⏳ 3. PENDIENTES CAE (órdenes sin facturar)
     const pendientesCAE = await Order.countDocuments({
       userId,
-      status: 'pending_invoice'
+      status: 'pending_invoice'  // 👈 Solo las que esperan factura
     });
     
-    // 4. Ingresos por día para el gráfico
+    // 📈 4. GRÁFICO - Ingresos por día (solo facturas emitidas)
     let chartDias = [];
     let chartVentas = [];
     
-    // Definir rango para el gráfico (usar el período solicitado o últimos 30 días)
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
     
@@ -1756,7 +1755,6 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    // Generar array de días en el rango
     const diffDays = Math.ceil((graficoHasta - graficoDesde) / (1000 * 60 * 60 * 24));
     const dias = [];
     for (let i = 0; i <= diffDays; i++) {
@@ -1765,12 +1763,11 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       dias.push(d);
     }
     
-    // Obtener ventas agrupadas por día
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
           userId,
-          status: 'invoiced',
+          status: 'invoiced',  // 👈 CLAVE: solo facturas emitidas
           fechaEmision: { $gte: graficoDesde, $lte: graficoHasta }
         }
       },
@@ -1792,15 +1789,21 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       return ventasMap.get(key) || 0;
     });
     
-    // 5. Últimas 5 ventas
+    // 🆕 5. ÚLTIMAS VENTAS (con concepto incluido)
     const ultimas = await Order.find({
       userId,
-      status: 'invoiced'
+      status: 'invoiced'  // 👈 CLAVE: solo facturas emitidas
     })
     .sort({ fechaEmision: -1 })
     .limit(5)
     .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items')
     .lean();
+    
+    // Agregar concepto formateado para mostrar
+    const ultimasConConcepto = ultimas.map(v => ({
+      ...v,
+      conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
+    }));
     
     res.json({
       ok: true,
@@ -1811,7 +1814,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       pendientesCAE,
       chartDias,
       chartVentas,
-      ultimas,
+      ultimas: ultimasConConcepto,
       periodo: {
         desde: fechaDesde,
         hasta: fechaHasta
@@ -1823,7 +1826,6 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — TOGGLE INTEGRACIÓN (para activar/desactivar desde frontend)
 // ════════════════════════════════════════════════════════════

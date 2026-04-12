@@ -1674,6 +1674,184 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+//  API — STATS DASHBOARD (endpoint unificado para el frontend)
+// ════════════════════════════════════════════════════════════
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+  try {
+    const userId = new mongoose.Types.ObjectId(req.userId);
+    
+    // Parsear filtros de fecha
+    let fechaDesde = null;
+    let fechaHasta = null;
+    
+    if (req.query.desde) {
+      fechaDesde = new Date(req.query.desde);
+      fechaDesde.setHours(0, 0, 0, 0);
+    }
+    if (req.query.hasta) {
+      fechaHasta = new Date(req.query.hasta);
+      fechaHasta.setHours(23, 59, 59, 999);
+    }
+    
+    // 1. Total facturado en el período (facturas emitidas)
+    const matchFacturado = {
+      userId,
+      status: 'invoiced'
+    };
+    if (fechaDesde || fechaHasta) {
+      matchFacturado.fechaEmision = {};
+      if (fechaDesde) matchFacturado.fechaEmision.$gte = fechaDesde;
+      if (fechaHasta) matchFacturado.fechaEmision.$lte = fechaHasta;
+    }
+    
+    const totalResult = await Order.aggregate([
+      { $match: matchFacturado },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+    ]);
+    
+    const totalFacturado = totalResult[0]?.total || 0;
+    const totalFacturas = totalResult[0]?.count || 0;
+    
+    // 2. Emitido hoy
+    const hoyInicio = new Date();
+    hoyInicio.setHours(0, 0, 0, 0);
+    const hoyFin = new Date();
+    hoyFin.setHours(23, 59, 59, 999);
+    
+    const hoyResult = await Order.aggregate([
+      { 
+        $match: { 
+          userId,
+          status: 'invoiced',
+          fechaEmision: { $gte: hoyInicio, $lte: hoyFin }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+    ]);
+    
+    const hoyMonto = hoyResult[0]?.total || 0;
+    const hoyCount = hoyResult[0]?.count || 0;
+    
+    // 3. Pendientes CAE
+    const pendientesCAE = await Order.countDocuments({
+      userId,
+      status: 'pending_invoice'
+    });
+    
+    // 4. Ingresos por día para el gráfico
+    let chartDias = [];
+    let chartVentas = [];
+    
+    // Definir rango para el gráfico (usar el período solicitado o últimos 30 días)
+    let graficoDesde = fechaDesde;
+    let graficoHasta = fechaHasta;
+    
+    if (!graficoDesde) {
+      graficoDesde = new Date();
+      graficoDesde.setDate(graficoDesde.getDate() - 30);
+      graficoDesde.setHours(0, 0, 0, 0);
+    }
+    if (!graficoHasta) {
+      graficoHasta = new Date();
+      graficoHasta.setHours(23, 59, 59, 999);
+    }
+    
+    // Generar array de días en el rango
+    const diffDays = Math.ceil((graficoHasta - graficoDesde) / (1000 * 60 * 60 * 24));
+    const dias = [];
+    for (let i = 0; i <= diffDays; i++) {
+      const d = new Date(graficoDesde);
+      d.setDate(graficoDesde.getDate() + i);
+      dias.push(d);
+    }
+    
+    // Obtener ventas agrupadas por día
+    const ventasPorDia = await Order.aggregate([
+      {
+        $match: {
+          userId,
+          status: 'invoiced',
+          fechaEmision: { $gte: graficoDesde, $lte: graficoHasta }
+        }
+      },
+      {
+        $group: {
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$fechaEmision' } },
+          total: { $sum: '$amount' }
+        }
+      },
+      { $sort: { _id: 1 } }
+    ]);
+    
+    const ventasMap = new Map();
+    ventasPorDia.forEach(v => ventasMap.set(v._id, v.total));
+    
+    chartDias = dias.map(d => d.toLocaleDateString('es-AR', { day: '2-digit' }));
+    chartVentas = dias.map(d => {
+      const key = d.toISOString().split('T')[0];
+      return ventasMap.get(key) || 0;
+    });
+    
+    // 5. Últimas 5 ventas
+    const ultimas = await Order.find({
+      userId,
+      status: 'invoiced'
+    })
+    .sort({ fechaEmision: -1 })
+    .limit(5)
+    .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items')
+    .lean();
+    
+    res.json({
+      ok: true,
+      totalFacturado,
+      totalFacturas,
+      hoyMonto,
+      hoyCount,
+      pendientesCAE,
+      chartDias,
+      chartVentas,
+      ultimas,
+      periodo: {
+        desde: fechaDesde,
+        hasta: fechaHasta
+      }
+    });
+    
+  } catch(e) {
+    console.error('Dashboard stats error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  API — TOGGLE INTEGRACIÓN (para activar/desactivar desde frontend)
+// ════════════════════════════════════════════════════════════
+app.post('/api/integrations/:platform/toggle', requireAuthAPI, async (req, res) => {
+  try {
+    const { platform } = req.params;
+    const { enabled } = req.body;
+    
+    const integration = await Integration.findOne({
+      userId: req.userId,
+      platform
+    });
+    
+    if (!integration) {
+      return res.status(404).json({ error: 'Integración no encontrada' });
+    }
+    
+    integration.status = enabled ? 'active' : 'paused';
+    await integration.save();
+    
+    res.json({ ok: true });
+  } catch(e) {
+    console.error('Toggle error:', e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
 //  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
 const isLoggedIn = (req) => {

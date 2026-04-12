@@ -39,6 +39,7 @@ const fs             = require('fs');
 const https          = require('https');
 const { DOMParser }  = require('@xmldom/xmldom');
 const xmlbuilder     = require('xmlbuilder');
+const ejs = require('ejs');  // 👈 AGREGAR ESTA LÍNEA
 
 const app  = express();
 const PORT = process.env.PORT || 10000;

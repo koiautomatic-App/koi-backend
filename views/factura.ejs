@@ -266,28 +266,41 @@
       margin-bottom: 16px;
     }
 
-    .producto-item {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 12px 0;
-      font-size: 14px;
+    /* Tabla de productos - formato profesional */
+    .productos-tabla {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 8px;
+    }
+    
+    .productos-tabla th {
+      text-align: left;
+      font-size: 9px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #b0a89c;
+      padding-bottom: 8px;
+      border-bottom: 1px solid #efe8df;
+    }
+    
+    .productos-tabla th:not(:first-child) {
+      text-align: right;
+    }
+    
+    .productos-tabla td {
+      padding: 10px 0;
+      font-size: 13px;
       color: #1a1a1a;
       border-bottom: 1px solid #f5f0ea;
     }
-
-    .producto-item:last-child {
+    
+    .productos-tabla td:not(:first-child) {
+      text-align: right;
+    }
+    
+    .productos-tabla tr:last-child td {
       border-bottom: none;
-    }
-
-    .producto-nombre {
-      flex: 1;
-      font-weight: 500;
-    }
-
-    .producto-precio {
-      font-weight: 700;
-      color: #d4a373;
     }
 
     .footer {
@@ -386,10 +399,22 @@
 
       <div class="productos">
         <div class="productos-titulo">DETALLE</div>
-        <%- filasItems %>
+        <table class="productos-tabla">
+          <thead>
+            <tr>
+              <th>Producto</th>
+              <th>Cant</th>
+              <th>Precio</th>
+              <th>Subtotal</th>
+            </tr>
+          </thead>
+          <tbody>
+            <%- filasItems %>
+          </tbody>
+        </table>
       </div>
 
-      <!-- Botón que abre el diálogo de impresión (NO recarga la página) -->
+      <!-- Botón que abre el diálogo de impresión -->
       <button onclick="window.print(); return false;" class="btn-descarga">
         🖨️ IMPRIMIR / GUARDAR PDF
       </button>

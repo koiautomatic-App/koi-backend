@@ -1171,13 +1171,15 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       ? new Date(orden.caeExpiry).toLocaleDateString('es-AR') 
       : '—';
 
-    // QR AFIP
-    let urlQrAfip = null;
+        // QR AFIP con redundancia (múltiples APIs)
+    let qrImageHtml = null;
+    
     if (orden.caeNumber && cuitRaw) {
+      // Datos para el QR según formato ARCA
       const qrData = {
         ver: 1,
         fecha: fecha.replace(/\//g, ''),
-        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+        cuit: parseInt(cuitRaw.replace(/\D/g, '')),
         ptoVta: parseInt(ptoVta),
         tipoCmp: orden.tipoComprobante || 11,
         nroCmp: orden.nroComprobante || 0,
@@ -1187,13 +1189,28 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
         tipoDocRec: 99,
         nroDocRec: 0,
         tipoCodAut: 'E',
-        codAut: parseInt(orden.caeNumber),
+        codAut: parseInt(orden.caeNumber)
       };
-const qrBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
-      // Usar API de QR Server para generar la imagen
-      urlQrAfip = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`;
+      
+      // Generar URL de AFIP
+      const paramsBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+      const afipUrl = `https://www.afip.gob.ar/fe/qr/?p=${paramsBase64}`;
+      
+      // Múltiples APIs con redundancia
+      const apis = [
+        `https://api.qrserver.com/v1/create-qr-code/?size=110x110&ecc=H&data=${encodeURIComponent(afipUrl)}`,
+        `https://quickchart.io/qr?size=110&ecLevel=H&text=${encodeURIComponent(afipUrl)}`
+      ];
+      
+      // Generar HTML con imágenes en orden
+      qrImageHtml = apis.map((api, index) => {
+        return `<img src="${api}" 
+                       style="width:90px;height:90px;display:${index === 0 ? 'block' : 'none'}" 
+                       alt="QR AFIP"
+                       onerror="this.style.display='none';this.nextSibling?.style?.setProperty('display','block')">`;
+      }).join('');
     }
-      // Renderizar con EJS
+    // Renderizar con EJS
     const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
       nombreFantasia,
       razonSocial,
@@ -1207,10 +1224,10 @@ const qrBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
       total: fmtARS(orden.amount),
       caeDisplay,
       caeVto,
-      urlQrAfip,
-      sinCae: !orden.caeNumber  // 👈 AGREGAR ESTA LÍNEA
+      qrImageHtml,  // ✅ CORRECTO: usar qrImageHtml
+      sinCae: !orden.caeNumber
     });
-
+    
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch(e) {

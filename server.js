@@ -1674,7 +1674,7 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — STATS DASHBOARD (corregido)
+//  API — STATS DASHBOARD (CORREGIDO - usa misma lógica que comprobantes)
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
@@ -1693,10 +1693,13 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       fechaHasta.setHours(23, 59, 59, 999);
     }
     
-    // 📊 1. TOTAL FACTURADO (solo facturas emitidas)
+    // 📊 1. TOTAL FACTURADO (incluye órdenes con CAE O status invoiced)
     const matchFacturado = {
       userId,
-      status: 'invoiced'  // 👈 CLAVE: solo facturas emitidas
+      $or: [
+        { status: 'invoiced' },
+        { caeNumber: { $exists: true, $ne: null } }
+      ]
     };
     if (fechaDesde || fechaHasta) {
       matchFacturado.fechaEmision = {};
@@ -1712,7 +1715,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const totalFacturado = totalResult[0]?.total || 0;
     const totalFacturas = totalResult[0]?.count || 0;
     
-    // 📅 2. EMITIDO HOY (solo facturas emitidas hoy)
+    // 📅 2. EMITIDO HOY (incluye órdenes con CAE O status invoiced)
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
     const hoyFin = new Date();
@@ -1722,7 +1725,10 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       { 
         $match: { 
           userId,
-          status: 'invoiced',  // 👈 CLAVE: solo facturas emitidas
+          $or: [
+            { status: 'invoiced' },
+            { caeNumber: { $exists: true, $ne: null } }
+          ],
           fechaEmision: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -1732,13 +1738,16 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const hoyMonto = hoyResult[0]?.total || 0;
     const hoyCount = hoyResult[0]?.count || 0;
     
-    // ⏳ 3. PENDIENTES CAE (órdenes sin facturar)
+    // ⏳ 3. PENDIENTES CAE (órdenes SIN CAE Y SIN status invoiced)
     const pendientesCAE = await Order.countDocuments({
       userId,
-      status: 'pending_invoice'  // 👈 Solo las que esperan factura
+      $and: [
+        { caeNumber: { $exists: false } },
+        { status: { $ne: 'invoiced' } }
+      ]
     });
     
-    // 📈 4. GRÁFICO - Ingresos por día (solo facturas emitidas)
+    // 📈 4. GRÁFICO - Ingresos por día (incluye órdenes con CAE O status invoiced)
     let chartDias = [];
     let chartVentas = [];
     
@@ -1755,7 +1764,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    const diffDays = Math.ceil((graficoHasta - graficoDesde) / (1000 * 60 * 60 * 24));
+    const diffDays = Math.min(Math.ceil((graficoHasta - graficoDesde) / (1000 * 60 * 60 * 24)), 60);
     const dias = [];
     for (let i = 0; i <= diffDays; i++) {
       const d = new Date(graficoDesde);
@@ -1767,7 +1776,10 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       {
         $match: {
           userId,
-          status: 'invoiced',  // 👈 CLAVE: solo facturas emitidas
+          $or: [
+            { status: 'invoiced' },
+            { caeNumber: { $exists: true, $ne: null } }
+          ],
           fechaEmision: { $gte: graficoDesde, $lte: graficoHasta }
         }
       },
@@ -1789,14 +1801,17 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       return ventasMap.get(key) || 0;
     });
     
-    // 🆕 5. ÚLTIMAS VENTAS (con concepto incluido)
+    // 🆕 5. ÚLTIMAS 50 VENTAS (misma lógica: tiene CAE O status invoiced)
     const ultimas = await Order.find({
       userId,
-      status: 'invoiced'  // 👈 CLAVE: solo facturas emitidas
+      $or: [
+        { status: 'invoiced' },
+        { caeNumber: { $exists: true, $ne: null } }
+      ]
     })
     .sort({ fechaEmision: -1 })
-    .limit(5)
-    .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items')
+    .limit(50)
+    .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items status')
     .lean();
     
     // Agregar concepto formateado para mostrar

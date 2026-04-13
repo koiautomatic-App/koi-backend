@@ -1916,7 +1916,7 @@ setTimeout(() => {
 // ════════════════════════════════════════════════════════════
 
 const multer = require('multer');
-const path = require('path');
+// ⚠️ ELIMINAR esta línea: const path = require('path');  (ya existe al principio del archivo)
 
 // Configurar almacenamiento
 const storage = multer.diskStorage({
@@ -1975,7 +1975,6 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

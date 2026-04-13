@@ -1136,49 +1136,84 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       status: 'invoiced',
     };
 
-    // 👇 VENTAS PARA EL GRÁFICO (TODAS las órdenes, NO filtrar por facturación)
-    const ventasAgrupadas = await Order.aggregate([
-      { 
-        $match: { 
-          userId: new mongoose.Types.ObjectId(req.userId),
-          amount: { $gt: 0 },
-          createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
-        } 
-      },
-      { 
-        $group: {
-          _id: { 
-            $dateToString: { 
-              format: '%Y-%m-%d', 
-              date: '$createdAt',
-              timezone: '-03:00' 
-            } 
-          },
-          total: { $sum: '$amount' },
-        }
-      },
-      { $sort: { _id: 1 } },
-    ]);
+    // 👇 DETERMINAR SI EL PERÍODO ES LARGO (> 31 días)
+    const duracionPeriodo = match.createdAt.$lte - match.createdAt.$gte;
+    const esPeriodoLargo = duracionPeriodo > 31 * 24 * 60 * 60 * 1000;
 
-    // Generar arrays para el gráfico (días del 1 al 30/31)
-    const diasEnMes = new Date(match.createdAt.$lte).getDate();
-    const chartDias = [];
-    const chartVentas = [];
+    // 👇 VENTAS PARA EL GRÁFICO (agrupar por día o por mes)
+    let chartDias = [];
+    let chartVentas = [];
 
-    // Inicializar arrays con ceros
-    for (let i = 1; i <= diasEnMes; i++) {
-      chartDias.push(i.toString().padStart(2, '0'));
-      chartVentas.push(0);
-    }
+    if (esPeriodoLargo) {
+      // 📅 PERÍODO LARGO (> 31 días) - agrupar por MES
+      const ventasPorMes = await Order.aggregate([
+        { 
+          $match: { 
+            userId: new mongoose.Types.ObjectId(req.userId),
+            amount: { $gt: 0 },
+            createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
+          } 
+        },
+        { 
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m', date: '$createdAt', timezone: '-03:00' } },
+            total: { $sum: '$amount' },
+          }
+        },
+        { $sort: { _id: 1 } },
+      ]);
 
-    // Llenar con los montos reales
-    ventasAgrupadas.forEach(v => {
-      const dia = parseInt(v._id.split('-')[2]);
-      const idx = dia - 1;
-      if (idx >= 0 && idx < chartVentas.length) {
-        chartVentas[idx] = v.total;
+      // Formatear etiquetas como "Ene", "Feb", "Mar"
+      chartDias = ventasPorMes.map(v => {
+        const [year, month] = v._id.split('-');
+        return new Date(year, month-1).toLocaleDateString('es-AR', { month: 'short' });
+      });
+      chartVentas = ventasPorMes.map(v => v.total);
+
+    } else {
+      // 📅 PERÍODO CORTO (≤ 31 días) - agrupar por DÍA
+      const ventasPorDia = await Order.aggregate([
+        { 
+          $match: { 
+            userId: new mongoose.Types.ObjectId(req.userId),
+            amount: { $gt: 0 },
+            createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
+          } 
+        },
+        { 
+          $group: {
+            _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt', timezone: '-03:00' } },
+            total: { $sum: '$amount' },
+          }
+        },
+        { $sort: { _id: 1 } },
+      ]);
+      // Generar arrays para el gráfico (solo hasta la fecha actual si es el mes vigente)
+      let diasAMostrar = new Date(match.createdAt.$lte).getDate();
+      
+      // Si el período incluye el mes actual, mostrar solo hasta hoy
+      const hoy = new Date();
+      const esMesActual = match.createdAt.$lte >= hoy;
+      
+      if (esMesActual) {
+        diasAMostrar = hoy.getDate();
       }
-    });
+      
+      // Inicializar arrays con ceros
+      for (let i = 1; i <= diasAMostrar; i++) {
+        chartDias.push(i.toString().padStart(2, '0'));
+        chartVentas.push(0);
+      }
+
+      // Llenar con los montos reales
+      ventasPorDia.forEach(v => {
+        const dia = parseInt(v._id.split('-')[2]);
+        const idx = dia - 1;
+        if (idx >= 0 && idx < chartVentas.length) {
+          chartVentas[idx] = v.total;
+        }
+      });
+    }
 
     // 👇 FACTURADO DE HOY (usando fechaEmision)
     const hoy = new Date();

@@ -1210,24 +1210,25 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
                        onerror="this.style.display='none';this.nextSibling?.style?.setProperty('display','block')">`;
       }).join('');
     }
-    // Renderizar con EJS
-    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
-      nombreFantasia,
-      razonSocial,
-      cuitFmt,
-      nroComp,
-      tipoLetra,
-      fecha,
-      customerName: orden.customerName || 'Consumidor Final',
-      customerEmail: orden.customerEmail,
-      filasItems,
-      total: fmtARS(orden.amount),
-      caeDisplay,
-      caeVto,
-      qrImageHtml,  // ✅ CORRECTO: usar qrImageHtml
-      sinCae: !orden.caeNumber
-    });
-    
+   // Renderizar con EJS
+const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+  nombreFantasia,
+  razonSocial,
+  cuitFmt,
+  nroComp,
+  tipoLetra,
+  fecha,
+  customerName: orden.customerName || 'Consumidor Final',
+  customerEmail: orden.customerEmail,
+  filasItems,
+  total: fmtARS(orden.amount),
+  caeDisplay,
+  caeVto,
+  qrImageHtml,
+  sinCae: !orden.caeNumber,
+  urlDescarga: `${BASE}/api/orders/${orden._id}/pdf`  // 👈 AGREGAR ESTA LÍNEA
+});
+
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.send(html);
   } catch(e) {

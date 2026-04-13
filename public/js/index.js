@@ -911,6 +911,128 @@ async function confirmarConexion() {
   }
 })();
 
+// ==================== LOGO ====================
+async function cargarLogoActual() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' });
+    const data = await res.json();
+    const logoUrl = data.user?.settings?.logoUrl;
+    
+    // Actualizar en ambas vistas
+    const imgVista = document.getElementById('currentLogoImg');
+    const imgCfg = document.getElementById('currentLogoImgCfg');
+    const noLogoVista = document.getElementById('noLogoText');
+    const noLogoCfg = document.getElementById('noLogoTextCfg');
+    const btnEliminarVista = document.getElementById('btnEliminarLogo');
+    const btnEliminarCfg = document.getElementById('btnEliminarLogoCfg');
+    
+    if (logoUrl) {
+      if (imgVista) { imgVista.src = logoUrl; imgVista.style.display = 'block'; }
+      if (imgCfg) { imgCfg.src = logoUrl; imgCfg.style.display = 'block'; }
+      if (noLogoVista) noLogoVista.style.display = 'none';
+      if (noLogoCfg) noLogoCfg.style.display = 'none';
+      if (btnEliminarVista) btnEliminarVista.style.display = 'inline-flex';
+      if (btnEliminarCfg) btnEliminarCfg.style.display = 'inline-flex';
+    } else {
+      if (imgVista) imgVista.style.display = 'none';
+      if (imgCfg) imgCfg.style.display = 'none';
+      if (noLogoVista) noLogoVista.style.display = 'flex';
+      if (noLogoCfg) noLogoCfg.style.display = 'flex';
+      if (btnEliminarVista) btnEliminarVista.style.display = 'none';
+      if (btnEliminarCfg) btnEliminarCfg.style.display = 'none';
+    }
+  } catch(e) {
+    console.warn('Error cargando logo:', e);
+  }
+}
+
+async function subirLogo(inputId, btnId) {
+  const input = document.getElementById(inputId);
+  if (!input?.files.length) {
+    toast('Seleccioná un archivo primero', 'warn');
+    return;
+  }
+  
+  const file = input.files[0];
+  const formData = new FormData();
+  formData.append('logo', file);
+  
+  const btn = document.getElementById(btnId);
+  const originalText = btn.innerHTML;
+  btn.innerHTML = '<span class="material-icons" style="font-size: 14px; animation: spin 1s linear infinite;">sync</span> Subiendo...';
+  btn.disabled = true;
+  
+  try {
+    const res = await fetch('/api/me/logo', {
+      method: 'POST',
+      credentials: 'include',
+      body: formData
+    });
+    
+    const data = await res.json();
+    if (data.ok) {
+      toast('Logo actualizado correctamente', 'success');
+      await cargarLogoActual();
+      input.value = '';
+    } else {
+      toast('Error: ' + data.error, 'error');
+    }
+  } catch(e) {
+    toast('Error al subir el logo', 'error');
+  } finally {
+    btn.innerHTML = originalText;
+    btn.disabled = false;
+  }
+}
+
+async function eliminarLogo(btnId) {
+  if (!confirm('¿Eliminar el logo actual?')) return;
+  
+  try {
+    const res = await fetch('/api/me/logo', {
+      method: 'DELETE',
+      credentials: 'include'
+    });
+    
+    const data = await res.json();
+    if (data.ok) {
+      toast('Logo eliminado', 'success');
+      await cargarLogoActual();
+    } else {
+      toast('Error al eliminar', 'error');
+    }
+  } catch(e) {
+    toast('Error al eliminar', 'error');
+  }
+}
+
+// Inicializar handlers
+function initLogoHandlers() {
+  // Vista principal
+  const btnSubir1 = document.getElementById('btnSubirLogo');
+  const btnEliminar1 = document.getElementById('btnEliminarLogo');
+  const logoInput1 = document.getElementById('logoInput');
+  
+  if (btnSubir1) btnSubir1.onclick = () => subirLogo('logoInput', 'btnSubirLogo');
+  if (btnEliminar1) btnEliminar1.onclick = () => eliminarLogo('btnEliminarLogo');
+  if (logoInput1) logoInput1.onchange = () => { if (logoInput1.files.length) subirLogo('logoInput', 'btnSubirLogo'); };
+  
+  // Panel flotante
+  const btnSubir2 = document.getElementById('btnSubirLogoCfg');
+  const btnEliminar2 = document.getElementById('btnEliminarLogoCfg');
+  const logoInput2 = document.getElementById('logoInputCfg');
+  
+  if (btnSubir2) btnSubir2.onclick = () => subirLogo('logoInputCfg', 'btnSubirLogoCfg');
+  if (btnEliminar2) btnEliminar2.onclick = () => eliminarLogo('btnEliminarLogoCfg');
+  if (logoInput2) logoInput2.onchange = () => { if (logoInput2.files.length) subirLogo('logoInputCfg', 'btnSubirLogoCfg'); };
+}
+
+// Modificar cargarConfigVista para incluir el logo
+// Si ya existe cargarConfigVista, agregale estas líneas al final:
+// cargarLogoActual();
+// initLogoHandlers();
+
+
 /* ── CONFIGURACIÓN VISTA ────────────────────────────── */
 function cargarConfigVista() {
   // Cargar valores desde la API REST

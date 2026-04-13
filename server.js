@@ -1189,9 +1189,10 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
         tipoCodAut: 'E',
         codAut: parseInt(orden.caeNumber),
       };
-      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${Buffer.from(JSON.stringify(qrData)).toString('base64')}`;
+const qrBase64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+      // Usar API de QR Server para generar la imagen
+      urlQrAfip = `https://api.qrserver.com/v1/create-qr-code/?size=100x100&data=https://www.afip.gob.ar/fe/qr/?p=${qrBase64}`;
     }
-
       // Renderizar con EJS
     const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
       nombreFantasia,

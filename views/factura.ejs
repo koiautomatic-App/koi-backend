@@ -105,8 +105,8 @@
     </div>
     <div class="footer-afip">
       <div class="qr-wrap">
-        <% if (urlQrAfip) { %>
-          <img src="<%= urlQrAfip %>" width="90" height="90" alt="QR AFIP">
+        <% if (qrImageHtml) { %>
+          <%- qrImageHtml %>
         <% } else { %>
           <div class="qr-placeholder">QR AFIP<br>disponible<br>al emitir</div>
         <% } %>

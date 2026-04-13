@@ -38,6 +38,14 @@
       border-bottom: 1px solid #efe8df;
     }
 
+    /* Logo dinámico */
+    .logo-img {
+      max-width: 80px;
+      max-height: 60px;
+      margin-bottom: 16px;
+      object-fit: contain;
+    }
+
     .logo-icon {
       width: 48px;
       height: 48px;
@@ -266,7 +274,6 @@
       margin-bottom: 16px;
     }
 
-    /* Tabla de productos - formato profesional */
     .productos-tabla {
       width: 100%;
       border-collapse: collapse;
@@ -353,7 +360,12 @@
     <div class="accent-bar"></div>
 
     <div class="header">
-      <div class="logo-icon">K</div>
+      <!-- Logo dinámico: si el usuario subió logo, lo muestra; si no, muestra el ícono K -->
+      <% if (logoUrl) { %>
+        <img src="<%= logoUrl %>" class="logo-img" alt="Logo">
+      <% } else { %>
+        <div class="logo-icon">K</div>
+      <% } %>
       <div class="empresa-nombre"><%= nombreFantasia %></div>
       <div class="empresa-info"><%= razonSocial %></div>
       <div class="cuit-line">CUIT <%= cuitFmt %></div>
@@ -414,7 +426,6 @@
         </table>
       </div>
 
-      <!-- Botón que abre el diálogo de impresión -->
       <button onclick="window.print(); return false;" class="btn-descarga">
         🖨️ IMPRIMIR / GUARDAR PDF
       </button>

@@ -18,7 +18,6 @@
       line-height: 1.5;
     }
 
-    /* Contenedor principal */
     .email-container {
       max-width: 580px;
       margin: 0 auto;
@@ -28,21 +27,15 @@
       box-shadow: 0 20px 40px -12px rgba(0, 0, 0, 0.08), 0 0 0 1px rgba(0, 0, 0, 0.02);
     }
 
-    /* Barra decorativa superior */
     .accent-bar {
       height: 4px;
       background: linear-gradient(90deg, #d4a373 0%, #e9edc9 50%, #d4a373 100%);
     }
 
-    /* Header */
     .header {
       padding: 36px 36px 24px;
       text-align: center;
       border-bottom: 1px solid #efe8df;
-    }
-
-    .logo-container {
-      margin-bottom: 20px;
     }
 
     .logo-icon {
@@ -58,6 +51,7 @@
       font-size: 20px;
       font-family: 'Syne', monospace;
       box-shadow: 0 4px 12px rgba(212, 163, 115, 0.2);
+      margin-bottom: 16px;
     }
 
     .empresa-nombre {
@@ -82,12 +76,10 @@
       font-weight: 400;
     }
 
-    /* Body */
     .body {
       padding: 32px 36px 36px;
     }
 
-    /* Saludo */
     .saludo {
       font-size: 15px;
       font-weight: 500;
@@ -104,7 +96,6 @@
       padding-left: 16px;
     }
 
-    /* Tarjeta de datos */
     .datos-card {
       background: #fefcf8;
       border-radius: 24px;
@@ -148,7 +139,6 @@
       letter-spacing: -0.5px;
     }
 
-    /* QR + CAE */
     .qr-cae-container {
       background: #fefcf8;
       border-radius: 24px;
@@ -158,7 +148,6 @@
       align-items: center;
       gap: 24px;
       border: 1px solid #efe8df;
-      transition: all 0.2s ease;
     }
 
     .qr-wrapper {
@@ -179,7 +168,6 @@
       font-weight: 600;
       text-align: center;
       line-height: 1.3;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.02);
     }
 
     .cae-info {
@@ -233,7 +221,6 @@
       letter-spacing: 0.3px;
     }
 
-    /* Botón */
     .btn-descarga {
       display: block;
       background: #d4a373;
@@ -245,10 +232,8 @@
       font-weight: 600;
       font-size: 14px;
       letter-spacing: 0.8px;
+      margin-top: 28px;
       transition: all 0.2s ease;
-      margin-bottom: 28px;
-      border: none;
-      cursor: pointer;
       box-shadow: 0 2px 8px rgba(212, 163, 115, 0.2);
     }
 
@@ -258,7 +243,6 @@
       box-shadow: 0 6px 16px rgba(212, 163, 115, 0.25);
     }
 
-    /* Tabla de productos */
     .productos {
       border-top: 1px solid #efe8df;
       padding-top: 24px;
@@ -297,7 +281,18 @@
       color: #d4a373;
     }
 
-    /* Footer KOI */
+    .total-row {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 2px solid #d4a373;
+      font-size: 16px;
+    }
+
+    .total-row .producto-nombre strong,
+    .total-row .producto-precio strong {
+      color: #d4a373;
+    }
+
     .footer {
       padding: 24px 36px;
       text-align: center;
@@ -323,7 +318,6 @@
       letter-spacing: 0.5px;
     }
 
-    /* Responsive */
     @media (max-width: 600px) {
       body { padding: 20px 16px; }
       .header { padding: 28px 24px 20px; }
@@ -336,7 +330,6 @@
       .total-valor { font-size: 24px; }
     }
 
-    /* Print styles */
     @media print {
       body { background: white; padding: 0; }
       .btn-descarga { display: none; }
@@ -349,22 +342,17 @@
   <div class="email-container">
     <div class="accent-bar"></div>
 
-    <!-- Header -->
     <div class="header">
-      <div class="logo-container">
-        <div class="logo-icon">K</div>
-      </div>
+      <div class="logo-icon">K</div>
       <div class="empresa-nombre"><%= nombreFantasia %></div>
       <div class="empresa-info"><%= razonSocial %></div>
       <div class="cuit-line">CUIT <%= cuitFmt %></div>
     </div>
 
-    <!-- Body -->
     <div class="body">
       <div class="saludo">Estimado/a <strong><%= customerName %></strong>,</div>
       <div class="mensaje">Adjuntamos el comprobante correspondiente a tu compra.</div>
 
-      <!-- Datos del comprobante -->
       <div class="datos-card">
         <div class="datos-row">
           <span class="datos-label">COMPROBANTE</span>
@@ -380,7 +368,6 @@
         </div>
       </div>
 
-      <!-- QR + CAE -->
       <div class="qr-cae-container">
         <div class="qr-wrapper">
           <% if (qrImageHtml) { %>
@@ -400,17 +387,21 @@
         </div>
       </div>
 
-      <!-- Botón descarga -->
-      <a href="<%= urlDescarga %>" class="btn-descarga">📄 DESCARGAR COMPROBANTE</a>
-
-      <!-- Detalle de productos -->
       <div class="productos">
         <div class="productos-titulo">DETALLE</div>
         <%- filasItems %>
+        
+        <% if (totalItems > 1) { %>
+          <div class="producto-item total-row">
+            <span class="producto-nombre"><strong>TOTAL</strong></span>
+            <span class="producto-precio"><strong>$ <%= total %></strong></span>
+          </div>
+        <% } %>
       </div>
+
+      <a href="<%= urlDescarga %>" class="btn-descarga" target="_blank">📄 DESCARGAR COMPROBANTE</a>
     </div>
 
-    <!-- Footer KOI -->
     <div class="footer">
       <div class="footer-text">
         <strong>KOI-FACTURA</strong> · Sistema de Facturación Electrónica

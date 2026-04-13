@@ -441,6 +441,44 @@
             <label class="cfg-label">Nombre de Marca</label>
             <input id="cfgNombre2" class="cfg-input" type="text" placeholder="ej: Mi Negocio"/>
           </div>
+          <!-- Logo de la empresa -->
+<div class="cfg-section sec-perfil">
+  <div class="cfg-sec-title">
+    <span class="material-icons">image</span> Logo de la empresa
+  </div>
+  <div class="cfg-sec-desc">
+    Subí el logo de tu negocio. Se mostrará en los comprobantes.
+  </div>
+
+  <div class="cfg-fields">
+    <!-- Previsualización del logo -->
+    <div id="logoPreviewArea" style="margin-bottom: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+      <div id="currentLogoContainer" style="background: var(--card-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center;">
+        <img id="currentLogoImg" src="" style="max-width: 80px; max-height: 60px; object-fit: contain; display: none;">
+        <span id="noLogoText" style="color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 6px;">
+          <span class="material-icons" style="font-size: 14px;">image_not_supported</span> Sin logo
+        </span>
+      </div>
+    </div>
+
+    <!-- Input para subir logo -->
+    <div class="cfg-field">
+      <label class="cfg-label">NUEVO LOGO</label>
+      <input type="file" id="logoInput" accept="image/jpeg,image/png,image/gif,image/webp" class="cfg-input" style="padding: 8px 12px;">
+      <div style="display: flex; gap: 12px; margin-top: 12px;">
+        <button id="btnSubirLogo" class="ab-btn secondary" style="padding: 8px 20px;">
+          <span class="material-icons" style="font-size: 14px;">upload</span> Subir logo
+        </button>
+        <button id="btnEliminarLogo" class="ab-btn ghost" style="padding: 8px 20px; display: none;">
+          <span class="material-icons" style="font-size: 14px;">delete</span> Eliminar
+        </button>
+      </div>
+      <div style="font-size: 10px; color: var(--text-3); margin-top: 10px;">
+        Formatos: JPG, PNG, GIF, WEBP · Tamaño máximo: 2MB
+      </div>
+    </div>
+  </div>
+</div>
           <div class="cfg-field">
             <label class="cfg-label">CUIT</label>
             <input id="cfgCuit2" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>
@@ -1076,6 +1114,44 @@
           <label class="cfg-label">Nombre de Marca</label>
           <input id="cfgNombre" class="cfg-input" type="text" placeholder="ej: sono.handmade" value="sono.handmade"/>
         </div>
+        <!-- Logo de la empresa -->
+<div class="cfg-section sec-perfil" style="margin-top: 16px;">
+  <div class="cfg-sec-title">
+    <span class="material-icons">image</span> Logo de la empresa
+  </div>
+  <div class="cfg-sec-desc">
+    Subí el logo de tu negocio. Se mostrará en los comprobantes.
+  </div>
+
+  <div class="cfg-fields">
+    <!-- Previsualización del logo -->
+    <div id="logoPreviewArea" style="margin-bottom: 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap;">
+      <div id="currentLogoContainer" style="background: var(--card-2); border-radius: 12px; padding: 12px; border: 1px solid var(--border); display: inline-flex; align-items: center; justify-content: center;">
+        <img id="currentLogoImgCfg" src="" style="max-width: 80px; max-height: 60px; object-fit: contain; display: none;">
+        <span id="noLogoTextCfg" style="color: var(--text-3); font-size: 12px; display: flex; align-items: center; gap: 6px;">
+          <span class="material-icons" style="font-size: 14px;">image_not_supported</span> Sin logo
+        </span>
+      </div>
+    </div>
+
+    <!-- Input para subir logo -->
+    <div class="cfg-field">
+      <label class="cfg-label">NUEVO LOGO</label>
+      <input type="file" id="logoInputCfg" accept="image/jpeg,image/png,image/gif,image/webp" class="cfg-input" style="padding: 8px 12px;">
+      <div style="display: flex; gap: 12px; margin-top: 12px;">
+        <button id="btnSubirLogoCfg" class="ab-btn secondary" style="padding: 8px 20px;">
+          <span class="material-icons" style="font-size: 14px;">upload</span> Subir logo
+        </button>
+        <button id="btnEliminarLogoCfg" class="ab-btn ghost" style="padding: 8px 20px; display: none;">
+          <span class="material-icons" style="font-size: 14px;">delete</span> Eliminar
+        </button>
+      </div>
+      <div style="font-size: 10px; color: var(--text-3); margin-top: 10px;">
+        Formatos: JPG, PNG, GIF, WEBP · Tamaño máximo: 2MB
+      </div>
+    </div>
+  </div>
+</div>
         <div class="cfg-field">
           <label class="cfg-label">CUIT</label>
           <input id="cfgCuit" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>

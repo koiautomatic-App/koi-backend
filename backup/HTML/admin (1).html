@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KOI · Admin Backstage</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+    <div class="admin-container">
+        <header class="admin-header">
+            <div class="admin-title">
+                <h1>🐟 KOI Admin</h1>
+                <p>Gestión de Carpeta Fiscal (Conserjería)</p>
+            </div>
+            <div class="admin-actions">
+                <button class="btn btn-primary" onclick="fetchPendientes()">Actualizar Lista</button>
+                <button class="btn btn-secondary" onclick="exportarCSV()">Exportar CSV</button>
+            </div>
+        </header>
+
+        <div class="card">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Cliente</th>
+                        <th>CUIT / Clave ARCA</th>
+                        <th class="text-center">Pto. Venta</th>
+                        <th>Estado Actual</th>
+                        <th class="text-right">Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="listaPendientes">
+                    <tr class="loading-row">
+                        <td colspan="5">Cargando usuarios...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="/js/admin.js"></script>
+</body>
+</html>

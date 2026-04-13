@@ -1192,7 +1192,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${Buffer.from(JSON.stringify(qrData)).toString('base64')}`;
     }
 
-    // Renderizar con EJS
+      // Renderizar con EJS
     const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
       nombreFantasia,
       razonSocial,
@@ -1206,7 +1206,8 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       total: fmtARS(orden.amount),
       caeDisplay,
       caeVto,
-      urlQrAfip
+      urlQrAfip,
+      sinCae: !orden.caeNumber  // 👈 AGREGAR ESTA LÍNEA
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');

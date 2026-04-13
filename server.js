@@ -1370,6 +1370,27 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
+//  API — OBTENER UNA ORDEN POR ID
+// ════════════════════════════════════════════════════════════
+app.get('/api/orders/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const orden = await Order.findOne({ 
+      _id: req.params.id, 
+      userId: req.userId 
+    }).lean();
+    
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    res.json({ ok: true, orden });
+  } catch(e) {
+    console.error('Error al obtener orden:', e.message);
+    res.status(500).json({ error: 'Error interno' });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════
 app.get('/api/integrations', requireAuthAPI, async (req, res) => {

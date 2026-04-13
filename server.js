@@ -1102,12 +1102,120 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
 //  API — PDF DE FACTURA (usando EJS)
 // ════════════════════════════════════════════════════════════
 
-// Configurar EJS (path ya está declarado al inicio del archivo)
+// Configurar EJS
 const ejs = require('ejs');
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 
-// ... resto del código igual
+app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
+  try {
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!orden) {
+      return res.status(404).send('Orden no encontrada');
+    }
+
+    // Verificar que tenga CAE
+    if (!orden.caeNumber) {
+      return res.status(400).send('Esta orden no tiene CAE emitido');
+    }
+
+    const user = await User.findById(req.userId)
+      .select('nombre apellido settings').lean();
+
+    // Datos del emisor
+    const nombreFantasia = user?.settings?.razonSocial
+      || `${user?.nombre||''} ${user?.apellido||''}`.trim()
+      || 'KOI Facturación';
+    const razonSocial = user?.settings?.razonSocial || nombreFantasia;
+    const cuitRaw = user?.settings?.cuit || '';
+    const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+
+    // Datos del comprobante
+    const ptoVta = String(orden.puntoVenta || 1).padStart(4, '0');
+    const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
+    const nroComp = `${ptoVta}-${nroCbte}`;
+    const tipoLetra = orden.tipoComprobante === 11 ? 'C' : 'A';
+    
+    const fecha = orden.fechaEmision 
+      ? new Date(orden.fechaEmision).toLocaleDateString('es-AR')
+      : new Date(orden.createdAt).toLocaleDateString('es-AR');
+
+    // Formatear montos
+    const fmtARS = n => new Intl.NumberFormat('es-AR', { 
+      minimumFractionDigits: 2, maximumFractionDigits: 2 
+    }).format(n || 0);
+
+    // Items
+    const items = orden.items?.length 
+      ? orden.items 
+      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+
+    const escapeHtml = (str) => {
+      if (!str) return '';
+      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    };
+
+    const filasItems = items.map(item => {
+      const subtotal = (item.precio || 0) * (item.cantidad || 1);
+      return `<tr>
+        <td>${escapeHtml(item.nombre || 'Producto')}</td>
+        <td>${item.cantidad || 1}</td>
+        <td>$ ${fmtARS(item.precio || 0)}</td>
+        <td>$ ${fmtARS(subtotal)}</td>
+      </tr>`;
+    }).join('');
+
+    // CAE
+    const caeDisplay = orden.caeNumber || '(pendiente)';
+    const caeVto = orden.caeExpiry 
+      ? new Date(orden.caeExpiry).toLocaleDateString('es-AR') 
+      : '—';
+
+    // QR AFIP
+    let urlQrAfip = null;
+    if (orden.caeNumber && cuitRaw) {
+      const qrData = {
+        ver: 1,
+        fecha: fecha.replace(/\//g, ''),
+        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+        ptoVta: parseInt(ptoVta),
+        tipoCmp: orden.tipoComprobante || 11,
+        nroCmp: orden.nroComprobante || 0,
+        importe: orden.amount,
+        moneda: 'PES',
+        ctz: 1,
+        tipoDocRec: 99,
+        nroDocRec: 0,
+        tipoCodAut: 'E',
+        codAut: parseInt(orden.caeNumber),
+      };
+      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${Buffer.from(JSON.stringify(qrData)).toString('base64')}`;
+    }
+
+    // Renderizar con EJS
+    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+      nombreFantasia,
+      razonSocial,
+      cuitFmt,
+      nroComp,
+      tipoLetra,
+      fecha,
+      customerName: orden.customerName || 'Consumidor Final',
+      customerEmail: orden.customerEmail,
+      filasItems,
+      total: fmtARS(orden.amount),
+      caeDisplay,
+      caeVto,
+      urlQrAfip
+    });
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.send(html);
+  } catch(e) {
+    console.error('PDF error:', e.message);
+    res.status(500).send('Error generando comprobante: ' + e.message);
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  API — STATS CON FILTRO DE PERÍODO
 // ════════════════════════════════════════════════════════════

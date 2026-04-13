@@ -39,7 +39,6 @@ const fs             = require('fs');
 const https          = require('https');
 const { DOMParser }  = require('@xmldom/xmldom');
 const xmlbuilder     = require('xmlbuilder');
-const ejs = require('ejs');  // 👈 AGREGAR ESTA LÍNEA
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
@@ -1103,107 +1102,158 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
 //  API — PDF DE FACTURA (usando EJS)
 // ════════════════════════════════════════════════════════════
 
-app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
+// Configurar EJS (path ya está declarado al inicio del archivo)
+const ejs = require('ejs');
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, 'views'));
+
+// ... resto del código igual
+// ════════════════════════════════════════════════════════════
+//  API — STATS CON FILTRO DE PERÍODO
+// ════════════════════════════════════════════════════════════
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
-    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
-    if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+    const { platform, desde, hasta } = req.query;
 
-    const user = await User.findById(req.userId)
-      .select('nombre apellido settings').lean();
+    const match = { 
+      userId: new mongoose.Types.ObjectId(req.userId),
+      status: { $ne: 'skipped' }
+    };
+    if (platform) match.platform = platform;
 
-    // Datos del emisor
-    const nombreFantasia = user?.settings?.razonSocial
-      || `${user?.nombre||''} ${user?.apellido||''}`.trim()
-      || 'Sono Handmade';
-    const razonSocial = user?.settings?.razonSocial || nombreFantasia;
-    const cuitRaw = user?.settings?.cuit || '';
-    const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+    // Período — por defecto mes actual
+    const ahora  = new Date();
+    const initMes = new Date(ahora.getFullYear(), ahora.getMonth(), 1);
+    const finMes  = new Date(ahora.getFullYear(), ahora.getMonth()+1, 0, 23, 59, 59);
 
-    // Datos del comprobante
-    const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
-    const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
-    const nroComp = `${ptoVta}-${nroCbte}`;
-    const fecha = (orden.orderDate || orden.createdAt)
-      ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
-      : '—';
-
-    // Importes
-    const fmtARS = n => new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    }).format(n || 0);
-
-    // Items
-    const items = orden.items?.length
-      ? orden.items
-      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
-
-    const escapeHtml = (str) => {
-      if (!str) return '';
-      return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+    match.createdAt = {
+      $gte: desde ? new Date(desde) : initMes,
+      $lte: hasta ? new Date(hasta) : finMes,
     };
 
-    const filasItems = items.map(item => {
-      const subtotal = (item.precio || 0) * (item.cantidad || 1);
-      return `<tr>
-        <td>${escapeHtml(item.nombre || 'Producto')}</td>
-        <td>${item.cantidad || 1}</td>
-        <td>$ ${fmtARS(item.precio || 0)}</td>
-        <td>$ ${fmtARS(subtotal)}</td>
-      </tr>`;
-    }).join('');
+    const matchFacturado = {
+      ...match,
+      status: 'invoiced',
+    };
 
-    // CAE
-    const caeNum = orden.caeNumber || null;
-    const caeVto = orden.caeExpiry
-      ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
-      : '—';
-    const caeDisplay = caeNum || '(pendiente)';
+    // 👇 VENTAS PARA EL GRÁFICO (TODAS las órdenes, NO filtrar por facturación)
+    const ventasAgrupadas = await Order.aggregate([
+      { 
+        $match: { 
+          userId: new mongoose.Types.ObjectId(req.userId),
+          amount: { $gt: 0 },
+          createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
+        } 
+      },
+      { 
+        $group: {
+          _id: { 
+            $dateToString: { 
+              format: '%Y-%m-%d', 
+              date: '$createdAt',
+              timezone: '-03:00' 
+            } 
+          },
+          total: { $sum: '$amount' },
+        }
+      },
+      { $sort: { _id: 1 } },
+    ]);
 
-    // QR AFIP
-    let urlQrAfip = null;
-    if (caeNum && cuitRaw) {
-      const qrData = {
-        ver: 1,
-        fecha,
-        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
-        ptoVta: parseInt(ptoVta),
-        tipoCmp: orden.tipoComprobante || 11,
-        nroCmp: orden.nroComprobante || 0,
-        importe: orden.amount,
-        moneda: 'PES',
-        ctz: 1,
-        tipoDocRec: 99,
-        nroDocRec: 0,
-        tipoCodAut: 'E',
-        codAut: parseInt(caeNum),
-      };
-      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
-      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+    // Generar arrays para el gráfico (días del 1 al 30/31)
+    const diasEnMes = new Date(match.createdAt.$lte).getDate();
+    const chartDias = [];
+    const chartVentas = [];
+
+    // Inicializar arrays con ceros
+    for (let i = 1; i <= diasEnMes; i++) {
+      chartDias.push(i.toString().padStart(2, '0'));
+      chartVentas.push(0);
     }
 
-    // Renderizar con EJS
-    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
-      nombreFantasia,
-      razonSocial,
-      cuitFmt,
-      nroComp,
-      fecha,
-      filasItems,
-      total: fmtARS(orden.amount),
-      caeDisplay,
-      caeVto,
-      urlQrAfip,
-      sinCae: !caeNum
+    // Llenar con los montos reales
+    ventasAgrupadas.forEach(v => {
+      const dia = parseInt(v._id.split('-')[2]);
+      const idx = dia - 1;
+      if (idx >= 0 && idx < chartVentas.length) {
+        chartVentas[idx] = v.total;
+      }
     });
 
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);
-    res.send(html);
+    // 👇 FACTURADO DE HOY (usando fechaEmision)
+    const hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    const manana = new Date(hoy);
+    manana.setDate(manana.getDate() + 1);
+
+    const hoyFacturado = await Order.aggregate([
+      { 
+        $match: { 
+          userId: new mongoose.Types.ObjectId(req.userId),
+          status: 'invoiced',
+          fechaEmision: { $gte: hoy, $lt: manana }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
+    ]);
+
+    const [totalesIngresos, totalesFacturado, porPlataforma, ultimas, pendientes] = await Promise.all([
+
+      // Total ingresos del período
+      Order.aggregate([
+        { $match: match },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+
+      // Total facturado del período
+      Order.aggregate([
+        { $match: matchFacturado },
+        { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+      ]),
+
+      // Desglose por plataforma
+      Order.aggregate([
+        { $match: match },
+        { $group: { _id: '$platform', total: { $sum: '$amount' }, count: { $sum: 1 } } },
+        { $sort: { total: -1 } },
+      ]),
+
+      // Últimas 50 órdenes del período
+      Order.find(match)
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .select('platform externalId customerName customerEmail amount currency status caeNumber createdAt tipoComprobante puntoVenta nroComprobante items concepto')
+        .lean(),
+
+      // Pendientes sin CAE
+      Order.countDocuments({ 
+        userId: req.userId, 
+        status: 'pending_invoice',
+        createdAt: { $gte: match.createdAt.$gte, $lte: match.createdAt.$lte }
+      }),
+    ]);
+
+    res.json({
+      ok:             true,
+      periodo:        { desde: match.createdAt.$gte, hasta: match.createdAt.$lte },
+      totalMonto:     totalesIngresos[0]?.total  || 0,
+      totalOrden:     totalesIngresos[0]?.count  || 0,
+      totalFacturado: totalesFacturado[0]?.total || 0,
+      totalFacturas:  totalesFacturado[0]?.count || 0,
+      pendientesCAE:  pendientes,
+      plataformas:    porPlataforma,
+      chartDias:      chartDias,
+      chartVentas:    chartVentas,
+      ultimas,
+      hoyMonto:       hoyFacturado[0]?.total || 0,
+      hoyCount:       hoyFacturado[0]?.count || 0,
+    });
   } catch(e) {
-    console.error('PDF error:', e.message);
-    res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
+    console.error('Stats error:', e.message);
+    res.status(500).json({ error: 'Error al obtener estadísticas' });
   }
 });
+
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════
@@ -1671,201 +1721,6 @@ app.post('/webhook/rappi/:secret', async (req, res) => {
 app.post('/webhook/shopify/:secret', async (req, res) => {
   res.status(200).send('OK');
   await handleWebhook('shopify', req.params.secret, () => normalize.shopify(req.body));
-});
-
-// ════════════════════════════════════════════════════════════
-//  API — STATS DASHBOARD (CORREGIDO - usa misma lógica que comprobantes)
-// ════════════════════════════════════════════════════════════
-app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
-  try {
-    const userId = new mongoose.Types.ObjectId(req.userId);
-    
-    // Parsear filtros de fecha
-    let fechaDesde = null;
-    let fechaHasta = null;
-    
-    if (req.query.desde) {
-      fechaDesde = new Date(req.query.desde);
-      fechaDesde.setHours(0, 0, 0, 0);
-    }
-    if (req.query.hasta) {
-      fechaHasta = new Date(req.query.hasta);
-      fechaHasta.setHours(23, 59, 59, 999);
-    }
-    
-    // 📊 1. TOTAL FACTURADO (incluye órdenes con CAE O status invoiced)
-    const matchFacturado = {
-      userId,
-      $or: [
-        { status: 'invoiced' },
-        { caeNumber: { $exists: true, $ne: null } }
-      ]
-    };
-    if (fechaDesde || fechaHasta) {
-      matchFacturado.fechaEmision = {};
-      if (fechaDesde) matchFacturado.fechaEmision.$gte = fechaDesde;
-      if (fechaHasta) matchFacturado.fechaEmision.$lte = fechaHasta;
-    }
-    
-    const totalResult = await Order.aggregate([
-      { $match: matchFacturado },
-      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
-    ]);
-    
-    const totalFacturado = totalResult[0]?.total || 0;
-    const totalFacturas = totalResult[0]?.count || 0;
-    
-    // 📅 2. EMITIDO HOY (incluye órdenes con CAE O status invoiced)
-    const hoyInicio = new Date();
-    hoyInicio.setHours(0, 0, 0, 0);
-    const hoyFin = new Date();
-    hoyFin.setHours(23, 59, 59, 999);
-    
-    const hoyResult = await Order.aggregate([
-      { 
-        $match: { 
-          userId,
-          $or: [
-            { status: 'invoiced' },
-            { caeNumber: { $exists: true, $ne: null } }
-          ],
-          fechaEmision: { $gte: hoyInicio, $lte: hoyFin }
-        }
-      },
-      { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
-    ]);
-    
-    const hoyMonto = hoyResult[0]?.total || 0;
-    const hoyCount = hoyResult[0]?.count || 0;
-    
-    // ⏳ 3. PENDIENTES CAE (órdenes SIN CAE Y SIN status invoiced)
-    const pendientesCAE = await Order.countDocuments({
-      userId,
-      $and: [
-        { caeNumber: { $exists: false } },
-        { status: { $ne: 'invoiced' } }
-      ]
-    });
-    
-    // 📈 4. GRÁFICO - Ingresos por día (incluye órdenes con CAE O status invoiced)
-    let chartDias = [];
-    let chartVentas = [];
-    
-    let graficoDesde = fechaDesde;
-    let graficoHasta = fechaHasta;
-    
-    if (!graficoDesde) {
-      graficoDesde = new Date();
-      graficoDesde.setDate(graficoDesde.getDate() - 30);
-      graficoDesde.setHours(0, 0, 0, 0);
-    }
-    if (!graficoHasta) {
-      graficoHasta = new Date();
-      graficoHasta.setHours(23, 59, 59, 999);
-    }
-    
-    const diffDays = Math.min(Math.ceil((graficoHasta - graficoDesde) / (1000 * 60 * 60 * 24)), 60);
-    const dias = [];
-    for (let i = 0; i <= diffDays; i++) {
-      const d = new Date(graficoDesde);
-      d.setDate(graficoDesde.getDate() + i);
-      dias.push(d);
-    }
-    
-    const ventasPorDia = await Order.aggregate([
-      {
-        $match: {
-          userId,
-          $or: [
-            { status: 'invoiced' },
-            { caeNumber: { $exists: true, $ne: null } }
-          ],
-          fechaEmision: { $gte: graficoDesde, $lte: graficoHasta }
-        }
-      },
-      {
-        $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$fechaEmision' } },
-          total: { $sum: '$amount' }
-        }
-      },
-      { $sort: { _id: 1 } }
-    ]);
-    
-    const ventasMap = new Map();
-    ventasPorDia.forEach(v => ventasMap.set(v._id, v.total));
-    
-    chartDias = dias.map(d => d.toLocaleDateString('es-AR', { day: '2-digit' }));
-    chartVentas = dias.map(d => {
-      const key = d.toISOString().split('T')[0];
-      return ventasMap.get(key) || 0;
-    });
-    
-    // 🆕 5. ÚLTIMAS 50 VENTAS (misma lógica: tiene CAE O status invoiced)
-    const ultimas = await Order.find({
-      userId,
-      $or: [
-        { status: 'invoiced' },
-        { caeNumber: { $exists: true, $ne: null } }
-      ]
-    })
-    .sort({ fechaEmision: -1 })
-    .limit(50)
-    .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items status')
-    .lean();
-    
-    // Agregar concepto formateado para mostrar
-    const ultimasConConcepto = ultimas.map(v => ({
-      ...v,
-      conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
-    }));
-    
-    res.json({
-      ok: true,
-      totalFacturado,
-      totalFacturas,
-      hoyMonto,
-      hoyCount,
-      pendientesCAE,
-      chartDias,
-      chartVentas,
-      ultimas: ultimasConConcepto,
-      periodo: {
-        desde: fechaDesde,
-        hasta: fechaHasta
-      }
-    });
-    
-  } catch(e) {
-    console.error('Dashboard stats error:', e);
-    res.status(500).json({ error: e.message });
-  }
-});
-// ════════════════════════════════════════════════════════════
-//  API — TOGGLE INTEGRACIÓN (para activar/desactivar desde frontend)
-// ════════════════════════════════════════════════════════════
-app.post('/api/integrations/:platform/toggle', requireAuthAPI, async (req, res) => {
-  try {
-    const { platform } = req.params;
-    const { enabled } = req.body;
-    
-    const integration = await Integration.findOne({
-      userId: req.userId,
-      platform
-    });
-    
-    if (!integration) {
-      return res.status(404).json({ error: 'Integración no encontrada' });
-    }
-    
-    integration.status = enabled ? 'active' : 'paused';
-    await integration.save();
-    
-    res.json({ ok: true });
-  } catch(e) {
-    console.error('Toggle error:', e);
-    res.status(500).json({ error: e.message });
-  }
 });
 
 // ════════════════════════════════════════════════════════════

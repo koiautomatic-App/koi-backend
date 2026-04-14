@@ -1087,6 +1087,19 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
     console.error('Lote error:', e.message);
   }
 });
+
+
+// ════════════════════════════════════════════════════════════
+//  GENERAR QR HTML PARA AFIP
+// ════════════════════════════════════════════════════════════
+
+function generarQRHtml(url) {
+  if (!url) return '';
+  // Usar API de quickchart.io para generar el código QR
+  const qrApiUrl = `https://quickchart.io/qr?text=${encodeURIComponent(url)}&size=200&margin=2`;
+  return `<img src="${qrApiUrl}" alt="Código QR AFIP" style="width: 88px; height: 88px;">`;
+}    
+
 // ════════════════════════════════════════════════════════════
 //  API — PDF DE FACTURA (usando EJS)
 // ════════════════════════════════════════════════════════════
@@ -1147,27 +1160,31 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       : '—';
     const caeDisplay = caeNum || '(pendiente)';
 
+
     // QR AFIP
-    let urlQrAfip = null;
-    if (caeNum && cuitRaw) {
-      const qrData = {
-        ver: 1,
-        fecha,
-        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
-        ptoVta: parseInt(ptoVta),
-        tipoCmp: orden.tipoComprobante || 11,
-        nroCmp: orden.nroComprobante || 0,
-        importe: orden.amount,
-        moneda: 'PES',
-        ctz: 1,
-        tipoDocRec: 99,
-        nroDocRec: 0,
-        tipoCodAut: 'E',
-        codAut: parseInt(caeNum),
-      };
-      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
-      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
-    }
+let urlQrAfip = null;
+let qrImageHtml = '';  // ← AGREGAR ESTA LÍNEA
+
+if (caeNum && cuitRaw) {
+  const qrData = {
+    ver: 1,
+    fecha,
+    cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+    ptoVta: parseInt(ptoVta),
+    tipoCmp: orden.tipoComprobante || 11,
+    nroCmp: orden.nroComprobante || 0,
+    importe: orden.amount,
+    moneda: 'PES',
+    ctz: 1,
+    tipoDocRec: 99,
+    nroDocRec: 0,
+    tipoCodAut: 'E',
+    codAut: parseInt(caeNum),
+  };
+  const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+  urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+  qrImageHtml = generarQRHtml(urlQrAfip);  // ← AGREGAR ESTA LÍNEA
+}
 
  // Renderizar con EJS
 const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
@@ -1182,6 +1199,7 @@ const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), 
   caeDisplay,
   caeVto,
   urlQrAfip,
+  qrImageHtml,        // ← AGREGAR ESTA LÍNEA
   sinCae: !caeNum,
   customerName: orden.customerName || orden.customerEmail || 'Cliente'  // ← así se llama el campo en tu schema
 });

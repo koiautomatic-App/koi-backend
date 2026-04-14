@@ -1062,7 +1062,12 @@ function cargarConfigVista() {
       
       const swEnvioAuto = document.getElementById('switchEnvioAuto2');
       if (swEnvioAuto) swEnvioAuto.checked = s.envioAuto === true;
+     // 👇 AGREGAR ESTAS DOS LÍNEAS
+      cargarLogoActual();
+      initLogoHandlers();
     })
+
+
     .catch(err => console.warn('cargarConfigVista error:', err.message));
 }
 

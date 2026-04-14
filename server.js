@@ -1040,7 +1040,7 @@ app.get('/api/me', requireAuthAPI, async (req, res) => {
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
     const allowed = ['factAuto','envioAuto','categoria','cuit','razonSocial',
-                     'puntoVenta','tipoComprobante','nombre','apellido'];
+                     'puntoVenta','tipoComprobante','nombre','apellido', 'logoUrl'];
     const update = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) update[`settings.${k}`] = req.body[k];

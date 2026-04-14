@@ -360,9 +360,9 @@
     <div class="accent-bar"></div>
 
     <div class="header">
-      <!-- Logo dinámico: si el usuario subió logo, lo muestra; si no, muestra el ícono K -->
-      <% if (logoUrl) { %>
-        <img src="<%= logoUrl %>" class="logo-img" alt="Logo">
+      <!-- Logo dinámico desde Cloudinary -->
+      <% if (logoUrl && logoUrl !== '') { %>
+        <img src="<%= logoUrl %>" class="logo-img" alt="Logo de la empresa">
       <% } else { %>
         <div class="logo-icon">K</div>
       <% } %>

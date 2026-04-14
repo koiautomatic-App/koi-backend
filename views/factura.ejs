@@ -392,8 +392,8 @@
 
       <div class="qr-cae-container">
         <div class="qr-wrapper">
-          <% if (qrImageHtml) { %>
-            <%- qrImageHtml %>
+          <% if (urlQrAfip) { %>
+            <img src="<%= urlQrAfip %>" alt="QR AFIP" style="width: 88px; height: 88px;">
           <% } else { %>
             <div class="qr-placeholder">CÓDIGO QR<br>AFIP</div>
           <% } %>

@@ -1912,43 +1912,43 @@ setTimeout(() => {
 }, 5000); // Empezar a los 5 segundos
 
 // ════════════════════════════════════════════════════════════
-//  API — SUBIR LOGO
+//  API — SUBIR LOGO (con Cloudinary)
 // ════════════════════════════════════════════════════════════
 
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
 const multer = require('multer');
-// ⚠️ ELIMINAR esta línea: const path = require('path');  (ya existe al principio del archivo)
 
-// Configurar almacenamiento
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => {
-    const dir = path.join(__dirname, 'public/uploads');
-    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    cb(null, dir);
-  },
-  filename: (req, file, cb) => {
-    const ext = path.extname(file.originalname);
-    cb(null, `logo_${req.userId}_${Date.now()}${ext}`);
+// Configurar Cloudinary con variables de entorno
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// Configurar almacenamiento en Cloudinary
+const storage = new CloudinaryStorage({
+  cloudinary: cloudinary,
+  params: {
+    folder: 'koi-logos',
+    allowed_formats: ['jpg', 'jpeg', 'png', 'gif', 'webp'],
+    transformation: [{ width: 200, height: 200, crop: 'limit' }]
   }
 });
 
 const upload = multer({ 
-  storage,
-  limits: { fileSize: 2 * 1024 * 1024 },
-  fileFilter: (req, file, cb) => {
-    const allowed = ['.jpg', '.jpeg', '.png', '.gif', '.webp'];
-    const ext = path.extname(file.originalname).toLowerCase();
-    if (allowed.includes(ext)) cb(null, true);
-    else cb(new Error('Formato no soportado. Use JPG, PNG, GIF o WEBP'));
-  }
+  storage: storage,
+  limits: { fileSize: 2 * 1024 * 1024 }
 });
 
+// Endpoint para subir logo
 app.post('/api/me/logo', requireAuthAPI, upload.single('logo'), async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ error: 'No se envió ningún archivo' });
     }
     
-    const logoUrl = `${BASE}/uploads/${req.file.filename}`;
+    const logoUrl = req.file.path;
     
     await User.findByIdAndUpdate(req.userId, {
       'settings.logoUrl': logoUrl
@@ -1966,8 +1966,8 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
   try {
     const user = await User.findById(req.userId);
     if (user?.settings?.logoUrl) {
-      const oldPath = path.join(__dirname, 'public/uploads', path.basename(user.settings.logoUrl));
-      if (fs.existsSync(oldPath)) fs.unlinkSync(oldPath);
+      const publicId = 'koi-logos/' + user.settings.logoUrl.split('/').pop().split('.')[0];
+      await cloudinary.uploader.destroy(publicId);
     }
     await User.findByIdAndUpdate(req.userId, { 'settings.logoUrl': '' });
     res.json({ ok: true });

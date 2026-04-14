@@ -1169,20 +1169,22 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
     }
 
-    // Renderizar con EJS
-    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
-      nombreFantasia,
-      razonSocial,
-      cuitFmt,
-      nroComp,
-      fecha,
-      filasItems,
-      total: fmtARS(orden.amount),
-      caeDisplay,
-      caeVto,
-      urlQrAfip,
-      sinCae: !caeNum
-    });
+ // Renderizar con EJS
+const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+  logoUrl: user?.settings?.logoUrl || '',        // ← viene de user.settings.logoUrl
+  nombreFantasia,
+  razonSocial,
+  cuitFmt,
+  nroComp,
+  fecha,
+  filasItems,
+  total: fmtARS(orden.amount),
+  caeDisplay,
+  caeVto,
+  urlQrAfip,
+  sinCae: !caeNum,
+  customerName: orden.customerName || orden.customerEmail || 'Cliente'  // ← así se llama el campo en tu schema
+});
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);

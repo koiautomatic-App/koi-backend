@@ -103,10 +103,6 @@ const decrypt = (payload) => {
   } catch { return null; }
 };
 
-// ════════════════════════════════════════════════════════════
-//  SCHEMAS
-// ════════════════════════════════════════════════════════════
-
 const UserSchema = new mongoose.Schema({
   nombre:       { type: String, trim: true },
   apellido:     { type: String, trim: true },
@@ -126,20 +122,11 @@ const UserSchema = new mongoose.Schema({
     tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
     // Clave Fiscal AFIP encriptada (para futura emisión directa)
     arcaClave:     { type: String },          // encriptada
+    logoUrl:       { type: String, default: '' }  // 👈 AGREGAR ESTA LÍNEA
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 });
-
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || !this.password) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
-UserSchema.methods.checkPassword = function(plain) {
-  return bcrypt.compare(plain, this.password);
-};
-const User = mongoose.model('User', UserSchema);
 
 // ── INTEGRATION ───────────────────────────────────────────────
 const IntegrationSchema = new mongoose.Schema({

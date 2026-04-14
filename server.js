@@ -115,18 +115,19 @@ const UserSchema = new mongoose.Schema({
     factAuto:   { type: Boolean, default: true },
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
-    // Datos fiscales del usuario (su propio CUIT)
-    cuit:          { type: String },          // ej: "27310889518"
+    cuit:          { type: String },
     razonSocial:   { type: String },
-    puntoVenta:    { type: Number },   // legacy — usar arcaPtoVta
-    tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
-    // Clave Fiscal AFIP encriptada (para futura emisión directa)
-    arcaClave:     { type: String },          // encriptada
-    logoUrl:       { type: String, default: '' }  // 👈 AGREGAR ESTA LÍNEA
+    puntoVenta:    { type: Number },
+    tipoComprobante: { type: Number, default: 11 },
+    arcaClave:     { type: String },
+    logoUrl:       { type: String, default: '' }
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 });
+
+// 👇 AGREGAR ESTA LÍNEA AQUÍ
+const User = mongoose.model('User', UserSchema);
 
 // ── INTEGRATION ───────────────────────────────────────────────
 const IntegrationSchema = new mongoose.Schema({

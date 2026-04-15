@@ -1344,21 +1344,26 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       return res.status(400).json({ error: 'El cliente no tiene email registrado' });
     }
 
-    // Obtener el usuario para el replyTo
-    const user = await User.findById(req.userId).select('email settings').lean();
+    // Obtener el usuario para el replyTo y nombre de empresa
+    const user = await User.findById(req.userId).select('email nombre apellido settings').lean();
     
     // El replyTo es el email del usuario (el que configuró en su cuenta)
     const replyToEmail = user?.email || 'koi.automatic@gmail.com';
+    
+    // Obtener el nombre de la empresa para el remitente y asunto
+    const nombreFantasiaEmail = user?.settings?.razonSocial
+      || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
+      || 'Sono Handmade';
     
     // Generar el HTML de la factura
     const facturaHtml = await generarFacturaHtml(req.userId, orden);
     
     // Enviar el email
     const info = await transporter.sendMail({
-      from: `"KOI-FACTURA" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      from: `"${nombreFantasiaEmail} · Factura Electrónica" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
       replyTo: replyToEmail,
       to: orden.customerEmail,
-      subject: `Factura Electrónica - ${orden.nroFormatted || orden._id}`,
+      subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.nroComprobante || orden._id.slice(-6)} | Enviado vía KOI`,
       html: facturaHtml
     });
 

@@ -40,11 +40,36 @@ const https          = require('https');
 const { DOMParser }  = require('@xmldom/xmldom');
 const xmlbuilder     = require('xmlbuilder');
 const ejs = require('ejs');  // 👈 AGREGAR ESTA LÍNEA
+const nodemailer = require('nodemailer');  // 👈 AGREGAR ESTA LÍNEA
+
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
 const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
+
+// ════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DE EMAIL (Nodemailer)
+// ════════════════════════════════════════════════════════════
+
+const transporter = nodemailer.createTransport({
+  host: process.env.SMTP_HOST,
+  port: parseInt(process.env.SMTP_PORT) || 587,
+  secure: process.env.SMTP_PORT == 465,
+  auth: {
+    user: process.env.SMTP_USER,
+    pass: process.env.SMTP_PASS
+  }
+});
+
+// Verificar conexión
+transporter.verify(function(error, success) {
+  if (error) {
+    console.error('❌ Error de conexión SMTP:', error.message);
+  } else {
+    console.log('✅ Servidor de correo listo para enviar emails');
+  }
+});
 
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARES
@@ -1210,6 +1235,146 @@ const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), 
   } catch(e) {
     console.error('PDF error:', e.message);
     res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+//  GENERAR HTML DE FACTURA (reutilizable)
+// ════════════════════════════════════════════════════════════
+
+async function generarFacturaHtml(userId, orden) {
+  const user = await User.findById(userId).select('nombre apellido settings').lean();
+
+  const nombreFantasia = user?.settings?.razonSocial
+    || `${user?.nombre||''} ${user?.apellido||''}`.trim()
+    || 'Sono Handmade';
+  const razonSocial = user?.settings?.razonSocial || nombreFantasia;
+  const cuitRaw = user?.settings?.cuit || '';
+  const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+
+  const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
+  const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
+  const nroComp = `${ptoVta}-${nroCbte}`;
+  const fecha = (orden.orderDate || orden.createdAt)
+    ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—';
+
+  const fmtARS = n => new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(n || 0);
+
+  const items = orden.items?.length
+    ? orden.items
+    : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  const filasItems = items.map(item => {
+    const subtotal = (item.precio || 0) * (item.cantidad || 1);
+    return `<tr>
+      <td>${escapeHtml(item.nombre || 'Producto')}</td>
+      <td>${item.cantidad || 1}</td>
+      <td>$ ${fmtARS(item.precio || 0)}</td>
+      <td>$ ${fmtARS(subtotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const caeNum = orden.caeNumber || null;
+  const caeVto = orden.caeExpiry
+    ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—';
+  const caeDisplay = caeNum || '(pendiente)';
+
+  let urlQrAfip = null;
+  let qrImageHtml = '';
+  if (caeNum && cuitRaw) {
+    const qrData = {
+      ver: 1,
+      fecha,
+      cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+      ptoVta: parseInt(ptoVta),
+      tipoCmp: orden.tipoComprobante || 11,
+      nroCmp: orden.nroComprobante || 0,
+      importe: orden.amount,
+      moneda: 'PES',
+      ctz: 1,
+      tipoDocRec: 99,
+      nroDocRec: 0,
+      tipoCodAut: 'E',
+      codAut: parseInt(caeNum),
+    };
+    const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+    urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+    qrImageHtml = generarQRHtml(urlQrAfip);
+  }
+
+  return await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+    logoUrl: user?.settings?.logoUrl || '',
+    nombreFantasia,
+    razonSocial,
+    cuitFmt,
+    nroComp,
+    fecha,
+    filasItems,
+    total: fmtARS(orden.amount),
+    caeDisplay,
+    caeVto,
+    urlQrAfip,
+    qrImageHtml,
+    sinCae: !caeNum,
+    customerName: orden.customerName || orden.customerEmail || 'Cliente'
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  API — ENVIAR FACTURA POR MAIL
+// ════════════════════════════════════════════════════════════
+
+app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
+  try {
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    if (!orden.customerEmail) {
+      return res.status(400).json({ error: 'El cliente no tiene email registrado' });
+    }
+
+    // Obtener el usuario para el replyTo
+    const user = await User.findById(req.userId).select('email settings').lean();
+    
+    // El replyTo es el email del usuario (el que configuró en su cuenta)
+    const replyToEmail = user?.email || 'koi.automatic@gmail.com';
+    
+    // Generar el HTML de la factura
+    const facturaHtml = await generarFacturaHtml(req.userId, orden);
+    
+    // Enviar el email
+    const info = await transporter.sendMail({
+      from: `"KOI-FACTURA" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
+      replyTo: replyToEmail,
+      to: orden.customerEmail,
+      subject: `Factura Electrónica - ${orden.nroFormatted || orden._id}`,
+      html: facturaHtml
+    });
+
+    console.log(`📧 Factura enviada a ${orden.customerEmail}`);
+    console.log(`   Responder a: ${replyToEmail}`);
+    console.log(`   Message ID: ${info.messageId}`);
+    
+    res.json({ 
+      ok: true, 
+      message: 'Factura enviada por email',
+      email: orden.customerEmail 
+    });
+
+  } catch(e) {
+    console.error('Error en /mail:', e.message);
+    res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
   }
 });
 // ════════════════════════════════════════════════════════════

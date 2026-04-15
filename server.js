@@ -1,14 +1,4 @@
-// ============================================================
-//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.0
-//  + Módulo de Emisión AFIP/WSFE (Producción)
-// ============================================================
-//  ENV VARS en Render:
-//
-//  MONGO_URI              mongodb+srv://...
-//  JWT_SECRET             string 64 chars
-//  SESSION_SECRET         string 32 chars
-//  ENCRYPTION_KEY         exactamente 32 chars
-//  GOOGLE_CLIENT_ID       Google Cloud Console
+
 //  GOOGLE_CLIENT_SECRET   Google Cloud Console
 //  ML_CLIENT_ID           MercadoLibre Developers
 //  ML_CLIENT_SECRET       MercadoLibre Developers
@@ -40,11 +30,20 @@ const https          = require('https');
 const { DOMParser }  = require('@xmldom/xmldom');
 const xmlbuilder     = require('xmlbuilder');
 const ejs = require('ejs');  // 👈 AGREGAR ESTA LÍNEA
+const { Resend } = require('resend');  // 👈 REEMPLAZAR por Resend
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
 const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/, '');
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
+
+// ════════════════════════════════════════════════════════════
+//  CONFIGURACIÓN DE EMAIL (Resend)
+// ════════════════════════════════════════════════════════════
+
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+console.log('✅ Servicio de email Resend listo');
 
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARES
@@ -103,10 +102,6 @@ const decrypt = (payload) => {
   } catch { return null; }
 };
 
-// ════════════════════════════════════════════════════════════
-//  SCHEMAS
-// ════════════════════════════════════════════════════════════
-
 const UserSchema = new mongoose.Schema({
   nombre:       { type: String, trim: true },
   apellido:     { type: String, trim: true },
@@ -119,26 +114,18 @@ const UserSchema = new mongoose.Schema({
     factAuto:   { type: Boolean, default: true },
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
-    // Datos fiscales del usuario (su propio CUIT)
-    cuit:          { type: String },          // ej: "27310889518"
+    cuit:          { type: String },
     razonSocial:   { type: String },
-    puntoVenta:    { type: Number },   // legacy — usar arcaPtoVta
-    tipoComprobante: { type: Number, default: 11 }, // 11=FC, 6=FB, 1=FA
-    // Clave Fiscal AFIP encriptada (para futura emisión directa)
-    arcaClave:     { type: String },          // encriptada
+    puntoVenta:    { type: Number },
+    tipoComprobante: { type: Number, default: 11 },
+    arcaClave:     { type: String },
+    logoUrl:       { type: String, default: '' }
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn:     { type: Date, default: Date.now },
 });
 
-UserSchema.pre('save', async function(next) {
-  if (!this.isModified('password') || !this.password) return next();
-  this.password = await bcrypt.hash(this.password, 12);
-  next();
-});
-UserSchema.methods.checkPassword = function(plain) {
-  return bcrypt.compare(plain, this.password);
-};
+// 👇 AGREGAR ESTA LÍNEA AQUÍ
 const User = mongoose.model('User', UserSchema);
 
 // ── INTEGRATION ───────────────────────────────────────────────
@@ -1040,7 +1027,7 @@ app.get('/api/me', requireAuthAPI, async (req, res) => {
 app.patch('/api/me/settings', requireAuthAPI, async (req, res) => {
   try {
     const allowed = ['factAuto','envioAuto','categoria','cuit','razonSocial',
-                     'puntoVenta','tipoComprobante','nombre','apellido'];
+                     'puntoVenta','tipoComprobante','nombre','apellido', 'logoUrl'];
     const update = {};
     for (const k of allowed) {
       if (req.body[k] !== undefined) update[`settings.${k}`] = req.body[k];
@@ -1099,6 +1086,19 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
     console.error('Lote error:', e.message);
   }
 });
+
+
+// ════════════════════════════════════════════════════════════
+//  GENERAR QR HTML PARA AFIP
+// ════════════════════════════════════════════════════════════
+
+function generarQRHtml(url) {
+  if (!url) return '';
+  // Usar API de quickchart.io para generar el código QR
+  const qrApiUrl = `https://quickchart.io/qr?text=${encodeURIComponent(url)}&size=200&margin=2`;
+  return `<img src="${qrApiUrl}" alt="Código QR AFIP" style="width: 88px; height: 88px;">`;
+}    
+
 // ════════════════════════════════════════════════════════════
 //  API — PDF DE FACTURA (usando EJS)
 // ════════════════════════════════════════════════════════════
@@ -1159,42 +1159,49 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       : '—';
     const caeDisplay = caeNum || '(pendiente)';
 
-    // QR AFIP
-    let urlQrAfip = null;
-    if (caeNum && cuitRaw) {
-      const qrData = {
-        ver: 1,
-        fecha,
-        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
-        ptoVta: parseInt(ptoVta),
-        tipoCmp: orden.tipoComprobante || 11,
-        nroCmp: orden.nroComprobante || 0,
-        importe: orden.amount,
-        moneda: 'PES',
-        ctz: 1,
-        tipoDocRec: 99,
-        nroDocRec: 0,
-        tipoCodAut: 'E',
-        codAut: parseInt(caeNum),
-      };
-      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
-      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
-    }
 
-    // Renderizar con EJS
-    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
-      nombreFantasia,
-      razonSocial,
-      cuitFmt,
-      nroComp,
-      fecha,
-      filasItems,
-      total: fmtARS(orden.amount),
-      caeDisplay,
-      caeVto,
-      urlQrAfip,
-      sinCae: !caeNum
-    });
+    // QR AFIP
+let urlQrAfip = null;
+let qrImageHtml = '';  // ← AGREGAR ESTA LÍNEA
+
+if (caeNum && cuitRaw) {
+  const qrData = {
+    ver: 1,
+    fecha,
+    cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+    ptoVta: parseInt(ptoVta),
+    tipoCmp: orden.tipoComprobante || 11,
+    nroCmp: orden.nroComprobante || 0,
+    importe: orden.amount,
+    moneda: 'PES',
+    ctz: 1,
+    tipoDocRec: 99,
+    nroDocRec: 0,
+    tipoCodAut: 'E',
+    codAut: parseInt(caeNum),
+  };
+  const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+  urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+  qrImageHtml = generarQRHtml(urlQrAfip);  // ← AGREGAR ESTA LÍNEA
+}
+
+ // Renderizar con EJS
+const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+  logoUrl: user?.settings?.logoUrl || '',        // ← viene de user.settings.logoUrl
+  nombreFantasia,
+  razonSocial,
+  cuitFmt,
+  nroComp,
+  fecha,
+  filasItems,
+  total: fmtARS(orden.amount),
+  caeDisplay,
+  caeVto,
+  urlQrAfip,
+  qrImageHtml,        // ← AGREGAR ESTA LÍNEA
+  sinCae: !caeNum,
+  customerName: orden.customerName || orden.customerEmail || 'Cliente'  // ← así se llama el campo en tu schema
+});
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
     res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);
@@ -1204,6 +1211,156 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
   }
 });
+
+// ════════════════════════════════════════════════════════════
+//  GENERAR HTML DE FACTURA (reutilizable)
+// ════════════════════════════════════════════════════════════
+
+async function generarFacturaHtml(userId, orden) {
+  const user = await User.findById(userId).select('nombre apellido settings').lean();
+
+  const nombreFantasia = user?.settings?.razonSocial
+    || `${user?.nombre||''} ${user?.apellido||''}`.trim()
+    || 'Sono Handmade';
+  const razonSocial = user?.settings?.razonSocial || nombreFantasia;
+  const cuitRaw = user?.settings?.cuit || '';
+  const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
+
+  const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
+  const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
+  const nroComp = `${ptoVta}-${nroCbte}`;
+  const fecha = (orden.orderDate || orden.createdAt)
+    ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—';
+
+  const fmtARS = n => new Intl.NumberFormat('es-AR', {
+    minimumFractionDigits: 2, maximumFractionDigits: 2
+  }).format(n || 0);
+
+  const items = orden.items?.length
+    ? orden.items
+    : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+
+  const escapeHtml = (str) => {
+    if (!str) return '';
+    return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  };
+
+  const filasItems = items.map(item => {
+    const subtotal = (item.precio || 0) * (item.cantidad || 1);
+    return `<tr>
+      <td>${escapeHtml(item.nombre || 'Producto')}</td>
+      <td>${item.cantidad || 1}</td>
+      <td>$ ${fmtARS(item.precio || 0)}</td>
+      <td>$ ${fmtARS(subtotal)}</td>
+    </tr>`;
+  }).join('');
+
+  const caeNum = orden.caeNumber || null;
+  const caeVto = orden.caeExpiry
+    ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
+    : '—';
+  const caeDisplay = caeNum || '(pendiente)';
+
+  let urlQrAfip = null;
+  let qrImageHtml = '';
+  if (caeNum && cuitRaw) {
+    const qrData = {
+      ver: 1,
+      fecha,
+      cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+      ptoVta: parseInt(ptoVta),
+      tipoCmp: orden.tipoComprobante || 11,
+      nroCmp: orden.nroComprobante || 0,
+      importe: orden.amount,
+      moneda: 'PES',
+      ctz: 1,
+      tipoDocRec: 99,
+      nroDocRec: 0,
+      tipoCodAut: 'E',
+      codAut: parseInt(caeNum),
+    };
+    const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+    urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+    qrImageHtml = generarQRHtml(urlQrAfip);
+  }
+
+  return await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+    logoUrl: user?.settings?.logoUrl || '',
+    nombreFantasia,
+    razonSocial,
+    cuitFmt,
+    nroComp,
+    fecha,
+    filasItems,
+    total: fmtARS(orden.amount),
+    caeDisplay,
+    caeVto,
+    urlQrAfip,
+    qrImageHtml,
+    sinCae: !caeNum,
+    customerName: orden.customerName || orden.customerEmail || 'Cliente'
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+//  API — ENVIAR FACTURA POR MAIL
+// ════════════════════════════════════════════════════════════
+
+app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
+  try {
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+
+    if (!orden.customerEmail) {
+      return res.status(400).json({ error: 'El cliente no tiene email registrado' });
+    }
+
+    // Obtener el usuario para el replyTo y nombre de empresa
+    const user = await User.findById(req.userId).select('email nombre apellido settings').lean();
+    
+    // El replyTo es el email del usuario (el que configuró en su cuenta)
+    const replyToEmail = user?.email || 'koi.automatic@gmail.com';
+    
+    // Obtener el nombre de la empresa para el remitente y asunto
+    const nombreFantasiaEmail = user?.settings?.razonSocial
+      || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
+      || 'Sono Handmade';
+    
+    // Generar el HTML de la factura
+    const facturaHtml = await generarFacturaHtml(req.userId, orden);
+    
+// Enviar el email con Resend
+const { data, error } = await resend.emails.send({
+  from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <onboarding@resend.dev>`,
+  reply_to: replyToEmail,
+  to: orden.customerEmail,
+  subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
+  html: facturaHtml
+});
+
+if (error) {
+  throw new Error(error.message);
+}
+
+console.log(`📧 Factura enviada a ${orden.customerEmail}`);
+console.log(`   Responder a: ${replyToEmail}`);
+console.log(`   Message ID: ${data.id}`);
+
+res.json({ 
+  ok: true, 
+  message: 'Factura enviada por email',
+  email: orden.customerEmail 
+});
+
+} catch(e) {
+  console.error('Error en /mail:', e.message);
+  res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
+}
+});
+
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════
@@ -1924,6 +2081,13 @@ cloudinary.config({
   cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
   api_key: process.env.CLOUDINARY_API_KEY,
   api_secret: process.env.CLOUDINARY_API_SECRET
+});
+
+// 👇 AGREGAR ESTO PARA DEBUG
+console.log('Cloudinary config:', {
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME ? '✅' : '❌',
+  api_key: process.env.CLOUDINARY_API_KEY ? '✅' : '❌',
+  api_secret: process.env.CLOUDINARY_API_SECRET ? '✅' : '❌'
 });
 
 // Configurar almacenamiento en Cloudinary

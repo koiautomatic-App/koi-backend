@@ -1355,15 +1355,13 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     // Generar el HTML de la factura
     const facturaHtml = await generarFacturaHtml(req.userId, orden);
     
-   // Enviar el email
+  // Enviar el email
 const info = await transporter.sendMail({
-  from: `"${nombreFantasiaEmail} · Factura Electrónica" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,
-  replyTo: replyToEmail,
+from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,  replyTo: replyToEmail,
   to: orden.customerEmail,
   subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
   html: facturaHtml
 });
-
     console.log(`📧 Factura enviada a ${orden.customerEmail}`);
     console.log(`   Responder a: ${replyToEmail}`);
     console.log(`   Message ID: ${info.messageId}`);

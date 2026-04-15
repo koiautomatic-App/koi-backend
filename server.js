@@ -40,8 +40,7 @@ const https          = require('https');
 const { DOMParser }  = require('@xmldom/xmldom');
 const xmlbuilder     = require('xmlbuilder');
 const ejs = require('ejs');  // 👈 AGREGAR ESTA LÍNEA
-const nodemailer = require('nodemailer');  // 👈 AGREGAR ESTA LÍNEA
-
+const { Resend } = require('resend');  // 👈 REEMPLAZAR por Resend
 
 const app  = express();
 const PORT = process.env.PORT || 10000;
@@ -49,24 +48,12 @@ const BASE = (process.env.BASE_URL || `http://localhost:${PORT}`).replace(/\/$/,
 const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 
 // ════════════════════════════════════════════════════════════
-//  CONFIGURACIÓN DE EMAIL (Nodemailer)
+//  CONFIGURACIÓN DE EMAIL (Resend)
 // ════════════════════════════════════════════════════════════
 
-const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST || 'smtp.gmail.com',
-  port: parseInt(process.env.SMTP_PORT) || 587,
-  secure: process.env.SMTP_PORT == 465,
-  auth: {
-    user: process.env.SMTP_USER,
-    pass: process.env.SMTP_PASS
-  },
-  // Forzar IPv4 para evitar problemas ENETUNREACH en Render
-  family: 4,
-  // Timeouts para conexiones lentas
-  connectionTimeout: 30000,
-  greetingTimeout: 30000,
-  socketTimeout: 30000
-});
+const resend = new Resend(process.env.RESEND_API_KEY);
+
+console.log('✅ Servicio de email Resend listo');
 
 // ════════════════════════════════════════════════════════════
 //  MIDDLEWARES
@@ -1355,28 +1342,35 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     // Generar el HTML de la factura
     const facturaHtml = await generarFacturaHtml(req.userId, orden);
     
-  // Enviar el email
-const info = await transporter.sendMail({
-from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <${process.env.SMTP_FROM || process.env.SMTP_USER}>`,  replyTo: replyToEmail,
+// Enviar el email con Resend
+const { data, error } = await resend.emails.send({
+  from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <onboarding@resend.dev>`,
+  reply_to: replyToEmail,
   to: orden.customerEmail,
   subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
   html: facturaHtml
 });
-    console.log(`📧 Factura enviada a ${orden.customerEmail}`);
-    console.log(`   Responder a: ${replyToEmail}`);
-    console.log(`   Message ID: ${info.messageId}`);
-    
-    res.json({ 
-      ok: true, 
-      message: 'Factura enviada por email',
-      email: orden.customerEmail 
-    });
 
-  } catch(e) {
-    console.error('Error en /mail:', e.message);
-    res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
-  }
+if (error) {
+  throw new Error(error.message);
+}
+
+console.log(`📧 Factura enviada a ${orden.customerEmail}`);
+console.log(`   Responder a: ${replyToEmail}`);
+console.log(`   Message ID: ${data.id}`);
+
+res.json({ 
+  ok: true, 
+  message: 'Factura enviada por email',
+  email: orden.customerEmail 
 });
+
+} catch(e) {
+  console.error('Error en /mail:', e.message);
+  res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
+}
+});
+
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════

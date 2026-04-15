@@ -53,22 +53,19 @@ const JWT_SECRET = process.env.JWT_SECRET || 'koi-jwt-dev-change-in-production';
 // ════════════════════════════════════════════════════════════
 
 const transporter = nodemailer.createTransport({
-  host: process.env.SMTP_HOST,
+  host: process.env.SMTP_HOST || 'smtp.gmail.com',
   port: parseInt(process.env.SMTP_PORT) || 587,
   secure: process.env.SMTP_PORT == 465,
   auth: {
     user: process.env.SMTP_USER,
     pass: process.env.SMTP_PASS
-  }
-});
-
-// Verificar conexión
-transporter.verify(function(error, success) {
-  if (error) {
-    console.error('❌ Error de conexión SMTP:', error.message);
-  } else {
-    console.log('✅ Servidor de correo listo para enviar emails');
-  }
+  },
+  // Forzar IPv4 para evitar problemas ENETUNREACH en Render
+  family: 4,
+  // Timeouts para conexiones lentas
+  connectionTimeout: 30000,
+  greetingTimeout: 30000,
+  socketTimeout: 30000
 });
 
 // ════════════════════════════════════════════════════════════

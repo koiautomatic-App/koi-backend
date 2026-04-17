@@ -2197,6 +2197,39 @@ app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
     });
   }
 });
+app.get('/api/debug/ml-test', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const sellerId = integration.credentials.sellerId;
+    
+    // Obtener una orden real de ML
+    const response = await axios.get('https://api.mercadolibre.com/orders/search', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { seller: sellerId, limit: 1 }
+    });
+    
+    const rawOrder = response.data.results[0];
+    if (!rawOrder) return res.json({ error: 'No hay órdenes' });
+    
+    // Aplicar el normalizador
+    const canonical = normalize.mercadolibre(rawOrder);
+    
+    // Intentar hacer upsert
+    const upsertResult = await upsertOrder(integration, canonical);
+    
+    res.json({
+      raw_order_id: rawOrder.id,
+      canonical,
+      upsert_success: !!upsertResult,
+      upsert_id: upsertResult?._id
+    });
+  } catch(e) {
+    res.json({ error: e.message, stack: e.stack });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

@@ -1,4 +1,14 @@
-
+// ============================================================
+//  KOI-FACTURA · SaaS Multi-Tenant Engine v4.0
+//  + Módulo de Emisión AFIP/WSFE (Producción)
+// ============================================================
+//  ENV VARS en Render:
+//
+//  MONGO_URI              mongodb+srv://...
+//  JWT_SECRET             string 64 chars
+//  SESSION_SECRET         string 32 chars
+//  ENCRYPTION_KEY         exactamente 32 chars
+//  GOOGLE_CLIENT_ID       Google Cloud Console
 //  GOOGLE_CLIENT_SECRET   Google Cloud Console
 //  ML_CLIENT_ID           MercadoLibre Developers
 //  ML_CLIENT_SECRET       MercadoLibre Developers
@@ -1334,7 +1344,7 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     
 // Enviar el email con Resend
 const { data, error } = await resend.emails.send({
-  from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <onboarding@resend.dev>`,
+  from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
   reply_to: replyToEmail,
   to: orden.customerEmail,
   subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,

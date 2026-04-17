@@ -1468,6 +1468,13 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn act-done" disabled title="Ya anulado">↩️</button>`
       : '';
 
+    // 👇 NUEVO CÓDIGO PARA EL BOTÓN DE MAIL
+    const emailSent = c.emailSent === true;
+    const emailIcon = emailSent ? '✅' : '📧';
+    const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
+    const emailDisabled = emailSent ? 'disabled' : '';
+    const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
+
     return `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
@@ -1482,12 +1489,19 @@ function renderComprobantes(lista) {
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
-          <button class="act-btn" title="Ver PDF"     onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
-          <button class="act-btn" title="Enviar mail" onclick="enviarMail('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+          <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            </svg>
+          </button>
+          <button class="act-btn ${emailSent ? 'act-btn-sent' : ''}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
+            ${emailIcon}
+          </button>
           ${btnAnular}
         </div>
       </td>
-    </tr>`;
+     </tr>`;
   }).join('');
 
   renderTotalesComp(lista);
@@ -1694,7 +1708,24 @@ async function enviarMail(orderId){
   toast('Enviando factura por mail…','info');
   try {
     const res = await api.post(`/api/orders/${orderId}/mail`, {});
-    toast(res.message || 'Mail enviado correctamente', 'success');
+    if (res.ok) {
+      toast(res.message || 'Mail enviado correctamente', 'success');
+      
+      // Actualizar visualmente el botón (cambiar clase a iluminado)
+      const buttons = document.querySelectorAll(`button[onclick*="enviarMail('${orderId}')"]`);
+      buttons.forEach(btn => {
+        btn.classList.remove('act-btn');
+        btn.classList.add('act-btn-sent');
+        btn.title = 'Factura ya enviada';
+        btn.disabled = true;
+        btn.onclick = null;
+      });
+      
+      // Recargar la lista para mantener consistencia
+      setTimeout(() => cargarTodosComprobantes(paginaActual, busquedaActual), 1500);
+    } else {
+      toast(res.message || 'Error al enviar', 'error');
+    }
   } catch(e) {
     toast('Error: ' + e.message, 'error');
   }

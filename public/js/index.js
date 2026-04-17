@@ -119,17 +119,26 @@ function renderChart(d){
 }
 
 function renderComps(lista){
-  document.getElementById('compBadge').textContent=lista.length;
-  const cont=document.getElementById('compList');
+  document.getElementById('compBadge').textContent = lista.length;
+  const cont = document.getElementById('compList');
   if(!lista.length){
-    cont.innerHTML=`<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
+    cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
     return;
   }
-  cont.innerHTML=lista.map((c,i)=>{
+  
+  cont.innerHTML = lista.map((c, i) => {
     const emitido = c.estado === 'cae-ok';
     const btnEmitir = emitido
       ? `<button class="act-btn act-done" title="Emitido ✓" disabled><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg></button>`
       : `<button class="act-btn act-warn" title="Emitir CAE — requiere credenciales AFIP" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
+    
+    // 👇 AGREGAR ESTAS LÍNEAS
+    const emailSent = c.emailSent === true;
+    const emailClass = emailSent ? 'act-btn act-btn-sent' : 'act-btn';
+    const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
+    const emailDisabled = emailSent ? 'disabled' : '';
+    const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
+    
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">
       <div class="cae-dot ${c.estado}"></div>
@@ -141,9 +150,11 @@ function renderComps(lista){
       </div>
       <div class="comp-monto">${ars(c.monto)}</div>
       <div class="comp-actions">
-        <button class="act-btn" title="Ver PDF"     onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
+        <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
         ${btnEmitir}
-        <button class="act-btn" title="Enviar mail" onclick="enviarMail('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+        <button class="${emailClass}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg>
+        </button>
       </div>
     </div>`;
   }).join('');

@@ -2158,6 +2158,45 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// Ruta temporal para debug de MercadoLibre
+app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) {
+      return res.json({ error: 'No hay integración de MercadoLibre' });
+    }
+    
+    const token = await _getMLToken(integration);
+    const sellerId = integration.credentials.sellerId;
+    
+    console.log(`🔍 Debug ML: Token obtenido, sellerId: ${sellerId}`);
+    
+    // Probar la API de ML
+    const response = await axios.get('https://api.mercadolibre.com/orders/search', {
+      headers: { Authorization: `Bearer ${token}` },
+      params: { seller: sellerId, limit: 5, sort: 'date_desc' }
+    });
+    
+    res.json({
+      ok: true,
+      total: response.data.paging?.total || 0,
+      orders: response.data.results?.map(o => ({
+        id: o.id,
+        status: o.status,
+        total: o.total_amount,
+        date_created: o.date_created,
+        buyer: o.buyer?.nickname
+      }))
+    });
+  } catch(e) {
+    console.error('Debug ML error:', e.message);
+    res.json({ 
+      error: e.message, 
+      details: e.response?.data,
+      status: e.response?.status
+    });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

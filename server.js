@@ -1978,19 +1978,18 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       return ventasMap.get(key) || 0;
     });
     
-    // 🆕 5. ÚLTIMAS 50 VENTAS (misma lógica: tiene CAE O status invoiced)
-    const ultimas = await Order.find({
-      userId,
-      $or: [
-        { status: 'invoiced' },
-        { caeNumber: { $exists: true, $ne: null } }
-      ]
-    })
-    .sort({ fechaEmision: -1 })
-    .limit(50)
-    .select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items status')
-    .lean();
-    
+  // 🆕 5. ÚLTIMAS 50 VENTAS (misma lógica: tiene CAE O status invoiced)
+const ultimas = await Order.find({
+  userId,
+  $or: [
+    { status: 'invoiced' },
+    { caeNumber: { $exists: true, $ne: null } }
+  ]
+})
+.sort({ fechaEmision: -1 })
+.limit(50)
+.select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt')
+.lean();
     // Agregar concepto formateado para mostrar
     const ultimasConConcepto = ultimas.map(v => ({
       ...v,

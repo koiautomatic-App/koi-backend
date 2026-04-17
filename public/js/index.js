@@ -1468,9 +1468,8 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn act-done" disabled title="Ya anulado">↩️</button>`
       : '';
 
-    // 👇 NUEVO CÓDIGO PARA EL BOTÓN DE MAIL
+    // 👇 CÓDIGO PARA EL BOTÓN DE MAIL (con sobre siempre igual)
     const emailSent = c.emailSent === true;
-    const emailIcon = emailSent ? '✅' : '📧';
     const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
     const emailDisabled = emailSent ? 'disabled' : '';
     const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
@@ -1496,7 +1495,7 @@ function renderComprobantes(lista) {
             </svg>
           </button>
           <button class="act-btn ${emailSent ? 'act-btn-sent' : ''}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
-            ${emailIcon}
+            📧
           </button>
           ${btnAnular}
         </div>

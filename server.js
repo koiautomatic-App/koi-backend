@@ -181,7 +181,7 @@ const OrderSchema = new mongoose.Schema({
     sku:      { type: String },
   }],
   orderDate:     { type: Date },
-  rawPayload:    { type: mongoose.Schema.Types.Mixed, default: null },  // 👈 AGREGAR ESTA LÍNEA
+  rawPayload:    { type: mongoose.Schema.Types.Mixed, default: null },
   status: {
     type:    String,
     default: 'pending_invoice',
@@ -195,6 +195,9 @@ const OrderSchema = new mongoose.Schema({
   puntoVenta:     { type: Number },
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
+  // Estado de envío de email
+  emailSent:      { type: Boolean, default: false },
+  emailSentAt:    { type: Date },
   createdAt:      { type: Date, default: Date.now },
 });
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
@@ -1319,7 +1322,7 @@ async function generarFacturaHtml(userId, orden) {
 
 app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
   try {
-    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId });
     if (!orden) {
       return res.status(404).json({ error: 'Orden no encontrada' });
     }
@@ -1342,33 +1345,39 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     // Generar el HTML de la factura
     const facturaHtml = await generarFacturaHtml(req.userId, orden);
     
-// Enviar el email con Resend
-const { data, error } = await resend.emails.send({
-  from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
-  reply_to: replyToEmail,
-  to: orden.customerEmail,
-  subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
-  html: facturaHtml
-});
+    // Enviar el email con Resend
+    const { data, error } = await resend.emails.send({
+      from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
+      reply_to: replyToEmail,
+      to: orden.customerEmail,
+      subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
+      html: facturaHtml
+    });
 
-if (error) {
-  throw new Error(error.message);
-}
+    if (error) {
+      throw new Error(error.message);
+    }
 
-console.log(`📧 Factura enviada a ${orden.customerEmail}`);
-console.log(`   Responder a: ${replyToEmail}`);
-console.log(`   Message ID: ${data.id}`);
+    // 👇 ACTUALIZAR ESTADO DEL EMAIL EN LA ORDEN
+    await Order.findByIdAndUpdate(orden._id, {
+      emailSent: true,
+      emailSentAt: new Date()
+    });
 
-res.json({ 
-  ok: true, 
-  message: 'Factura enviada por email',
-  email: orden.customerEmail 
-});
+    console.log(`📧 Factura enviada a ${orden.customerEmail}`);
+    console.log(`   Responder a: ${replyToEmail}`);
+    console.log(`   Message ID: ${data.id}`);
 
-} catch(e) {
-  console.error('Error en /mail:', e.message);
-  res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
-}
+    res.json({ 
+      ok: true, 
+      message: 'Factura enviada por email',
+      email: orden.customerEmail 
+    });
+
+  } catch(e) {
+    console.error('Error en /mail:', e.message);
+    res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
+  }
 });
 
 // ════════════════════════════════════════════════════════════
@@ -1432,6 +1441,8 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     
     const ordersWithSummary = orders.map(order => ({
       ...order,
+      emailSent: order.emailSent || false,
+      emailSentAt: order.emailSentAt || null,
       itemsSummary: order.items?.map(i => `${i.cantidad}x ${i.nombre}`).join(', ') || order.concepto || ''
     }));
     
@@ -1450,7 +1461,6 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error interno' }); 
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════

@@ -151,12 +151,19 @@ function renderComps(lista){
 
 /* ── CARGA INICIAL ─────────────────────────────────── */
 function cargarDashboard(data){
-  const d=data||MOCK;
+  const d = data || MOCK;
+  
+  // 👇 Asegurar que los comprobantes tengan emailSent
+  const comprobantesConEmail = (d.comprobantes || []).map(c => ({
+    ...c,
+    emailSent: c.emailSent || false
+  }));
+  
   renderStatus(d.serverOnline);
   renderMono(d);
   renderMetrics(d);
   renderChart(d);
-  renderComps(d.comprobantes);
+  renderComps(comprobantesConEmail);
 }
 
 /* ── API BRIDGE — reemplaza gasRun para entorno web Render ── */

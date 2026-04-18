@@ -1395,18 +1395,19 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
       search = '' 
     } = req.query;
     
-    const filter = { 
-      userId: req.userId,
-      status: { $ne: 'skipped' },
-      $and: [
-        {
-          $or: [
-            { items: { $exists: true, $ne: [] } },
-            { concepto: { $exists: true, $ne: '', $nin: ['Venta WooCommerce', 'woocommerce', null] } }
-          ]
-        }
+   const filter = { 
+  userId: req.userId,
+  status: { $ne: 'skipped' },
+  $and: [
+    {
+      $or: [
+        { items: { $exists: true, $ne: [] } },
+        { concepto: { $exists: true, $ne: '', $nin: ['Venta WooCommerce', 'woocommerce', null] } },
+        { platform: 'mercadolibre' }  // 👈 AGREGAR ESTA LÍNEA
       ]
-    };
+    }
+  ]
+};
     
     if (platform) filter.platform = platform;
     if (status)   filter.status   = status;
@@ -2156,95 +2157,6 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
-  }
-});
-// Ruta temporal para debug de MercadoLibre
-app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) {
-      return res.json({ error: 'No hay integración de MercadoLibre' });
-    }
-    
-    const token = await _getMLToken(integration);
-    const sellerId = integration.credentials.sellerId;
-    
-    console.log(`🔍 Debug ML: Token obtenido, sellerId: ${sellerId}`);
-    
-    // Probar la API de ML
-    const response = await axios.get('https://api.mercadolibre.com/orders/search', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { seller: sellerId, limit: 5, sort: 'date_desc' }
-    });
-    
-    res.json({
-      ok: true,
-      total: response.data.paging?.total || 0,
-      orders: response.data.results?.map(o => ({
-        id: o.id,
-        status: o.status,
-        total: o.total_amount,
-        date_created: o.date_created,
-        buyer: o.buyer?.nickname
-      }))
-    });
-  } catch(e) {
-    console.error('Debug ML error:', e.message);
-    res.json({ 
-      error: e.message, 
-      details: e.response?.data,
-      status: e.response?.status
-    });
-  }
-});
-app.get('/api/debug/ml-test', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const sellerId = integration.credentials.sellerId;
-    
-    // Obtener una orden real de ML
-    const response = await axios.get('https://api.mercadolibre.com/orders/search', {
-      headers: { Authorization: `Bearer ${token}` },
-      params: { seller: sellerId, limit: 1 }
-    });
-    
-    const rawOrder = response.data.results[0];
-    if (!rawOrder) return res.json({ error: 'No hay órdenes' });
-    
-    // Aplicar el normalizador
-    const canonical = normalize.mercadolibre(rawOrder);
-    
-    // Verificar si ya existe
-    const existing = await Order.findOne({ 
-      userId: integration.userId, 
-      platform: 'mercadolibre', 
-      externalId: canonical.externalId 
-    });
-    
-    // Intentar hacer upsert
-    const upsertResult = await upsertOrder(integration, canonical);
-    
-    // Verificar después del upsert
-    const afterUpsert = await Order.findOne({ 
-      userId: integration.userId, 
-      platform: 'mercadolibre', 
-      externalId: canonical.externalId 
-    });
-    
-    res.json({
-      raw_order_id: rawOrder.id,
-      canonical,
-      existing_before: existing ? existing._id : null,
-      upsert_success: !!upsertResult,
-      upsert_id: upsertResult?._id,
-      after_upsert: afterUpsert ? afterUpsert._id : null,
-      all_orders_count: await Order.countDocuments({ userId: req.userId })
-    });
-  } catch(e) {
-    res.json({ error: e.message, stack: e.stack });
   }
 });
 // ════════════════════════════════════════════════════════════

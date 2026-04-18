@@ -132,7 +132,19 @@ function renderComps(lista){
       ? `<button class="act-btn act-done" title="Emitido ✓" disabled><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg></button>`
       : `<button class="act-btn act-warn" title="Emitir CAE — requiere credenciales AFIP" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
     
-    // 👇 AGREGAR ESTAS LÍNEAS
+    // 👇 ORIGEN TAG (ML, WOO, etc.)
+    const origenTag = (() => {
+      switch (c.platform) {
+        case 'mercadolibre':
+          return '<span style="font-size:8px;font-weight:700;background:#FFE600;color:#1a1a1a;padding:2px 6px;border-radius:4px;margin-right:6px;">ML</span>';
+        case 'woocommerce':
+          return '<span style="font-size:8px;font-weight:700;background:#7F54B3;color:white;padding:2px 6px;border-radius:4px;margin-right:6px;">WOO</span>';
+        default:
+          return '';
+      }
+    })();
+    
+    // 👇 EMAIL SENT
     const emailSent = c.emailSent === true;
     const emailClass = emailSent ? 'act-btn act-btn-sent' : 'act-btn';
     const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
@@ -143,7 +155,7 @@ function renderComps(lista){
     <div class="comp-row" style="animation-delay:${i*55}ms">
       <div class="cae-dot ${c.estado}"></div>
       <div class="comp-info">
-        <div class="comp-cliente">${c.cliente}</div>
+        <div class="comp-cliente">${origenTag}${c.cliente}</div>
         <div class="comp-meta">
           ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}${c.estado==='cae-ok'&&c.cae ? `CAE ${c.cae.slice(-8)} · Vto ${c.caeVto||'—'}` : c.fecha}
         </div>
@@ -495,18 +507,19 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
         }
         
         return {
-          id:         o.externalId || o._id,
-          _id:        o._id,
-          cliente:    o.customerName  || 'Sin nombre',
-          email:      o.customerEmail || '',
-          concepto:   conceptoMostrar,
-          fecha:      o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
-          tipo:       'Factura C',
-          monto:      o.amount || 0,
-          estado:     o.status === 'invoiced' ? 'emitido' : 'pendiente',
-          origen:     o.platform === 'manual' ? 'manual' : 'woo',
-          emailSent:  o.emailSent || false,  // 👈 CAMBIO IMPORTANTE
-        };
+  id:         o.externalId || o._id,
+  _id:        o._id,
+  cliente:    o.customerName  || 'Sin nombre',
+  email:      o.customerEmail || '',
+  concepto:   conceptoMostrar,
+  fecha:      o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+  tipo:       'Factura C',
+  monto:      o.amount || 0,
+  estado:     o.status === 'invoiced' ? 'emitido' : 'pendiente',
+  origen:     o.platform === 'manual' ? 'manual' : 'woo',
+  platform:   o.platform,  // 👈 AGREGADO
+  emailSent:  o.emailSent || false,
+};
       });
       
       filtrarComprobantes();

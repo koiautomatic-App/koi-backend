@@ -2230,6 +2230,26 @@ app.get('/api/debug/ml-test', requireAuthAPI, async (req, res) => {
     res.json({ error: e.message, stack: e.stack });
   }
 });
+app.get('/api/debug/ml-insert', requireAuthAPI, async (req, res) => {
+  try {
+    // Crear una orden de prueba directamente
+    const testOrder = {
+      userId: req.userId,
+      platform: 'mercadolibre',
+      externalId: 'TEST_ORDER_001',
+      customerName: 'Cliente Test',
+      customerEmail: 'test@test.com',
+      amount: 1000,
+      status: 'pending_invoice',
+      concepto: 'Venta de prueba'
+    };
+    
+    const order = await Order.create(testOrder);
+    res.json({ ok: true, order });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

@@ -2217,37 +2217,34 @@ app.get('/api/debug/ml-test', requireAuthAPI, async (req, res) => {
     // Aplicar el normalizador
     const canonical = normalize.mercadolibre(rawOrder);
     
+    // Verificar si ya existe
+    const existing = await Order.findOne({ 
+      userId: integration.userId, 
+      platform: 'mercadolibre', 
+      externalId: canonical.externalId 
+    });
+    
     // Intentar hacer upsert
     const upsertResult = await upsertOrder(integration, canonical);
+    
+    // Verificar después del upsert
+    const afterUpsert = await Order.findOne({ 
+      userId: integration.userId, 
+      platform: 'mercadolibre', 
+      externalId: canonical.externalId 
+    });
     
     res.json({
       raw_order_id: rawOrder.id,
       canonical,
+      existing_before: existing ? existing._id : null,
       upsert_success: !!upsertResult,
-      upsert_id: upsertResult?._id
+      upsert_id: upsertResult?._id,
+      after_upsert: afterUpsert ? afterUpsert._id : null,
+      all_orders_count: await Order.countDocuments({ userId: req.userId })
     });
   } catch(e) {
     res.json({ error: e.message, stack: e.stack });
-  }
-});
-app.get('/api/debug/ml-insert', requireAuthAPI, async (req, res) => {
-  try {
-    // Crear una orden de prueba directamente
-    const testOrder = {
-      userId: req.userId,
-      platform: 'mercadolibre',
-      externalId: 'TEST_ORDER_001',
-      customerName: 'Cliente Test',
-      customerEmail: 'test@test.com',
-      amount: 1000,
-      status: 'pending_invoice',
-      concepto: 'Venta de prueba'
-    };
-    
-    const order = await Order.create(testOrder);
-    res.json({ ok: true, order });
-  } catch(e) {
-    res.json({ error: e.message });
   }
 });
 // ════════════════════════════════════════════════════════════

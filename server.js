@@ -267,25 +267,36 @@ const normalize = {
     };
   },
   mercadolibre: (raw) => {
-    const doc   = _cleanDoc(raw.billing_info?.doc_number || '');
-    const items = (raw.order_items || []).map(i => ({
-      nombre:   i.item?.title || 'Producto',
-      cantidad: i.quantity    || 1,
-      precio:   parseFloat(i.unit_price || 0),
-      sku:      i.item?.seller_sku || '',
-    }));
-    const concepto = items.length
-      ? items.map(i => i.nombre).join(', ')
-      : 'Venta Mercado Libre';
-    return {
-      externalId:    String(raw.id),
-      customerName:  raw.buyer?.nickname || '',
-      customerEmail: raw.buyer?.email || '',
-      customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount)||0),
-      amount:        parseFloat(raw.total_amount) || 0,
-      currency:      raw.currency_id || 'ARS',
-    };
-  },
+  const doc   = _cleanDoc(raw.billing_info?.doc_number || '');
+  const items = (raw.order_items || []).map(i => ({
+    nombre:   i.item?.title || 'Producto',
+    cantidad: i.quantity    || 1,
+    precio:   parseFloat(i.unit_price || 0),
+    sku:      i.item?.seller_sku || '',
+  }));
+  
+  // 👇 MEJORAR EL CONCEPTO (productos reales)
+  const concepto = items.length
+    ? items.map(i => i.nombre).join(', ')
+    : 'Venta Mercado Libre';
+  
+  // 👇 MEJORAR EL NOMBRE DEL CLIENTE (nombre real, no nickname)
+  const buyer = raw.buyer || {};
+  const customerName = buyer.first_name && buyer.last_name
+    ? `${buyer.first_name} ${buyer.last_name}`.trim()
+    : buyer.nickname || 'Cliente ML';
+  
+  return {
+    externalId:    String(raw.id),
+    customerName:  customerName,  // 👈 Nombre real (ej: "Juan Pérez")
+    customerEmail: buyer.email || '',
+    customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount)||0),
+    amount:        parseFloat(raw.total_amount) || 0,
+    currency:      raw.currency_id || 'ARS',
+    concepto,      // 👈 Productos reales (ej: "Curso de marroquinería")
+    items,         // 👈 Array de productos para detalles
+  };
+},
   vtex: (raw) => {
     const c = raw.clientProfileData || {};
     const doc = _cleanDoc(c.document || '');

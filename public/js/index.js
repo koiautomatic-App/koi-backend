@@ -1490,9 +1490,21 @@ function renderComprobantes(lista) {
       ? `<span class="estado-chip anulado">✕ Anulado</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
 
-    const origenPill = c.origen === 'manual'
-      ? `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--yellow);background:rgba(255,179,0,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,179,0,.2)">MAN</span>`
-      : `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#7b8cde;background:rgba(123,140,222,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(123,140,222,.2)">WOO</span>`;
+    // 👇 NUEVO ORIGEN PILL BASADO EN platform
+    const origenPill = (() => {
+      switch (c.platform) {
+        case 'mercadolibre':
+          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#1a1a1a;background:#FFE600;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">ML</span>`;
+        case 'woocommerce':
+          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:white;background:#7F54B3;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">WOO</span>`;
+        case 'tiendanube':
+          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:white;background:#1EAAF1;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">TN</span>`;
+        case 'manual':
+          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--yellow);background:rgba(255,179,0,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,179,0,.2)">MAN</span>`;
+        default:
+          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-2);background:var(--card-2);padding:2px 7px;border-radius:4px;border:1px solid var(--border)">${c.platform?.slice(0,3).toUpperCase() || 'EXT'}</span>`;
+      }
+    })();
 
     const btnAnular = c.origen === 'manual' && c.estado !== 'anulado'
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
@@ -1500,7 +1512,6 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn act-done" disabled title="Ya anulado">↩️</button>`
       : '';
 
-    // 👇 CÓDIGO PARA EL BOTÓN DE MAIL (con SVG como en Dashboard)
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
     const emailDisabled = emailSent ? 'disabled' : '';

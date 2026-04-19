@@ -2293,6 +2293,68 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+
+// Ruta temporal para actualizar órdenes de MercadoLibre (eliminar después)
+app.post('/api/debug/update-ml-orders', requireAuthAPI, async (req, res) => {
+  try {
+    console.log('🔄 Actualizando órdenes de MercadoLibre...');
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const sellerId = integration.credentials.sellerId;
+    
+    let offset = 0;
+    let updated = 0;
+    const LIMIT = 50;
+    
+    while (true) {
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' }
+      });
+      const orders = data.results || [];
+      if (!orders.length) break;
+      
+      for (const raw of orders) {
+        const canonical = normalize.mercadolibre(raw);
+        const result = await Order.updateOne(
+          { 
+            userId: integration.userId, 
+            platform: 'mercadolibre', 
+            externalId: canonical.externalId 
+          },
+          { 
+            $set: {
+              customerName: canonical.customerName,
+              customerEmail: canonical.customerEmail,
+              customerDoc: canonical.customerDoc,
+              taxCondition: canonical.taxCondition,
+              customerZipCode: canonical.customerZipCode,
+              customerAddress: canonical.customerAddress,
+              shippingType: canonical.shippingType,
+              shippingCarrier: canonical.shippingCarrier,
+              shippingCost: canonical.shippingCost,
+              shouldIncludeShipping: canonical.shouldIncludeShipping,
+              concepto: canonical.concepto,
+              items: canonical.items,
+              orderDate: canonical.orderDate
+            }
+          }
+        );
+        if (result.modifiedCount > 0) updated++;
+      }
+      offset += LIMIT;
+      if (offset >= (data.paging?.total || 0)) break;
+    }
+    
+    console.log(`✅ Actualizadas ${updated} órdenes de ML`);
+    res.json({ ok: true, updated });
+  } catch(e) {
+    console.error('Error actualizando ML:', e.message);
+    res.json({ error: e.message });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

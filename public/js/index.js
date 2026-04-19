@@ -1826,3 +1826,108 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 👇 AGREGAR ESTA LÍNEA 👇
   conectarBusquedaComprobantes();
 });
+// Función para mostrar/ocultar el campo de categoría según condición fiscal
+function toggleCategoriaField() {
+  const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+  const categoriaGroup = document.getElementById('categoriaGroup2');
+  const categoriaSelect = document.getElementById('cfgCategoria2');
+  
+  if (!condicionSelect || !categoriaGroup) return;
+  
+  const condicion = condicionSelect.value;
+  
+  if (condicion === 'monotributo') {
+    // Mostrar y habilitar el campo de categoría
+    categoriaGroup.style.display = 'block';
+    if (categoriaSelect) categoriaSelect.disabled = false;
+  } else {
+    // Ocultar y deshabilitar el campo de categoría
+    categoriaGroup.style.display = 'none';
+    if (categoriaSelect) categoriaSelect.disabled = true;
+  }
+}
+
+// Modificar la función guardarPerfilVista() para incluir condicionFiscal
+async function guardarPerfilVista() {
+  const condicionFiscal = document.getElementById('cfgCondicionFiscal2').value;
+  const categoria = document.getElementById('cfgCategoria2').value;
+  const cuit = document.getElementById('cfgCuit2').value;
+  const email = document.getElementById('cfgEmail2').value;
+  
+  const payload = {
+    condicionFiscal,
+    categoria: condicionFiscal === 'monotributo' ? categoria : 'C',
+    cuit,
+    email
+  };
+  
+  // Mostrar loading
+  const btn = event?.target?.closest?.('.btn-cfg-save') || document.querySelector('.btn-cfg-save');
+  if (btn) btn.disabled = true;
+  
+  try {
+    const res = await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    const data = await res.json();
+    
+    if (data.ok) {
+      // Mostrar mensaje de éxito
+      const statusDiv = document.getElementById('cfgSaveStatus2');
+      if (statusDiv) {
+        statusDiv.style.display = 'block';
+        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+      }
+      console.log('✅ Configuración guardada:', payload);
+    } else {
+      alert('Error: ' + (data.error || 'No se pudo guardar'));
+    }
+  } catch (err) {
+    console.error('Error al guardar:', err);
+    alert('Error al guardar la configuración');
+  } finally {
+    if (btn) btn.disabled = false;
+  }
+}
+
+// Función para cargar los datos del usuario
+async function cargarConfiguracion() {
+  try {
+    const res = await fetch('/api/me');
+    const { user } = await res.json();
+    
+    if (user?.settings) {
+      // Cargar condición fiscal
+      const condicion = user.settings.condicionFiscal || 'responsable_inscripto';
+      const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+      if (condicionSelect) condicionSelect.value = condicion;
+      
+      // Cargar categoría
+      const categoria = user.settings.categoria || 'C';
+      const categoriaSelect = document.getElementById('cfgCategoria2');
+      if (categoriaSelect) categoriaSelect.value = categoria;
+      
+      // Cargar CUIT
+      const cuitInput = document.getElementById('cfgCuit2');
+      if (cuitInput && user.settings.cuit) cuitInput.value = user.settings.cuit;
+      
+      // Aplicar visibilidad del campo categoría
+      toggleCategoriaField();
+    }
+  } catch (err) {
+    console.error('Error al cargar configuración:', err);
+  }
+}
+
+// Agregar event listener cuando se carga la página
+document.addEventListener('DOMContentLoaded', () => {
+  cargarConfiguracion();
+  
+  const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+  if (condicionSelect) {
+    condicionSelect.addEventListener('change', toggleCategoriaField);
+  }
+});

@@ -1258,48 +1258,6 @@ const requireAuthAPI = (req, res, next) => {
   catch { res.status(401).json({ error: 'No autenticado' }); }
 };
 
-// ════════════════════════════════════════════════════════════
-//  RUTA TEMPORAL PARA ENRIQUECER ÓRDENES EXISTENTES
-// ════════════════════════════════════════════════════════════
-
-app.post('/api/debug/enrich-ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    
-    // 👇 MODIFICAR ESTA CONSULTA
-    const orders = await Order.find({
-      userId: req.userId,
-      platform: 'mercadolibre',
-      $or: [
-        { orderEnriched: { $ne: true } },
-        { orderEnriched: { $exists: false } }
-      ]
-    }).limit(100);
-    
-    console.log(`📋 Encontradas ${orders.length} órdenes para enriquecer`);
-    
-    let enriched = 0;
-    for (const order of orders) {
-      console.log(`🔄 Procesando orden ${order.externalId}...`);
-      const updated = await enrichMercadoLibreOrder(order, token);
-      if (updated) {
-        enriched++;
-        console.log(`   ✅ Enriquecida`);
-      } else {
-        console.log(`   ⚠️ No se pudo enriquecer (sin buyerId o shipmentId)`);
-      }
-      await new Promise(r => setTimeout(r, 200));
-    }
-    
-    res.json({ ok: true, enriched, total: orders.length });
-  } catch(e) {
-    console.error('Error en enrich-ml-orders:', e.message);
-    res.json({ error: e.message });
-  }
-});
 
 
 // ════════════════════════════════════════════════════════════
@@ -2204,67 +2162,7 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
   await handleWebhook('shopify', req.params.secret, () => normalize.shopify(req.body));
 });
 
-// Ruta temporal para actualizar órdenes de MercadoLibre (eliminar después)
-app.post('/api/debug/update-ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    console.log('🔄 Actualizando órdenes de MercadoLibre...');
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const sellerId = integration.credentials.sellerId;
-    
-    let offset = 0;
-    let updated = 0;
-    const LIMIT = 50;
-    
-    while (true) {
-      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' }
-      });
-      const orders = data.results || [];
-      if (!orders.length) break;
-      
-      for (const raw of orders) {
-        const canonical = normalize.mercadolibre(raw);
-        const result = await Order.updateOne(
-          { 
-            userId: integration.userId, 
-            platform: 'mercadolibre', 
-            externalId: canonical.externalId 
-          },
-          { 
-            $set: {
-              customerName: canonical.customerName,
-              customerEmail: canonical.customerEmail,
-              customerDoc: canonical.customerDoc,
-              taxCondition: canonical.taxCondition,
-              customerZipCode: canonical.customerZipCode,
-              customerAddress: canonical.customerAddress,
-              shippingType: canonical.shippingType,
-              shippingCarrier: canonical.shippingCarrier,
-              shippingCost: canonical.shippingCost,
-              shouldIncludeShipping: canonical.shouldIncludeShipping,
-              concepto: canonical.concepto,
-              items: canonical.items,
-              orderDate: canonical.orderDate
-            }
-          }
-        );
-        if (result.modifiedCount > 0) updated++;
-      }
-      offset += LIMIT;
-      if (offset >= (data.paging?.total || 0)) break;
-    }
-    
-    console.log(`✅ Actualizadas ${updated} órdenes de ML`);
-    res.json({ ok: true, updated });
-  } catch(e) {
-    console.error('Error actualizando ML:', e.message);
-    res.json({ error: e.message });
-  }
-});
+
 
 // ════════════════════════════════════════════════════════════
 //  API — STATS DASHBOARD (CORREGIDO - usa misma lógica que comprobantes)
@@ -2575,335 +2473,94 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
   }
 });
 
-// Ruta para forzar la actualización de buyerId y shipmentId de TODAS las órdenes de ML
-app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const sellerId = integration.credentials.sellerId;
 
-    // Obtener TODAS las órdenes de la API de ML
-    let offset = 0;
-    let allMLOrders = [];
-    const LIMIT = 50;
-    while (true) {
-      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' }
-      });
-      const orders = data.results || [];
-      if (!orders.length) break;
-      allMLOrders.push(...orders);
-      offset += LIMIT;
-      if (offset >= (data.paging?.total || 0)) break;
-    }
-
-    let updatedCount = 0;
-    for (const raw of allMLOrders) {
-      // Obtener el detalle completo de cada orden
-      const detailRes = await axios.get(`https://api.mercadolibre.com/orders/${raw.id}`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      const fullOrder = detailRes.data;
-      const buyerId = fullOrder.buyer?.id || '';
-      const shipmentId = fullOrder.shipping?.id || '';
-
-      // Actualizar directamente en MongoDB
-      const result = await Order.updateOne(
-        { userId: req.userId, platform: 'mercadolibre', externalId: String(raw.id) },
-        { $set: { buyerId, shipmentId, orderEnriched: false } }
-      );
-      if (result.modifiedCount > 0) updatedCount++;
-      
-      // Pequeña pausa para no saturar la API
-      await new Promise(r => setTimeout(r, 100));
-    }
-
-    res.json({ ok: true, updated: updatedCount, total: allMLOrders.length });
-  } catch(e) {
-    console.error('Error en fix-ml-ids:', e);
-    res.json({ error: e.message });
-  }
-});
 // ════════════════════════════════════════════════════════════
-//  DEBUG REAL DE MERCADOLIBRE (VERSIÓN COMPLETA)
+//  DEBUG MERCADOLIBRE (SOLO ENDPOINTS ÚTILES)
 // ════════════════════════════════════════════════════════════
 
-// Probar si el token tiene permisos de órdenes
-app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    
-    const response = await axios.get('https://api.mercadolibre.com/orders/search?limit=5', {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    res.json({
-      success: true,
-      total_orders: response.data.results?.length || 0,
-      orders: response.data.results?.map(o => ({
-        id: o.id,
-        status: o.status,
-        total: o.total_amount,
-        buyer_id: o.buyer?.id
-      }))
-    });
-  } catch(e) {
-    res.json({ 
-      success: false,
-      error: e.message,
-      status: e.response?.status,
-      code: e.response?.data?.code,
-      message: e.response?.data?.message
-    });
-  }
-});
-
-// Obtener datos de un comprador específico
-app.get('/api/debug/ml-buyer/:id', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const buyerId = req.params.id;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/users/${buyerId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    res.json({
-      id: response.data.id,
-      first_name: response.data.first_name,
-      last_name: response.data.last_name,
-      email: response.data.email,
-      identification: response.data.identification,
-      nickname: response.data.nickname,
-      phone: response.data.phone
-    });
-  } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
-  }
-});
-
-// Obtener orden específica (MEJORADA con x-format-new)
+// 1. Obtener datos básicos de una orden (items, monto, IDs)
 app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
+    if (!integration) return res.status(404).json({ error: 'No hay integración con MercadoLibre' });
+
     const token = await _getMLToken(integration);
-    const orderId = req.params.id;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'
-      }
+    const { data } = await axios.get(`https://api.mercadolibre.com/orders/${req.params.id}`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
     });
-    
+
     res.json({
-      id: response.data.id,
-      status: response.data.status,
-      buyer: {
-        id: response.data.buyer?.id,
-        name: `${response.data.buyer?.first_name || ''} ${response.data.buyer?.last_name || ''}`.trim(),
-        nickname: response.data.buyer?.nickname,
-        identification: response.data.buyer?.identification,
-        email: response.data.buyer?.email,
-        billing_info: response.data.buyer?.billing_info
-      },
-      shipping_id: response.data.shipping?.id,
-      total_amount: response.data.total_amount,
-      items: response.data.order_items,
-      shipping: response.data.shipping,
-      billing_info: response.data.billing_info
+      id: data.id,
+      status: data.status,
+      total_amount: data.total_amount,
+      buyer_id: data.buyer?.id,
+      shipping_id: data.shipping?.id,
+      items: data.order_items?.map(i => ({
+        nombre: i.item?.title,
+        cantidad: i.quantity,
+        precio: i.unit_price
+      }))
     });
-  } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  } catch (error) {
+    res.status(error.response?.status || 500).json({ error: error.message });
   }
 });
 
-// Obtener datos fiscales del comprador (documento + facturación)
-app.get('/api/debug/ml-order-billing/:orderId', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const orderId = req.params.orderId;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/group/ML/order/details?order_ids=${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    const billingData = response.data.results?.[0];
-    const chargeInfo = billingData?.details?.[0]?.charge_info;
-    const salesInfo = billingData?.details?.[0]?.sales_info?.[0];
-    
-    res.json({
-      success: true,
-      order_id: billingData?.order_id,
-      legal_document_number: chargeInfo?.legal_document_number,
-      legal_document_status: chargeInfo?.legal_document_status,
-      payer_nickname: salesInfo?.payer_nickname,
-      transaction_amount: salesInfo?.transaction_amount,
-      transaction_detail: chargeInfo?.transaction_detail,
-      detail_amount: chargeInfo?.detail_amount,
-      raw_response: response.data
-    });
-  } catch(e) {
-    console.error('Error en billing:', e.response?.data || e.message);
-    res.json({ 
-      error: e.message, 
-      status: e.response?.status, 
-      data: e.response?.data,
-      note: 'Si el comprador no cargó datos fiscales en ML, este endpoint puede no devolver información'
-    });
-  }
-});
-
-// 🆕 Obtener información del envío (tipo de logística: Flex, Drop_off, etc.)
-app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const shipmentId = req.params.shipmentId;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'
-      }
-    });
-    
-    // Extraer información del tipo de envío
-    const logistic = response.data.logistic || {};
-    const tags = response.data.tags || [];
-    
-    // Mapeo de logistic_type a nombre comercial
-    const logisticTypeMap = {
-      'self_service': 'Flex',
-      'drop_off': 'Mercado Envíos',
-      'xd_drop_off': 'Mercado Envíos Places',
-      'cross_docking': 'Mercado Envíos Colecta',
-      'fulfillment': 'Mercado Envíos Full'
-    };
-    
-    let shippingType = logisticTypeMap[logistic.logistic_type] || logistic.logistic_type;
-    
-    // Detectar Turbo (es Flex con etiqueta especial)
-    if (logistic.logistic_type === 'self_service' && tags.includes('turbo')) {
-      shippingType = 'Turbo';
-    }
-    
-    res.json({
-      success: true,
-      shipping_id: response.data.id,
-      logistic_type: logistic.logistic_type,
-      shipping_type: shippingType,
-      mode: response.data.mode,
-      tags: tags,
-      status: response.data.status,
-      receiver_shipping_cost: response.data.receiver_shipping_cost
-    });
-  } catch(e) {
-    res.json({ 
-      success: false,
-      error: e.message, 
-      status: e.response?.status, 
-      data: e.response?.data 
-    });
-  }
-});
-// Debug: Ver respuesta cruda de ML del envío
-app.get('/api/debug/ml-shipment-raw/:shipmentId', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const shipmentId = req.params.shipmentId;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'
-      }
-    });
-    
-    // Devolver la respuesta completa sin filtrar
-    res.json(response.data);
-  } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
-  }
-});
-// 🆕 Obtener la condición fiscal del COMPRADOR
-app.get('/api/debug/ml-buyer-tax/:buyerId', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const buyerId = req.params.buyerId;
-    
-    // ✅ Endpoint correcto según la documentación
-    const response = await axios.get(`https://api.mercadolibre.com/users/${buyerId}/tax_info`, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    
-    // Los campos que nos interesan están en response.data
-    res.json({
-      success: true,
-      buyer_id: buyerId,
-      fiscal_condition: response.data.user_fiscal_condition,
-      legal_document_number: response.data.legal_document_number,
-      tax_address: response.data.tax_address,
-      raw_response: response.data
-    });
-  } catch(e) {
-    console.error('Error al obtener tax_info del comprador:', e.response?.data || e.message);
-    res.json({ 
-      error: e.message, 
-      status: e.response?.status, 
-      data: e.response?.data,
-      note: 'Es posible que el comprador no tenga información fiscal cargada o que el token no tenga permisos para verla.'
-    });
-  }
-});
-// Obtener billing_info del comprador (documento + condición fiscal)
+// 2. DATOS FISCALES DEL COMPRADOR (DNI, nombre, domicilio, condición fiscal)
 app.get('/api/debug/ml-order-billing-info/:orderId', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
+    if (!integration) return res.status(404).json({ error: 'No hay integración con MercadoLibre' });
+
     const token = await _getMLToken(integration);
-    const orderId = req.params.orderId;
-    
-    // 🔥 Endpoint correcto según Gemini
-    const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}/billing_info`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'  // ← CRÍTICO: Sin esto no funciona
+    const { data } = await axios.get(`https://api.mercadolibre.com/orders/${req.params.orderId}/billing_info`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
+    });
+
+    // Extraer datos del array additional_info
+    const additional = (data.billing_info?.additional_info || []).reduce((acc, item) => {
+      acc[item.type] = item.value;
+      return acc;
+    }, {});
+
+    res.json({
+      doc_type: data.billing_info?.doc_type,
+      doc_number: data.billing_info?.doc_number,
+      nombre: `${additional.FIRST_NAME || ''} ${additional.LAST_NAME || ''}`.trim(),
+      condicion_fiscal: additional.TAXPAYER_TYPE_ID || additional.TAX_TYPE,
+      domicilio: {
+        calle: additional.STREET_NAME,
+        ciudad: additional.CITY_NAME,
+        provincia: additional.STATE_NAME,
+        codigo_postal: additional.ZIP_CODE
       }
     });
-    
-    res.json(response.data);
-  } catch(e) {
-    console.error('Error en billing_info:', e.response?.data || e.message);
-    res.json({ 
-      error: e.message, 
-      status: e.response?.status, 
-      data: e.response?.data,
-      note: 'Verificar que el comprador haya cargado datos fiscales en el checkout'
+  } catch (error) {
+    res.status(error.response?.status || 500).json({ error: error.message });
+  }
+});
+
+// 3. Tipo de envío (fulfillment, self_service, etc.)
+app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.status(404).json({ error: 'No hay integración con MercadoLibre' });
+
+    const token = await _getMLToken(integration);
+    const { data } = await axios.get(`https://api.mercadolibre.com/shipments/${req.params.shipmentId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
     });
+
+    const logisticType = data.logistic?.type;
+    const incluirEnvio = logisticType === 'self_service';
+
+    res.json({
+      tipo: logisticType,
+      incluir_en_factura: incluirEnvio,
+      estado: data.status
+    });
+  } catch (error) {
+    res.status(error.response?.status || 500).json({ error: error.message });
   }
 });
 // ════════════════════════════════════════════════════════════

@@ -2596,6 +2596,140 @@ app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) =
   }
 });
 // ════════════════════════════════════════════════════════════
+//  SCRIPT TEMPORAL: Actualizar órdenes existentes de ML
+//  (Ejecutar una sola vez, luego eliminar este endpoint)
+// ════════════════════════════════════════════════════════════
+app.post('/api/debug/update-existing-orders', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    
+    // Buscar órdenes de ML que no tengan datos fiscales
+    const orders = await Order.find({
+      userId: req.userId,
+      platform: 'mercadolibre',
+      $or: [
+        { customerDoc: { $in: ['0', '', null] } },
+        { buyerIdentificationNumber: { $in: ['', null] } },
+        { orderEnriched: false }
+      ]
+    }).limit(100);
+    
+    console.log(`📋 Encontradas ${orders.length} órdenes para actualizar`);
+    
+    let updated = 0;
+    let errors = 0;
+    
+    for (const order of orders) {
+      try {
+        // 1. Obtener billing_info de la orden (DNI, nombre, condición fiscal)
+        const billingRes = await axios.get(`https://api.mercadolibre.com/orders/${order.externalId}/billing_info`, {
+          headers: { 
+            Authorization: `Bearer ${token}`,
+            'x-format-new': 'true'
+          }
+        });
+        
+        const billingData = billingRes.data;
+        
+        // Extraer datos del billing_info
+        let docNumber = '';
+        let docType = '';
+        let firstName = '';
+        let lastName = '';
+        
+        if (billingData.billing_info?.doc_number) {
+          docNumber = billingData.billing_info.doc_number;
+          docType = billingData.billing_info.doc_type;
+        }
+        
+        if (billingData.billing_info?.additional_info) {
+          for (const item of billingData.billing_info.additional_info) {
+            if (item.type === 'FIRST_NAME') firstName = item.value;
+            if (item.type === 'LAST_NAME') lastName = item.value;
+          }
+        }
+        
+        const customerName = firstName && lastName 
+          ? `${firstName} ${lastName}`.trim()
+          : firstName || order.customerName;
+        
+        const docClean = docNumber.replace(/\D/g, '');
+        let taxCondition = 'consumidor_final';
+        
+        if (docClean) {
+          if (docClean.length === 11) taxCondition = 'responsable_inscripto';
+          else if (docClean.length >= 7 && docClean.length <= 8) taxCondition = 'consumidor_final';
+        }
+        
+        // 2. Obtener dirección de envío
+        let customerAddress = {};
+        if (order.shipmentId) {
+          try {
+            const shippingRes = await axios.get(`https://api.mercadolibre.com/shipments/${order.shipmentId}`, {
+              headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
+            });
+            const shipment = shippingRes.data;
+            const addr = shipment.destination?.shipping_address || {};
+            customerAddress = {
+              street: addr.street_name || '',
+              streetNumber: addr.street_number || '',
+              city: addr.city?.name || '',
+              state: addr.state?.name || '',
+              zipCode: addr.zip_code || '',
+              country: addr.country?.name || ''
+            };
+          } catch(e) {
+            console.warn(`⚠️ No se pudo obtener envío para orden ${order.externalId}:`, e.message);
+          }
+        }
+        
+        // 3. Actualizar la orden
+        await Order.updateOne(
+          { _id: order._id },
+          { 
+            $set: {
+              customerDoc: docClean || order.customerDoc,
+              customerName: customerName || order.customerName,
+              taxCondition: taxCondition,
+              customerAddress: customerAddress,
+              buyerFirstName: firstName,
+              buyerLastName: lastName,
+              buyerIdentificationType: docType,
+              buyerIdentificationNumber: docClean,
+              orderEnriched: true
+            }
+          }
+        );
+        
+        updated++;
+        console.log(`✅ Orden ${order.externalId} actualizada: DNI=${docClean || 'no disponible'}, Nombre=${customerName || 'no disponible'}`);
+        
+        // Pausa para no saturar la API
+        await new Promise(r => setTimeout(r, 200));
+        
+      } catch(e) {
+        errors++;
+        console.error(`❌ Error actualizando orden ${order.externalId}:`, e.message);
+      }
+    }
+    
+    res.json({ 
+      ok: true, 
+      updated, 
+      errors,
+      total: orders.length,
+      message: `✅ Se actualizaron ${updated} órdenes de ${orders.length} (${errors} errores)`
+    });
+    
+  } catch(e) {
+    console.error('Error en update-existing-orders:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+// ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════
 app.listen(PORT, () => {

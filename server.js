@@ -1232,25 +1232,34 @@ app.post('/api/debug/enrich-ml-orders', requireAuthAPI, async (req, res) => {
     
     const token = await _getMLToken(integration);
     
+    // 👇 MODIFICAR ESTA CONSULTA
     const orders = await Order.find({
       userId: req.userId,
       platform: 'mercadolibre',
-      orderEnriched: { $ne: true },
       $or: [
-        { buyerId: { $exists: true, $ne: '' } },
-        { shipmentId: { $exists: true, $ne: '' } }
+        { orderEnriched: { $ne: true } },
+        { orderEnriched: { $exists: false } }
       ]
     }).limit(100);
     
+    console.log(`📋 Encontradas ${orders.length} órdenes para enriquecer`);
+    
     let enriched = 0;
     for (const order of orders) {
+      console.log(`🔄 Procesando orden ${order.externalId}...`);
       const updated = await enrichMercadoLibreOrder(order, token);
-      if (updated) enriched++;
+      if (updated) {
+        enriched++;
+        console.log(`   ✅ Enriquecida`);
+      } else {
+        console.log(`   ⚠️ No se pudo enriquecer (sin buyerId o shipmentId)`);
+      }
       await new Promise(r => setTimeout(r, 200));
     }
     
     res.json({ ok: true, enriched, total: orders.length });
   } catch(e) {
+    console.error('Error en enrich-ml-orders:', e.message);
     res.json({ error: e.message });
   }
 });

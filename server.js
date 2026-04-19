@@ -586,39 +586,6 @@ async function enrichMercadoLibreOrder(order, token) {
   
   return updated;
 }
-// ════════════════════════════════════════════════════════════
-//  RUTA TEMPORAL PARA ENRIQUECER ÓRDENES EXISTENTES
-// ════════════════════════════════════════════════════════════
-
-app.post('/api/debug/enrich-ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    
-    const orders = await Order.find({
-      userId: req.userId,
-      platform: 'mercadolibre',
-      orderEnriched: { $ne: true },
-      $or: [
-        { buyerId: { $exists: true, $ne: '' } },
-        { shipmentId: { $exists: true, $ne: '' } }
-      ]
-    }).limit(100);
-    
-    let enriched = 0;
-    for (const order of orders) {
-      const updated = await enrichMercadoLibreOrder(order, token);
-      if (updated) enriched++;
-      await new Promise(r => setTimeout(r, 200));
-    }
-    
-    res.json({ ok: true, enriched, total: orders.length });
-  } catch(e) {
-    res.json({ error: e.message });
-  }
-});
 
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
@@ -1253,6 +1220,41 @@ const requireAuthAPI = (req, res, next) => {
   try { req.userId = jwt.verify(token, JWT_SECRET).id; next(); }
   catch { res.status(401).json({ error: 'No autenticado' }); }
 };
+
+// ════════════════════════════════════════════════════════════
+//  RUTA TEMPORAL PARA ENRIQUECER ÓRDENES EXISTENTES
+// ════════════════════════════════════════════════════════════
+
+app.post('/api/debug/enrich-ml-orders', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    
+    const orders = await Order.find({
+      userId: req.userId,
+      platform: 'mercadolibre',
+      orderEnriched: { $ne: true },
+      $or: [
+        { buyerId: { $exists: true, $ne: '' } },
+        { shipmentId: { $exists: true, $ne: '' } }
+      ]
+    }).limit(100);
+    
+    let enriched = 0;
+    for (const order of orders) {
+      const updated = await enrichMercadoLibreOrder(order, token);
+      if (updated) enriched++;
+      await new Promise(r => setTimeout(r, 200));
+    }
+    
+    res.json({ ok: true, enriched, total: orders.length });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
+
 
 // ════════════════════════════════════════════════════════════
 //  PASSPORT GOOGLE

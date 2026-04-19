@@ -764,8 +764,7 @@ function cargarIntegraciones() {
           </div>
         </div>`).join('');
     })
-    .cat
-    ch(() => {});
+      .catch(() => {}); // ✅ CORREGIDO
 }
 
 async function backfillConcepto(integrationId) {

@@ -124,6 +124,7 @@ const UserSchema = new mongoose.Schema({
     factAuto:   { type: Boolean, default: true },
     envioAuto:  { type: Boolean, default: true },
     categoria:  { type: String, default: 'C' },
+    condicionFiscal: { type: String, default: 'responsable_inscripto', enum: ['responsable_inscripto', 'monotributo', 'exento'] },
     cuit:          { type: String },
     razonSocial:   { type: String },
     puntoVenta:    { type: Number },
@@ -931,16 +932,21 @@ async function getUltimoComprobante(cuit, ptoVta, tipoCbte, token, sign) {
 // ── PASO 3: Determinar tipo de comprobante ───────────────────
 //
 //  Regla AFIP:
-//  - Monotributo          → siempre Factura C (tipo 11)
-//  - RI con CUIT receptor → Factura A (tipo 1)
-//  - RI con DNI receptor  → Factura B (tipo 6)
+//  - Monotributo o Exento  → siempre Factura C (tipo 11)
+//  - RI con CUIT receptor  → Factura A (tipo 1)
+//  - RI con DNI receptor   → Factura B (tipo 6)
 function getTipoComprobante(orden, userSettings) {
+  // 1. Primero, verificar condición fiscal explícita (nuevo campo)
+  const condicion = userSettings.condicionFiscal || 'responsable_inscripto';
+  
+  // Monotributo o Exento → siempre Factura C
+  if (condicion === 'monotributo' || condicion === 'exento') return 11;
+  
+  // 2. Si tiene categoría A-K (Monotributo por compatibilidad con versiones anteriores)
   const cat = userSettings.categoria || 'C';
-
-  // Monotributo (categoría A-K) → siempre C
   if (/^[A-K]$/.test(cat)) return 11;
-
-  // Responsable Inscripto
+  
+  // 3. Responsable Inscripto (por defecto)
   const docLen = (orden.customerDoc || '').replace(/\D/g, '').length;
   if (docLen === 11) return 1;  // CUIT → Factura A
   return 6;                      // DNI/CF → Factura B

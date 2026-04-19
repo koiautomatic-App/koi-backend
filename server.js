@@ -2845,44 +2845,36 @@ app.get('/api/debug/ml-shipment-raw/:shipmentId', requireAuthAPI, async (req, re
     res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
   }
 });
-// 🆕 Obtener datos fiscales del comprador (documento + condición fiscal)
-// Usa el endpoint de resumen de percepciones de ML con el parámetro group obligatorio
-app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
+// 🆕 Obtener la condición fiscal del COMPRADOR
+app.get('/api/debug/ml-buyer-tax/:buyerId', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
     if (!integration) return res.json({ error: 'No hay integración ML' });
     
     const token = await _getMLToken(integration);
-    const date = req.params.date; // Formato: YYYY-MM-DD (ej: 2025-10-01)
+    const buyerId = req.params.buyerId;
     
-    // ✅ IMPORTANTE: Agregar el parámetro group=ML como dice la documentación
-    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/periods/key/${date}/perceptions/summary?group=ML`, {
+    // ✅ Endpoint correcto según la documentación
+    const response = await axios.get(`https://api.mercadolibre.com/users/${buyerId}/tax_info`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    const perceptions = response.data.summary || [];
-    
+    // Los campos que nos interesan están en response.data
     res.json({
       success: true,
-      date: date,
-      total_perceptions: perceptions.length,
-      perceptions: perceptions,
-      buyers_info: perceptions.map(p => ({
-        buyer_name: p.buyer_name,
-        legal_document_number: p.legal_document_number,
-        user_fiscal_condition: p.user_fiscal_condition,
-        buyer_state_name: p.buyer_state_name,
-        amount: p.amount,
-        perception_charge_number: p.perception_charge_number
-      }))
+      buyer_id: buyerId,
+      fiscal_condition: response.data.user_fiscal_condition,
+      legal_document_number: response.data.legal_document_number,
+      tax_address: response.data.tax_address,
+      raw_response: response.data
     });
   } catch(e) {
-    console.error('Error en percepciones:', e.response?.data || e.message);
+    console.error('Error al obtener tax_info del comprador:', e.response?.data || e.message);
     res.json({ 
       error: e.message, 
       status: e.response?.status, 
       data: e.response?.data,
-      note: 'Verificar que la fecha sea correcta (formato YYYY-MM-DD) y que el grupo sea ML'
+      note: 'Es posible que el comprador no tenga información fiscal cargada o que el token no tenga permisos para verla.'
     });
   }
 });

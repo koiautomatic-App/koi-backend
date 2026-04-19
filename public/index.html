@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>KOI · Facturación</title>
+  <title>KOI · Factura</title>
   <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
   <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.0/chart.umd.min.js"></script>
@@ -479,15 +479,17 @@
     </div>
   </div>
 </div>
-          <div class="cfg-field">
-            <label class="cfg-label">CUIT</label>
-            <input id="cfgCuit2" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>
-          </div>
-          <div class="cfg-field">
-            <label class="cfg-label">Email de contacto</label>
-            <input id="cfgEmail2" class="cfg-input" type="email" placeholder="tu@email.com"/>
-          </div>
-          <div class="cfg-field">
+<div class="cfg-field">
+  <label class="cfg-label">Condición Fiscal</label>
+  <select id="cfgCondicionFiscal2" class="cfg-input">
+    <option value="responsable_inscripto">Responsable Inscripto</option>
+    <option value="monotributo">Monotributista</option>
+    <option value="exento">Exento</option>
+  </select>
+  <span class="cfg-hint">Define qué tipo de facturas podés emitir</span>
+</div>
+
+<div class="cfg-field" id="categoriaGroup2">
   <label class="cfg-label">Categoría Monotributo</label>
   <select id="cfgCategoria2" class="cfg-input">
     <option value="">— Seleccioná —</option>
@@ -502,16 +504,19 @@
     <option value="I">I — hasta $84.124.088,79</option>
     <option value="J">J — hasta $98.144.777,00</option>
     <option value="K">K — hasta $112.165.465,00</option>
-     </select>
-          </div>
-        </div>
-        <button class="btn-cfg-save" onclick="guardarPerfilVista()" style="margin-top:4px">
-          <span class="material-icons">save</span> Guardar
-        </button>
-        <div id="cfgSaveStatus2" style="display:none;margin-top:10px">
-          <span class="cfg-badge-ok"><span class="material-icons">check_circle</span> Guardado</span>
-        </div>
-      </div>
+  </select>
+  <span class="cfg-hint">Solo para Monotributistas (categorías A-K)</span>
+</div>
+
+<div class="cfg-field">
+  <label class="cfg-label">CUIT</label>
+  <input id="cfgCuit2" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>
+</div>
+
+<div class="cfg-field">
+  <label class="cfg-label">Email de contacto</label>
+  <input id="cfgEmail2" class="cfg-input" type="email" placeholder="tu@email.com"/>
+</div>
 
     <!-- AUTOMATIZACIÓN -->
 <div class="cfg-vista-card" style="margin-top:14px">

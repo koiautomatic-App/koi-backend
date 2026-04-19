@@ -1412,38 +1412,10 @@
       .koi-cta-area { padding:20px 20px; }
       .susc-btn-mp { font-size:14px; padding:13px 18px; }
     }
-
-/* Botón de mail ya enviado (mismo estilo que los demás, pero verde) */
-.act-btn-sent {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  background: var(--card-2);
-  border: 1px solid rgba(76, 175, 80, 0.4);
-  color: #4caf50;
-  font-size: 1.2rem;
-  cursor: default;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.16s ease;
-  text-shadow: 0 0 2px rgba(76, 175, 80, 0.3);
+    #categoriaGroup {
+  transition: all 0.3s ease;
 }
 
-/* Efecto hover sutil (no cambia el cursor) */
-.act-btn-sent:hover {
-  border-color: rgba(76, 175, 80, 0.7);
-  background: rgba(76, 175, 80, 0.08);
-  transform: none;
-}
-
-/* Animación opcional al iluminarse */
-.act-btn-sent {
-  animation: glowPulse 0.5s ease-out;
-}
-
-@keyframes glowPulse {
-  0% { text-shadow: 0 0 0 rgba(76, 175, 80, 0); }
-  50% { text-shadow: 0 0 8px rgba(76, 175, 80, 0.8); }
-  100% { text-shadow: 0 0 4px rgba(76, 175, 80, 0.5); }
+#categoriaGroup[style*="display: none"] {
+  display: none !important;
 }

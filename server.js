@@ -2845,9 +2845,52 @@ app.get('/api/debug/ml-shipment-raw/:shipmentId', requireAuthAPI, async (req, re
     res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
   }
 });
+// 🆕 Obtener datos fiscales del comprador (documento + condición fiscal)
+// Usa el endpoint de resumen de percepciones de ML
+app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const date = req.params.date; // Formato: YYYY-MM-DD (ej: 2025-10-01)
+    
+    // Endpoint de resumen de percepciones
+    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/periods/key/${date}/perceptions/summary`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    const perceptions = response.data.summary || [];
+    
+    res.json({
+      success: true,
+      date: date,
+      total_perceptions: perceptions.length,
+      perceptions: perceptions,
+      // Extraer solo los campos relevantes para facturación
+      buyers_info: perceptions.map(p => ({
+        buyer_name: p.buyer_name,
+        legal_document_number: p.legal_document_number,
+        user_fiscal_condition: p.user_fiscal_condition,
+        buyer_state_name: p.buyer_state_name,
+        amount: p.amount,
+        sale_number: p.sale_number
+      }))
+    });
+  } catch(e) {
+    console.error('Error en percepciones:', e.response?.data || e.message);
+    res.json({ 
+      error: e.message, 
+      status: e.response?.status, 
+      data: e.response?.data,
+      note: 'Verificar que la fecha sea correcta (formato YYYY-MM-DD) y que haya percepciones para ese período'
+    });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════
 app.listen(PORT, () => {
   console.log(`🚀 KOI-Factura v4.0 | Puerto ${PORT} | ${BASE}`);
 });
+

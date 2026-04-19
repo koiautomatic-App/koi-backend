@@ -2878,6 +2878,34 @@ app.get('/api/debug/ml-buyer-tax/:buyerId', requireAuthAPI, async (req, res) => 
     });
   }
 });
+// Obtener billing_info del comprador (documento + condición fiscal)
+app.get('/api/debug/ml-order-billing-info/:orderId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const orderId = req.params.orderId;
+    
+    // 🔥 Endpoint correcto según Gemini
+    const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}/billing_info`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'x-format-new': 'true'  // ← CRÍTICO: Sin esto no funciona
+      }
+    });
+    
+    res.json(response.data);
+  } catch(e) {
+    console.error('Error en billing_info:', e.response?.data || e.message);
+    res.json({ 
+      error: e.message, 
+      status: e.response?.status, 
+      data: e.response?.data,
+      note: 'Verificar que el comprador haya cargado datos fiscales en el checkout'
+    });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

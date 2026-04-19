@@ -198,7 +198,7 @@ const OrderSchema = new mongoose.Schema({
   // Estado de envío de email
   emailSent:      { type: Boolean, default: false },
   emailSentAt:    { type: Date },
-  // 👇 NUEVOS CAMPOS PARA MERCADOLIBRE
+  // 👇 CAMPOS PARA MERCADOLIBRE
   customerZipCode: { type: String, default: '' },
   taxCondition:    { type: String, default: 'consumidor_final' },
   customerAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
@@ -207,6 +207,17 @@ const OrderSchema = new mongoose.Schema({
   shippingCost:    { type: Number, default: 0 },
   shouldIncludeShipping: { type: Boolean, default: false },
   shippingAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
+  // 👇 NUEVOS CAMPOS PARA ENRIQUECIMIENTO
+  buyerId: { type: String, default: '' },
+  shipmentId: { type: String, default: '' },
+  buyerFirstName: { type: String, default: '' },
+  buyerLastName: { type: String, default: '' },
+  buyerIdentificationType: { type: String, default: '' },
+  buyerIdentificationNumber: { type: String, default: '' },
+  shippingMode: { type: String, default: '' },
+  shippingStatus: { type: String, default: '' },
+  shippingDestinationAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
+  orderEnriched: { type: Boolean, default: false },
   createdAt:      { type: Date, default: Date.now },
 });
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
@@ -274,7 +285,7 @@ const normalize = {
       orderDate:     raw.paid_at ? new Date(raw.paid_at) : raw.created_at ? new Date(raw.created_at) : undefined,
     };
   },
-  mercadolibre: (raw) => {
+ mercadolibre: (raw) => {
   // 👇 EXTRAER DNI/CUIT
   let docNumber = '';
   let docType = '';
@@ -417,6 +428,10 @@ const normalize = {
     concepto,
     items: allItems,
     orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
+    // 👇 NUEVOS CAMPOS PARA ENRIQUECIMIENTO
+    buyerId:       raw.buyer?.id || '',
+    shipmentId:    raw.shipping?.id || '',
+    orderEnriched: false,
   };
 },
 
@@ -467,6 +482,143 @@ const normalize = {
     };
   },
 };
+// ════════════════════════════════════════════════════════════
+//  ENRIQUECER ÓRDENES DE MERCADOLIBRE
+// ════════════════════════════════════════════════════════════
+
+async function enrichMercadoLibreOrder(order, token) {
+  let updated = false;
+  const updates = {};
+  
+  // 1. Obtener datos del comprador si tenemos buyerId
+  if (order.buyerId && !order.buyerFirstName && !order.buyerIdentificationNumber) {
+    try {
+      const buyerRes = await axios.get(`https://api.mercadolibre.com/users/${order.buyerId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const buyer = buyerRes.data;
+      
+      updates.buyerFirstName = buyer.first_name || '';
+      updates.buyerLastName = buyer.last_name || '';
+      updates.buyerIdentificationType = buyer.identification?.type || '';
+      updates.buyerIdentificationNumber = buyer.identification?.number || '';
+      
+      // Si tenemos identificación, actualizar customerDoc y taxCondition
+      const docClean = _cleanDoc(updates.buyerIdentificationNumber);
+      if (docClean) {
+        updates.customerDoc = docClean;
+        if (docClean.length === 11) {
+          updates.taxCondition = 'responsable_inscripto';
+        } else if (docClean.length >= 7 && docClean.length <= 8) {
+          updates.taxCondition = 'consumidor_final';
+        }
+      }
+      
+      // Si tenemos nombre real, actualizar customerName
+      if (updates.buyerFirstName) {
+        const lastName = updates.buyerLastName ? ` ${updates.buyerLastName}` : '';
+        updates.customerName = `${updates.buyerFirstName}${lastName}`.trim();
+      }
+      
+      updated = true;
+    } catch(e) {
+      console.error(`Error obteniendo buyer ${order.buyerId}:`, e.message);
+    }
+  }
+  
+  // 2. Obtener datos del envío si tenemos shipmentId
+  if (order.shipmentId && !order.shippingMode) {
+    try {
+      const shipmentRes = await axios.get(`https://api.mercadolibre.com/marketplace/shipments/${order.shipmentId}`, {
+        headers: { 
+          Authorization: `Bearer ${token}`,
+          'x-format-new': 'true'
+        }
+      });
+      const shipment = shipmentRes.data;
+      
+      updates.shippingMode = shipment.logistic?.mode || shipment.mode || 'unknown';
+      updates.shippingStatus = shipment.status || '';
+      
+      if (shipment.destination?.shipping_address) {
+        const addr = shipment.destination.shipping_address;
+        updates.shippingDestinationAddress = {
+          street: addr.street_name || '',
+          streetNumber: addr.street_number || '',
+          city: addr.city?.name || '',
+          state: addr.state?.name || '',
+          zipCode: addr.zip_code || '',
+          country: addr.country?.name || ''
+        };
+        
+        // Actualizar customerAddress con la dirección de envío si no teníamos
+        if (!order.customerAddress?.street) {
+          updates.customerAddress = updates.shippingDestinationAddress;
+          updates.customerZipCode = addr.zip_code || '';
+        }
+      }
+      
+      // Determinar si se debe facturar el envío
+      if (updates.shippingMode === 'flex') {
+        updates.shouldIncludeShipping = true;
+        updates.shippingCarrier = 'MercadoEnvíos Flex';
+      } else if (updates.shippingMode === 'me2') {
+        updates.shouldIncludeShipping = false;
+        updates.shippingCarrier = 'MercadoEnvíos';
+      } else if (updates.shippingMode === 'me1') {
+        updates.shouldIncludeShipping = false;
+        updates.shippingCarrier = 'Envío del vendedor';
+      } else if (updates.shippingMode === 'fulfillment') {
+        updates.shouldIncludeShipping = false;
+        updates.shippingCarrier = 'MercadoEnvíos Full';
+      }
+      
+      updated = true;
+    } catch(e) {
+      console.error(`Error obteniendo shipment ${order.shipmentId}:`, e.message);
+    }
+  }
+  
+  if (updated) {
+    updates.orderEnriched = true;
+    await Order.updateOne({ _id: order._id }, { $set: updates });
+  }
+  
+  return updated;
+}
+// ════════════════════════════════════════════════════════════
+//  RUTA TEMPORAL PARA ENRIQUECER ÓRDENES EXISTENTES
+// ════════════════════════════════════════════════════════════
+
+app.post('/api/debug/enrich-ml-orders', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    
+    const orders = await Order.find({
+      userId: req.userId,
+      platform: 'mercadolibre',
+      orderEnriched: { $ne: true },
+      $or: [
+        { buyerId: { $exists: true, $ne: '' } },
+        { shipmentId: { $exists: true, $ne: '' } }
+      ]
+    }).limit(100);
+    
+    let enriched = 0;
+    for (const order of orders) {
+      const updated = await enrichMercadoLibreOrder(order, token);
+      if (updated) enriched++;
+      await new Promise(r => setTimeout(r, 200));
+    }
+    
+    res.json({ ok: true, enriched, total: orders.length });
+  } catch(e) {
+    res.json({ error: e.message });
+  }
+});
 
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
@@ -1016,25 +1168,35 @@ const BULK_SYNC = {
   },
 
   async mercadolibre(integration) {
-    const accessToken = await _getMLToken(integration);
-    const sellerId    = integration.credentials.sellerId;
-    let offset = 0, total = 0;
-    const LIMIT = 50;
-    while (true) {
-      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-        headers: { Authorization: `Bearer ${accessToken}` },
-        params:  { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' },
-        timeout: 30_000,
-      });
-      const orders = data.results || [];
-      if (!orders.length) break;
-      await Promise.all(orders.map(raw => upsertOrder(integration, normalize.mercadolibre(raw))));
-      total  += orders.length;
-      offset += LIMIT;
-      if (offset >= (data.paging?.total || 0)) break;
+  const accessToken = await _getMLToken(integration);
+  const sellerId    = integration.credentials.sellerId;
+  let offset = 0, total = 0;
+  const LIMIT = 50;
+  while (true) {
+    const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      params:  { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' },
+      timeout: 30_000,
+    });
+    const orders = data.results || [];
+    if (!orders.length) break;
+    
+    for (const raw of orders) {
+      const canonical = normalize.mercadolibre(raw);
+      const result = await upsertOrder(integration, canonical);
+      
+      // 👇 ENRIQUECER LA ORDEN RECIÉN CREADA/ACTUALIZADA
+      if (result && (canonical.buyerId || canonical.shipmentId)) {
+        await new Promise(r => setTimeout(r, 200));
+        await enrichMercadoLibreOrder(result, accessToken);
+      }
     }
-    return total;
-  },
+    total  += orders.length;
+    offset += LIMIT;
+    if (offset >= (data.paging?.total || 0)) break;
+  }
+  return total;
+},
 
   async vtex(integration) {
     const apiKey   = integration.getKey('apiKey');

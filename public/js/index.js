@@ -688,13 +688,35 @@ let _plataformaActual = null;
 function cargarIntegraciones() {
   const cont = document.getElementById('negIntegraciones');
   if (typeof google !== 'undefined') {
-    // En GAS no hay /api/integrations, usar datos reales cuando sea web
     return;
   }
-  fetch('/api/integrations', { credentials:'include' })
+  fetch('/api/integrations', { credentials: 'include' })
     .then(r => r.json())
     .then(data => {
       const list = data.integrations || [];
+      
+      // Actualizar toggles y descripciones en las cards (si existen)
+      const connectedPlatforms = {};
+      list.forEach(i => { connectedPlatforms[i.platform] = i; });
+
+      ['woocommerce', 'mercadolibre', 'tiendanube', 'empretienda', 'rappi', 'vtex'].forEach(p => {
+        const tog = document.getElementById('toggle-' + p);
+        const desc = document.getElementById('desc-' + p);
+        const card = document.getElementById('card-' + p);
+        const integration = connectedPlatforms[p];
+        if (tog) {
+          tog.checked = integration && integration.status === 'active';
+          if (card) card.classList.toggle('is-active', tog.checked);
+        }
+        if (desc) {
+          desc.textContent = integration
+            ? (integration.status === 'active' ? `✓ Conectada — ${integration.storeName || integration.storeId}` : '⚠ Error de conexión')
+            : 'Sin conectar';
+          desc.style.color = integration && integration.status === 'active' ? 'var(--green)' : '';
+        }
+      });
+
+      // Renderizar lista de integraciones activas en negIntegraciones
       if (!list.length) {
         cont.innerHTML = `<div class="neg-empty">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
@@ -705,47 +727,16 @@ function cargarIntegraciones() {
         </div>`;
         return;
       }
+
       const LOGOS = {
-        woocommerce:  '🛍',
-        tiendanube:   '☁️',
+        woocommerce: '🛍',
+        tiendanube: '☁️',
         mercadolibre: '🛒',
-        empretienda:  '🏪',
-        rappi:        '🛵',
+        empretienda: '🏪',
+        rappi: '🛵',
       };
-      // Actualizar toggles y descripciones en las cards
-    const connectedPlatforms = {};
-    list.forEach(i => { connectedPlatforms[i.platform] = i; });
 
-    ['woocommerce','mercadolibre','tiendanube','empretienda','rappi','vtex'].forEach(p => {
-      const tog  = document.getElementById('toggle-' + p);
-      const desc = document.getElementById('desc-' + p);
-      const card = document.getElementById('card-' + p);
-      const integration = connectedPlatforms[p];
-      if (tog) {
-        tog.checked = integration && integration.status === 'active';
-        if (card) card.classList.toggle('is-active', tog.checked);
-      }
-      if (desc) {
-        desc.textContent = integration
-          ? (integration.status === 'active' ? `✓ Conectada — ${integration.storeName || integration.storeId}` : '⚠ Error de conexión')
-          : 'Sin conectar';
-        desc.style.color = integration && integration.status === 'active' ? 'var(--green)' : '';
-      }
-    });
-
-    // También renderizar lista de integraciones activas arriba
-    if (!list.length) {
-      cont.innerHTML = `<div class="neg-empty">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
-          <rect x="2" y="8" width="28" height="20" rx="3" stroke="var(--text-2)" stroke-width="1.5"/>
-          <path d="M10 8V6a6 6 0 0 1 12 0v2" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span>Todavía no conectaste ninguna tienda</span>
-      </div>`;
-      return;
-    }
-
-    cont.innerHTML = list.map(i => `
+      cont.innerHTML = list.map(i => `
         <div class="neg-integration">
           <div class="neg-integration-logo">${LOGOS[i.platform] || '🔗'}</div>
           <div class="neg-integration-info">
@@ -764,7 +755,7 @@ function cargarIntegraciones() {
           </div>
         </div>`).join('');
     })
-      .catch(() => {}); // ✅ CORREGIDO
+    .catch(err => console.error('Error cargando integraciones:', err));
 }
 
 async function backfillConcepto(integrationId) {

@@ -2611,6 +2611,32 @@ app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
     res.json({ error: e.message });
   }
 });
+// Ruta temporal para debug de buyer
+app.get('/api/debug/buyer/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const buyerId = req.params.id;
+    
+    console.log(`🔍 Consultando buyer ${buyerId}...`);
+    const response = await axios.get(`https://api.mercadolibre.com/users/${buyerId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    res.json({
+      id: response.data.id,
+      first_name: response.data.first_name,
+      last_name: response.data.last_name,
+      identification: response.data.identification,
+      nickname: response.data.nickname
+    });
+  } catch(e) {
+    console.error('Error en debug buyer:', e.message);
+    res.json({ error: e.message, status: e.response?.status });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

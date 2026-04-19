@@ -2653,6 +2653,27 @@ app.get('/api/debug/buyer/:id', requireAuthAPI, async (req, res) => {
     res.json({ error: e.message, status: e.response?.status });
   }
 });
+app.get('/api/debug/ml-token-scopes', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    
+    // Obtener información del token (scopes)
+    const response = await axios.get('https://api.mercadolibre.com/oauth/token/info', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    res.json({
+      scopes: response.data.scopes,
+      user_id: response.data.user_id,
+      app_id: response.data.app_id
+    });
+  } catch(e) {
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

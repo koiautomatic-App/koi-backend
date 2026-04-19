@@ -428,10 +428,14 @@ const normalize = {
     concepto,
     items: allItems,
     orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
-    // 👇 NUEVOS CAMPOS PARA ENRIQUECIMIENTO
+    // 👇 CAMPOS PARA ENRIQUECIMIENTO (ahora con datos reales)
     buyerId:       raw.buyer?.id || '',
     shipmentId:    raw.shipping?.id || '',
-    orderEnriched: false,
+    buyerFirstName: firstName,
+    buyerLastName: lastName,
+    buyerIdentificationType: docType,
+    buyerIdentificationNumber: docClean,
+    orderEnriched: true,  // ✅ Ya tenemos los datos, no necesita enriquecimiento posterior
   };
 },
 

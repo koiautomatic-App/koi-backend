@@ -2627,8 +2627,45 @@ app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
     res.json({ error: e.message });
   }
 });
-// Ruta temporal para debug de buyer
-app.get('/api/debug/buyer/:id', requireAuthAPI, async (req, res) => {
+// ════════════════════════════════════════════════════════════
+//  DEBUG REAL DE MERCADOLIBRE
+// ════════════════════════════════════════════════════════════
+
+// Probar si el token tiene permisos de órdenes
+app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    
+    const response = await axios.get('https://api.mercadolibre.com/orders/search?limit=5', {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    res.json({
+      success: true,
+      total_orders: response.data.results?.length || 0,
+      orders: response.data.results?.map(o => ({
+        id: o.id,
+        status: o.status,
+        total: o.total_amount,
+        buyer_id: o.buyer?.id
+      }))
+    });
+  } catch(e) {
+    res.json({ 
+      success: false,
+      error: e.message,
+      status: e.response?.status,
+      code: e.response?.data?.code,
+      message: e.response?.data?.message
+    });
+  }
+});
+
+// Obtener datos de un comprador específico (reemplaza al anterior)
+app.get('/api/debug/ml-buyer/:id', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
     if (!integration) return res.json({ error: 'No hay integración ML' });
@@ -2636,7 +2673,6 @@ app.get('/api/debug/buyer/:id', requireAuthAPI, async (req, res) => {
     const token = await _getMLToken(integration);
     const buyerId = req.params.id;
     
-    console.log(`🔍 Consultando buyer ${buyerId}...`);
     const response = await axios.get(`https://api.mercadolibre.com/users/${buyerId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
@@ -2645,30 +2681,43 @@ app.get('/api/debug/buyer/:id', requireAuthAPI, async (req, res) => {
       id: response.data.id,
       first_name: response.data.first_name,
       last_name: response.data.last_name,
+      email: response.data.email,
       identification: response.data.identification,
-      nickname: response.data.nickname
+      nickname: response.data.nickname,
+      phone: response.data.phone
     });
   } catch(e) {
-    console.error('Error en debug buyer:', e.message);
-    res.json({ error: e.message, status: e.response?.status });
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
   }
 });
-app.get('/api/debug/ml-token-scopes', requireAuthAPI, async (req, res) => {
+
+// Obtener orden específica (la que necesitas)
+app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
     if (!integration) return res.json({ error: 'No hay integración ML' });
     
     const token = await _getMLToken(integration);
+    const orderId = req.params.id;
     
-    // Obtener información del token (scopes)
-    const response = await axios.get('https://api.mercadolibre.com/oauth/token/info', {
+    const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
     res.json({
-      scopes: response.data.scopes,
-      user_id: response.data.user_id,
-      app_id: response.data.app_id
+      id: response.data.id,
+      status: response.data.status,
+      buyer: {
+        id: response.data.buyer?.id,
+        name: `${response.data.buyer?.first_name || ''} ${response.data.buyer?.last_name || ''}`.trim(),
+        nickname: response.data.buyer?.nickname,
+        identification: response.data.buyer?.identification,
+        email: response.data.buyer?.email
+      },
+      total_amount: response.data.total_amount,
+      items: response.data.order_items,
+      shipping: response.data.shipping,
+      billing_info: response.data.billing_info
     });
   } catch(e) {
     res.json({ error: e.message, status: e.response?.status, data: e.response?.data });

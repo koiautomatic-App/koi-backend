@@ -612,11 +612,10 @@ async function upsertOrder(integration, canonical) {
         status,
         errorLog,
       },
-      // 👇 AGREGAR $set PARA ACTUALIZAR SIEMPRE ESTOS CAMPOS
       $set: {
         buyerId: canonical.buyerId || '',
         shipmentId: canonical.shipmentId || '',
-        orderEnriched: false,
+        orderEnriched: canonical.orderEnriched || false,
         customerName: canonical.customerName,
         customerEmail: canonical.customerEmail,
         customerDoc: canonical.customerDoc,
@@ -625,7 +624,12 @@ async function upsertOrder(integration, canonical) {
         currency: canonical.currency,
         concepto: canonical.concepto,
         items: canonical.items,
-        orderDate: canonical.orderDate
+        orderDate: canonical.orderDate,
+        // 👇 AGREGAR ESTOS CAMPOS
+        buyerFirstName: canonical.buyerFirstName || '',
+        buyerLastName: canonical.buyerLastName || '',
+        buyerIdentificationType: canonical.buyerIdentificationType || '',
+        buyerIdentificationNumber: canonical.buyerIdentificationNumber || '',
       }
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
@@ -635,9 +639,8 @@ async function upsertOrder(integration, canonical) {
   });
 
   console.log(`📦 Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
- // 👇 LOG DESPUÉS DE LA ACTUALIZACIÓN
-  console.log(`📦 [UPSERT] Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
-  // Auto-emitir si el usuario tiene factAuto activado
+  console.log(`📦 [UPSERT] Orden ${canonical.externalId}: buyerFirstName=${doc?.buyerFirstName}, buyerLastName=${doc?.buyerLastName}`);
+
   if (doc && status === 'pending_invoice') {
     const user = await User.findById(integration.userId).select('settings').lean();
     if (user?.settings?.factAuto && user?.settings?.cuit) {

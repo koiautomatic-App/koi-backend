@@ -583,6 +583,9 @@ async function enrichMercadoLibreOrder(order, token) {
   
   return updated;
 }
+const canonical = normalize.mercadolibre(fullOrder);
+console.log(`📦 Canonical para ${raw.id}: buyerId=${canonical.buyerId}, shipmentId=${canonical.shipmentId}`);
+const result = await upsertOrder(integration, canonical);
 
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
@@ -629,7 +632,8 @@ async function upsertOrder(integration, canonical) {
   });
 
   console.log(`📦 Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
-
+ // 👇 LOG DESPUÉS DE LA ACTUALIZACIÓN
+  console.log(`📦 [UPSERT] Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
   // Auto-emitir si el usuario tiene factAuto activado
   if (doc && status === 'pending_invoice') {
     const user = await User.findById(integration.userId).select('settings').lean();

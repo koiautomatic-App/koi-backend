@@ -597,32 +597,38 @@ async function upsertOrder(integration, canonical) {
 
   const doc = await Order.findOneAndUpdate(
     { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId },
-    { $setOnInsert: {
+    { 
+      $setOnInsert: {
         userId:        integration.userId,
         integrationId: integration._id,
         platform:      integration.platform,
         ...canonical,
         status,
         errorLog,
-    }},
+      },
+      // 👇 AGREGAR $set PARA ACTUALIZAR SIEMPRE ESTOS CAMPOS
+      $set: {
+        buyerId: canonical.buyerId || '',
+        shipmentId: canonical.shipmentId || '',
+        orderEnriched: false,
+        customerName: canonical.customerName,
+        customerEmail: canonical.customerEmail,
+        customerDoc: canonical.customerDoc,
+        taxCondition: canonical.taxCondition,
+        amount: canonical.amount,
+        currency: canonical.currency,
+        concepto: canonical.concepto,
+        items: canonical.items,
+        orderDate: canonical.orderDate
+      }
+    },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).catch(err => {
     if (err.code !== 11000) console.error(`upsert error:`, err.message);
     return null;
   });
 
-  // 👇 ACTUALIZAR buyerId y shipmentId si vienen en canonical
-  if (doc && (canonical.buyerId || canonical.shipmentId)) {
-    await Order.updateOne(
-      { _id: doc._id },
-      { $set: {
-          buyerId: canonical.buyerId || '',
-          shipmentId: canonical.shipmentId || '',
-          orderEnriched: false
-      }}
-    );
-    console.log(`📦 Actualizada orden ${canonical.externalId}: buyerId=${canonical.buyerId}, shipmentId=${canonical.shipmentId}`);
-  }
+  console.log(`📦 Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
 
   // Auto-emitir si el usuario tiene factAuto activado
   if (doc && status === 'pending_invoice') {

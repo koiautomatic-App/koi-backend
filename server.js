@@ -2095,7 +2095,7 @@ async function _registerWebhookTiendaNube(integration, apiToken) {
 // ════════════════════════════════════════════════════════════
 app.get('/auth/ml/connect', requireAuth, (req, res) => {
   const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
-  const scopes = 'read write offline_access';
+  const scopes = 'read write offline_access invoices orders.read shipments.read';
   res.redirect(`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}&state=${encodeURIComponent(state)}&scope=${scopes}`);
 });
 

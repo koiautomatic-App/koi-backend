@@ -2628,7 +2628,7 @@ app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
   }
 });
 // ════════════════════════════════════════════════════════════
-//  DEBUG REAL DE MERCADOLIBRE (VERSIÓN CORREGIDA)
+//  DEBUG REAL DE MERCADOLIBRE (VERSIÓN COMPLETA)
 // ════════════════════════════════════════════════════════════
 
 // Probar si el token tiene permisos de órdenes
@@ -2729,8 +2729,7 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
   }
 });
 
-// 🆕 NUEVO: Obtener datos fiscales del comprador (documento + facturación)
-// Este es el endpoint correcto según documentación de ML
+// Obtener datos fiscales del comprador (documento + facturación)
 app.get('/api/debug/ml-order-billing/:orderId', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
@@ -2765,6 +2764,62 @@ app.get('/api/debug/ml-order-billing/:orderId', requireAuthAPI, async (req, res)
       status: e.response?.status, 
       data: e.response?.data,
       note: 'Si el comprador no cargó datos fiscales en ML, este endpoint puede no devolver información'
+    });
+  }
+});
+
+// 🆕 Obtener información del envío (tipo de logística: Flex, Drop_off, etc.)
+app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const shipmentId = req.params.shipmentId;
+    
+    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'x-format-new': 'true'
+      }
+    });
+    
+    // Extraer información del tipo de envío
+    const logistic = response.data.logistic || {};
+    const tags = response.data.tags || [];
+    
+    // Mapeo de logistic_type a nombre comercial
+    const logisticTypeMap = {
+      'self_service': 'Flex',
+      'drop_off': 'Mercado Envíos',
+      'xd_drop_off': 'Mercado Envíos Places',
+      'cross_docking': 'Mercado Envíos Colecta',
+      'fulfillment': 'Mercado Envíos Full'
+    };
+    
+    let shippingType = logisticTypeMap[logistic.logistic_type] || logistic.logistic_type;
+    
+    // Detectar Turbo (es Flex con etiqueta especial)
+    if (logistic.logistic_type === 'self_service' && tags.includes('turbo')) {
+      shippingType = 'Turbo';
+    }
+    
+    res.json({
+      success: true,
+      shipping_id: response.data.id,
+      logistic_type: logistic.logistic_type,
+      shipping_type: shippingType,
+      mode: response.data.mode,
+      tags: tags,
+      status: response.data.status,
+      receiver_shipping_cost: response.data.receiver_shipping_cost
+    });
+  } catch(e) {
+    res.json({ 
+      success: false,
+      error: e.message, 
+      status: e.response?.status, 
+      data: e.response?.data 
     });
   }
 });

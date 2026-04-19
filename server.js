@@ -2559,7 +2559,58 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
   }
 });
 
+// Ruta para forzar la actualización de buyerId y shipmentId de TODAS las órdenes de ML
+app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const sellerId = integration.credentials.sellerId;
 
+    // Obtener TODAS las órdenes de la API de ML
+    let offset = 0;
+    let allMLOrders = [];
+    const LIMIT = 50;
+    while (true) {
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+        headers: { Authorization: `Bearer ${token}` },
+        params: { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' }
+      });
+      const orders = data.results || [];
+      if (!orders.length) break;
+      allMLOrders.push(...orders);
+      offset += LIMIT;
+      if (offset >= (data.paging?.total || 0)) break;
+    }
+
+    let updatedCount = 0;
+    for (const raw of allMLOrders) {
+      // Obtener el detalle completo de cada orden
+      const detailRes = await axios.get(`https://api.mercadolibre.com/orders/${raw.id}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      const fullOrder = detailRes.data;
+      const buyerId = fullOrder.buyer?.id || '';
+      const shipmentId = fullOrder.shipping?.id || '';
+
+      // Actualizar directamente en MongoDB
+      const result = await Order.updateOne(
+        { userId: req.userId, platform: 'mercadolibre', externalId: String(raw.id) },
+        { $set: { buyerId, shipmentId, orderEnriched: false } }
+      );
+      if (result.modifiedCount > 0) updatedCount++;
+      
+      // Pequeña pausa para no saturar la API
+      await new Promise(r => setTimeout(r, 100));
+    }
+
+    res.json({ ok: true, updated: updatedCount, total: allMLOrders.length });
+  } catch(e) {
+    console.error('Error en fix-ml-ids:', e);
+    res.json({ error: e.message });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

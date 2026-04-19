@@ -2088,7 +2088,8 @@ async function _registerWebhookTiendaNube(integration, apiToken) {
 // ════════════════════════════════════════════════════════════
 app.get('/auth/ml/connect', requireAuth, (req, res) => {
   const state = jwt.sign({ userId: req.userId }, JWT_SECRET, { expiresIn: '15m' });
-  res.redirect(`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}&state=${encodeURIComponent(state)}`);
+  const scopes = 'read write offline_access';
+  res.redirect(`https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(`${BASE}/auth/ml/callback`)}&state=${encodeURIComponent(state)}&scope=${scopes}`);
 });
 
 app.get('/auth/ml/callback', async (req, res) => {
@@ -2097,8 +2098,11 @@ app.get('/auth/ml/callback', async (req, res) => {
   try {
     const { userId } = jwt.verify(state, JWT_SECRET);
     const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', {
-      grant_type: 'authorization_code', client_id: process.env.ML_CLIENT_ID,
-      client_secret: process.env.ML_CLIENT_SECRET, code, redirect_uri: `${BASE}/auth/ml/callback`,
+      grant_type: 'authorization_code',
+      client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET,
+      code,
+      redirect_uri: `${BASE}/auth/ml/callback`,
     });
     const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me',
       { headers: { Authorization: `Bearer ${token.access_token}` } });
@@ -2116,7 +2120,10 @@ app.get('/auth/ml/callback', async (req, res) => {
     res.redirect('/dashboard?ml=connected');
     // Sync histórico automático
     startBackgroundSync(integration);
-  } catch(e) { console.error('ML callback:', e.message); res.redirect('/dashboard?error=ml_failed'); }
+  } catch(e) { 
+    console.error('ML callback:', e.message); 
+    res.redirect('/dashboard?error=ml_failed'); 
+  }
 });
 
 async function _getMLToken(integration) {
@@ -2124,8 +2131,10 @@ async function _getMLToken(integration) {
   const accessToken = decrypt(integration.credentials.accessToken);
   if (expiry > new Date(Date.now() + 10*60*1000)) return accessToken;
   const { data } = await axios.post('https://api.mercadolibre.com/oauth/token', {
-    grant_type: 'refresh_token', client_id: process.env.ML_CLIENT_ID,
-    client_secret: process.env.ML_CLIENT_SECRET, refresh_token: decrypt(integration.credentials.refreshToken),
+    grant_type: 'refresh_token',
+    client_id: process.env.ML_CLIENT_ID,
+    client_secret: process.env.ML_CLIENT_SECRET,
+    refresh_token: decrypt(integration.credentials.refreshToken),
   });
   await Integration.findByIdAndUpdate(integration._id, {
     'credentials.accessToken':  encrypt(data.access_token),

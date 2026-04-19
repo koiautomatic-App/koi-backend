@@ -286,54 +286,71 @@ const normalize = {
     };
   },
  mercadolibre: (raw) => {
-  // 👇 EXTRAER DNI/CUIT
+  // ============================================================
+  // 1. EXTRAER DNI/CUIT desde billing_info (mismo que usa debug)
+  // ============================================================
   let docNumber = '';
   let docType = '';
+  let fiscalCondition = 'Consumidor Final';
   
-  if (raw.buyer?.billing_info?.doc_number) {
+  // El endpoint /orders/{id}/billing_info devuelve esta estructura
+  if (raw.billing_info?.doc_number) {
+    docNumber = raw.billing_info.doc_number;
+    docType = raw.billing_info.doc_type;
+  } 
+  // Fallback por si viene en buyer.billing_info
+  else if (raw.buyer?.billing_info?.doc_number) {
     docNumber = raw.buyer.billing_info.doc_number;
     docType = raw.buyer.billing_info.doc_type;
-  } else if (raw.billing_info?.doc_number) {
-    docNumber = raw.billing_info.doc_number;
-  } else if (raw.buyer?.identification?.number) {
-    docNumber = raw.buyer.identification.number;
-    docType = raw.buyer.identification.type;
   }
   
-  const docClean = _cleanDoc(docNumber);
+  // ============================================================
+  // 2. EXTRAER NOMBRE COMPLETO Y CONDICIÓN FISCAL
+  // ============================================================
+  let firstName = '';
+  let lastName = '';
   
-  // 👇 TIPO DE RESPONSABILIDAD (para Factura A, B o C)
+  if (raw.billing_info?.additional_info) {
+    for (const item of raw.billing_info.additional_info) {
+      if (item.type === 'FIRST_NAME') firstName = item.value;
+      if (item.type === 'LAST_NAME') lastName = item.value;
+      if (item.type === 'TAXPAYER_TYPE_ID') fiscalCondition = item.value;
+    }
+  }
+  
+  // Si no hay datos en billing_info, usar buyer como fallback
+  if (!firstName && !lastName) {
+    firstName = raw.buyer?.first_name || '';
+    lastName = raw.buyer?.last_name || '';
+  }
+  
+  // Nombre completo del comprador
+  const customerName = firstName && lastName 
+    ? `${firstName} ${lastName}`.trim()
+    : firstName || raw.buyer?.nickname || '';
+  
+  // ============================================================
+  // 3. DETERMINAR CONDICIÓN FISCAL PARA FACTURACIÓN
+  // ============================================================
+  const docClean = docNumber.replace(/\D/g, '');
   let taxCondition = 'consumidor_final';
   let customerDoc = '0';
   
   if (docClean) {
     if (docClean.length === 11) {
-      taxCondition = 'responsable_inscripto'; // CUIT → Factura A (RI → RI)
+      taxCondition = 'responsable_inscripto';  // CUIT
       customerDoc = docClean;
     } else if (docClean.length >= 7 && docClean.length <= 8) {
-      taxCondition = 'consumidor_final'; // DNI → Factura B (RI → CF) o Factura C (Monotributo → CF)
+      taxCondition = 'consumidor_final';       // DNI
       customerDoc = docClean;
     } else {
       customerDoc = docClean;
     }
   }
   
-  // 👇 DATOS DEL COMPRADOR (nombre real)
-  const buyer = raw.buyer || {};
-  const firstName = buyer.first_name || '';
-  const lastName = buyer.last_name || '';
-  const nickname = buyer.nickname || '';
-  
-  let customerName = '';
-  if (firstName && lastName) {
-    customerName = `${firstName} ${lastName}`.trim();
-  } else if (firstName) {
-    customerName = firstName;
-  } else {
-    customerName = nickname;
-  }
-  
-  // 👇 DIRECCIÓN DE ENVÍO
+  // ============================================================
+  // 4. DIRECCIÓN DE ENVÍO
+  // ============================================================
   const shipping = raw.shipping || {};
   const address = shipping.receiver_address || {};
   
@@ -346,12 +363,15 @@ const normalize = {
     country: address.country?.name || ''
   };
   
-  // 👇 MODO DE ENVÍO - VERSIÓN CORREGIDA
+  // ============================================================
+  // 5. TIPO DE ENVÍO (mismo que usa debug en /shipments/{id})
+  // ============================================================
   let shippingType = 'unknown';
   let shippingCarrier = '';
   let shippingCost = 0;
   let shouldIncludeShipping = false;
   
+  // Detectar tipo de envío
   if (shipping.shipping_mode) {
     shippingType = shipping.shipping_mode;
   }
@@ -359,48 +379,57 @@ const normalize = {
     shippingType = 'fulfillment';
   }
   
-  // 👇 REGLAS CORREGIDAS PARA FACTURACIÓN
+  // Reglas de facturación del envío
   if (shippingType === 'flex' || shippingType === 'self_service') {
     shippingCarrier = 'MercadoEnvíos Flex';
-    shouldIncludeShipping = true;  // ✅ Flex SÍ se factura
+    shouldIncludeShipping = true;
   } 
   else if (shippingType === 'custom') {
     shippingCarrier = 'Envío personalizado';
-    shouldIncludeShipping = true;  // ✅ Envío custom SÍ se factura
+    shouldIncludeShipping = true;
   }
   else if (shippingType === 'fulfillment') {
     shippingCarrier = 'MercadoEnvíos Full';
-    shouldIncludeShipping = false; // ❌ Full NO se factura
+    shouldIncludeShipping = false;
   }
   else if (shippingType === 'me2') {
     shippingCarrier = 'MercadoEnvíos';
-    shouldIncludeShipping = false; // ❌ MercadoEnvíos estándar NO se factura
+    shouldIncludeShipping = false;
   }
   else {
     shippingCarrier = shipping.shipping_option?.name || 'Envío a convenir';
     shouldIncludeShipping = false;
   }
   
-  // Costo de envío (solo si aplica y está disponible)
+  // Costo del envío
   if (shouldIncludeShipping && shipping.shipping_option?.cost) {
     shippingCost = parseFloat(shipping.shipping_option.cost) || 0;
   }
   
-  // 👇 PRODUCTOS
+  // ============================================================
+  // 6. PRODUCTOS
+  // ============================================================
   const items = (raw.order_items || []).map(i => ({
     nombre:   i.item?.title || 'Producto',
-    cantidad: i.quantity    || 1,
+    cantidad: i.quantity || 1,
     precio:   parseFloat(i.unit_price || 0),
     sku:      i.item?.seller_sku || '',
   }));
   
-  // 👇 CONCEPTO (incluir envío solo si aplica)
-  let concepto = items.length ? items.map(i => i.nombre).join(', ') : 'Venta Mercado Libre';
+  // ============================================================
+  // 7. CONCEPTO (incluir envío solo si aplica)
+  // ============================================================
+  let concepto = items.length 
+    ? items.map(i => i.nombre).join(', ') 
+    : 'Venta Mercado Libre';
+  
   if (shouldIncludeShipping && shippingCost > 0) {
     concepto += ` + Envío (${shippingCarrier})`;
   }
   
-  // 👇 AGREGAR ITEM DE ENVÍO SOLO SI CORRESPONDE
+  // ============================================================
+  // 8. AGREGAR ITEM DE ENVÍO SI CORRESPONDE
+  // ============================================================
   const allItems = [...items];
   if (shouldIncludeShipping && shippingCost > 0) {
     allItems.push({
@@ -411,10 +440,13 @@ const normalize = {
     });
   }
   
+  // ============================================================
+  // 9. RESPUESTA FINAL
+  // ============================================================
   return {
     externalId:    String(raw.id),
     customerName:  customerName,
-    customerEmail: buyer.email || '',
+    customerEmail: raw.buyer?.email || '',
     customerDoc:   customerDoc,
     taxCondition:  taxCondition,
     customerZipCode: address.zip_code || '',
@@ -428,14 +460,14 @@ const normalize = {
     concepto,
     items: allItems,
     orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
-    // 👇 CAMPOS PARA ENRIQUECIMIENTO (ahora con datos reales)
     buyerId:       raw.buyer?.id || '',
     shipmentId:    raw.shipping?.id || '',
     buyerFirstName: firstName,
     buyerLastName: lastName,
     buyerIdentificationType: docType,
     buyerIdentificationNumber: docClean,
-    orderEnriched: true,  // ✅ Ya tenemos los datos, no necesita enriquecimiento posterior
+    fiscal_condition: fiscalCondition,
+    orderEnriched: true,
   };
 },
 

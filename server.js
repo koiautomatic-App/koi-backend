@@ -611,6 +611,19 @@ async function upsertOrder(integration, canonical) {
     return null;
   });
 
+  // 👇 ACTUALIZAR buyerId y shipmentId si vienen en canonical
+  if (doc && (canonical.buyerId || canonical.shipmentId)) {
+    await Order.updateOne(
+      { _id: doc._id },
+      { $set: {
+          buyerId: canonical.buyerId || '',
+          shipmentId: canonical.shipmentId || '',
+          orderEnriched: false
+      }}
+    );
+    console.log(`📦 Actualizada orden ${canonical.externalId}: buyerId=${canonical.buyerId}, shipmentId=${canonical.shipmentId}`);
+  }
+
   // Auto-emitir si el usuario tiene factAuto activado
   if (doc && status === 'pending_invoice') {
     const user = await User.findById(integration.userId).select('settings').lean();

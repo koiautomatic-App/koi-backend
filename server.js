@@ -490,9 +490,12 @@ async function enrichMercadoLibreOrder(order, token) {
   let updated = false;
   const updates = {};
   
+  console.log(`🔍 Enriquociendo orden ${order.externalId}: buyerId=${order.buyerId}, shipmentId=${order.shipmentId}`);
+  
   // 1. Obtener datos del comprador si tenemos buyerId
-  if (order.buyerId && !order.buyerFirstName && !order.buyerIdentificationNumber) {
+  if (order.buyerId && (!order.buyerFirstName || !order.buyerIdentificationNumber)) {
     try {
+      console.log(`   Obteniendo datos del comprador ${order.buyerId}...`);
       const buyerRes = await axios.get(`https://api.mercadolibre.com/users/${order.buyerId}`, {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -521,14 +524,16 @@ async function enrichMercadoLibreOrder(order, token) {
       }
       
       updated = true;
+      console.log(`   ✅ Datos del comprador obtenidos: ${updates.buyerFirstName} ${updates.buyerLastName}`);
     } catch(e) {
-      console.error(`Error obteniendo buyer ${order.buyerId}:`, e.message);
+      console.error(`   ❌ Error obteniendo buyer ${order.buyerId}:`, e.message);
     }
   }
   
   // 2. Obtener datos del envío si tenemos shipmentId
   if (order.shipmentId && !order.shippingMode) {
     try {
+      console.log(`   Obteniendo datos del envío ${order.shipmentId}...`);
       const shipmentRes = await axios.get(`https://api.mercadolibre.com/marketplace/shipments/${order.shipmentId}`, {
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -550,12 +555,6 @@ async function enrichMercadoLibreOrder(order, token) {
           zipCode: addr.zip_code || '',
           country: addr.country?.name || ''
         };
-        
-        // Actualizar customerAddress con la dirección de envío si no teníamos
-        if (!order.customerAddress?.street) {
-          updates.customerAddress = updates.shippingDestinationAddress;
-          updates.customerZipCode = addr.zip_code || '';
-        }
       }
       
       // Determinar si se debe facturar el envío
@@ -565,23 +564,21 @@ async function enrichMercadoLibreOrder(order, token) {
       } else if (updates.shippingMode === 'me2') {
         updates.shouldIncludeShipping = false;
         updates.shippingCarrier = 'MercadoEnvíos';
-      } else if (updates.shippingMode === 'me1') {
-        updates.shouldIncludeShipping = false;
-        updates.shippingCarrier = 'Envío del vendedor';
-      } else if (updates.shippingMode === 'fulfillment') {
-        updates.shouldIncludeShipping = false;
-        updates.shippingCarrier = 'MercadoEnvíos Full';
       }
       
       updated = true;
+      console.log(`   ✅ Datos del envío obtenidos: ${updates.shippingMode}`);
     } catch(e) {
-      console.error(`Error obteniendo shipment ${order.shipmentId}:`, e.message);
+      console.error(`   ❌ Error obteniendo shipment ${order.shipmentId}:`, e.message);
     }
   }
   
   if (updated) {
     updates.orderEnriched = true;
     await Order.updateOne({ _id: order._id }, { $set: updates });
+    console.log(`   ✅ Orden ${order.externalId} enriquecida`);
+  } else {
+    console.log(`   ⚠️ No se pudo enriquecer orden ${order.externalId}`);
   }
   
   return updated;

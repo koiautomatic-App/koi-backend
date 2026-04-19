@@ -2628,7 +2628,7 @@ app.post('/api/debug/fix-ml-ids', requireAuthAPI, async (req, res) => {
   }
 });
 // ════════════════════════════════════════════════════════════
-//  DEBUG REAL DE MERCADOLIBRE
+//  DEBUG REAL DE MERCADOLIBRE (VERSIÓN CORREGIDA)
 // ════════════════════════════════════════════════════════════
 
 // Probar si el token tiene permisos de órdenes
@@ -2700,11 +2700,10 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
     const token = await _getMLToken(integration);
     const orderId = req.params.id;
     
-    // 🔥 IMPORTANTE: Agregar header x-format-new
     const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
       headers: { 
         Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'  // ← ESTO ES CLAVE para obtener billing_info
+        'x-format-new': 'true'
       }
     });
     
@@ -2717,9 +2716,9 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
         nickname: response.data.buyer?.nickname,
         identification: response.data.buyer?.identification,
         email: response.data.buyer?.email,
-        billing_info: response.data.buyer?.billing_info  // ← ACÁ VIENE EL DOCUMENTO
+        billing_info: response.data.buyer?.billing_info
       },
-      shipping_id: response.data.shipping?.id,  // ← NECESARIO para facturación
+      shipping_id: response.data.shipping?.id,
       total_amount: response.data.total_amount,
       items: response.data.order_items,
       shipping: response.data.shipping,
@@ -2730,53 +2729,43 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
   }
 });
 
-// 🆕 NUEVO: Obtener datos fiscales del envío (documento + dirección)
-app.get('/api/debug/ml-shipment-billing/:shipmentId', requireAuthAPI, async (req, res) => {
+// 🆕 NUEVO: Obtener datos fiscales del comprador (documento + facturación)
+// Este es el endpoint correcto según documentación de ML
+app.get('/api/debug/ml-order-billing/:orderId', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
     if (!integration) return res.json({ error: 'No hay integración ML' });
     
     const token = await _getMLToken(integration);
-    const shipmentId = req.params.shipmentId;
+    const orderId = req.params.orderId;
     
-    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}/billing_info`, {
+    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/group/ML/order/details?order_ids=${orderId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
-    res.json({
-      success: true,
-      receiver_document: response.data.receiver?.document,
-      receiver_id: response.data.receiver?.id
-    });
-  } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
-  }
-});
-
-// 🆕 NUEVO: Obtener dirección completa del envío
-app.get('/api/debug/ml-shipment-address/:shipmentId', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const shipmentId = req.params.shipmentId;
-    
-    const response = await axios.get(`https://api.mercadolibre.com/marketplace/shipments/${shipmentId}`, {
-      headers: { 
-        Authorization: `Bearer ${token}`,
-        'x-format-new': 'true'
-      }
-    });
+    const billingData = response.data.results?.[0];
+    const chargeInfo = billingData?.details?.[0]?.charge_info;
+    const salesInfo = billingData?.details?.[0]?.sales_info?.[0];
     
     res.json({
       success: true,
-      receiver_name: response.data.destination?.receiver_name,
-      receiver_identification: response.data.destination?.receiver_identification,
-      shipping_address: response.data.destination?.shipping_address
+      order_id: billingData?.order_id,
+      legal_document_number: chargeInfo?.legal_document_number,
+      legal_document_status: chargeInfo?.legal_document_status,
+      payer_nickname: salesInfo?.payer_nickname,
+      transaction_amount: salesInfo?.transaction_amount,
+      transaction_detail: chargeInfo?.transaction_detail,
+      detail_amount: chargeInfo?.detail_amount,
+      raw_response: response.data
     });
   } catch(e) {
-    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+    console.error('Error en billing:', e.response?.data || e.message);
+    res.json({ 
+      error: e.message, 
+      status: e.response?.status, 
+      data: e.response?.data,
+      note: 'Si el comprador no cargó datos fiscales en ML, este endpoint puede no devolver información'
+    });
   }
 });
 // ════════════════════════════════════════════════════════════

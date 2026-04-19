@@ -2664,7 +2664,7 @@ app.get('/api/debug/ml-orders', requireAuthAPI, async (req, res) => {
   }
 });
 
-// Obtener datos de un comprador específico (reemplaza al anterior)
+// Obtener datos de un comprador específico
 app.get('/api/debug/ml-buyer/:id', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
@@ -2691,7 +2691,7 @@ app.get('/api/debug/ml-buyer/:id', requireAuthAPI, async (req, res) => {
   }
 });
 
-// Obtener orden específica (la que necesitas)
+// Obtener orden específica (MEJORADA con x-format-new)
 app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
@@ -2700,8 +2700,12 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
     const token = await _getMLToken(integration);
     const orderId = req.params.id;
     
+    // 🔥 IMPORTANTE: Agregar header x-format-new
     const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
-      headers: { Authorization: `Bearer ${token}` }
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'x-format-new': 'true'  // ← ESTO ES CLAVE para obtener billing_info
+      }
     });
     
     res.json({
@@ -2712,12 +2716,64 @@ app.get('/api/debug/ml-order/:id', requireAuthAPI, async (req, res) => {
         name: `${response.data.buyer?.first_name || ''} ${response.data.buyer?.last_name || ''}`.trim(),
         nickname: response.data.buyer?.nickname,
         identification: response.data.buyer?.identification,
-        email: response.data.buyer?.email
+        email: response.data.buyer?.email,
+        billing_info: response.data.buyer?.billing_info  // ← ACÁ VIENE EL DOCUMENTO
       },
+      shipping_id: response.data.shipping?.id,  // ← NECESARIO para facturación
       total_amount: response.data.total_amount,
       items: response.data.order_items,
       shipping: response.data.shipping,
       billing_info: response.data.billing_info
+    });
+  } catch(e) {
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
+
+// 🆕 NUEVO: Obtener datos fiscales del envío (documento + dirección)
+app.get('/api/debug/ml-shipment-billing/:shipmentId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const shipmentId = req.params.shipmentId;
+    
+    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}/billing_info`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    res.json({
+      success: true,
+      receiver_document: response.data.receiver?.document,
+      receiver_id: response.data.receiver?.id
+    });
+  } catch(e) {
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
+
+// 🆕 NUEVO: Obtener dirección completa del envío
+app.get('/api/debug/ml-shipment-address/:shipmentId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const shipmentId = req.params.shipmentId;
+    
+    const response = await axios.get(`https://api.mercadolibre.com/marketplace/shipments/${shipmentId}`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'x-format-new': 'true'
+      }
+    });
+    
+    res.json({
+      success: true,
+      receiver_name: response.data.destination?.receiver_name,
+      receiver_identification: response.data.destination?.receiver_identification,
+      shipping_address: response.data.destination?.shipping_address
     });
   } catch(e) {
     res.json({ error: e.message, status: e.response?.status, data: e.response?.data });

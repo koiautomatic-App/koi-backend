@@ -1134,7 +1134,7 @@ const BULK_SYNC = {
     return total;
   },
 
-  async mercadolibre(integration) {
+ async mercadolibre(integration) {
   const accessToken = await _getMLToken(integration);
   const sellerId    = integration.credentials.sellerId;
   let offset = 0, total = 0;
@@ -1149,10 +1149,23 @@ const BULK_SYNC = {
     if (!orders.length) break;
     
     for (const raw of orders) {
-      const canonical = normalize.mercadolibre(raw);
+      // 👇 OBTENER LA ORDEN COMPLETA PARA TENER buyerId Y shipmentId
+      let fullOrder = raw;
+      try {
+        const orderDetail = await axios.get(`https://api.mercadolibre.com/orders/${raw.id}`, {
+          headers: { Authorization: `Bearer ${accessToken}` }
+        });
+        fullOrder = orderDetail.data;
+        await new Promise(r => setTimeout(r, 100)); // Pausa para no saturar
+        console.log(`📦 Orden ${raw.id}: buyerId=${fullOrder.buyer?.id}, shipmentId=${fullOrder.shipping?.id}`);
+      } catch(e) {
+        console.error(`Error obteniendo detalle de orden ${raw.id}:`, e.message);
+      }
+      
+      const canonical = normalize.mercadolibre(fullOrder);
       const result = await upsertOrder(integration, canonical);
       
-      // 👇 ENRIQUECER LA ORDEN RECIÉN CREADA/ACTUALIZADA
+      // Enriquecer la orden recién creada/actualizada
       if (result && (canonical.buyerId || canonical.shipmentId)) {
         await new Promise(r => setTimeout(r, 200));
         await enrichMercadoLibreOrder(result, accessToken);

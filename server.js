@@ -2823,6 +2823,28 @@ app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) =
     });
   }
 });
+// Debug: Ver respuesta cruda de ML del envío
+app.get('/api/debug/ml-shipment-raw/:shipmentId', requireAuthAPI, async (req, res) => {
+  try {
+    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
+    if (!integration) return res.json({ error: 'No hay integración ML' });
+    
+    const token = await _getMLToken(integration);
+    const shipmentId = req.params.shipmentId;
+    
+    const response = await axios.get(`https://api.mercadolibre.com/shipments/${shipmentId}`, {
+      headers: { 
+        Authorization: `Bearer ${token}`,
+        'x-format-new': 'true'
+      }
+    });
+    
+    // Devolver la respuesta completa sin filtrar
+    res.json(response.data);
+  } catch(e) {
+    res.json({ error: e.message, status: e.response?.status, data: e.response?.data });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

@@ -198,13 +198,21 @@ const OrderSchema = new mongoose.Schema({
   // Estado de envío de email
   emailSent:      { type: Boolean, default: false },
   emailSentAt:    { type: Date },
+  // 👇 NUEVOS CAMPOS PARA MERCADOLIBRE
+  customerZipCode: { type: String, default: '' },
+  taxCondition:    { type: String, default: 'consumidor_final' },
+  customerAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
+  shippingType:    { type: String, default: '' },
+  shippingCarrier: { type: String, default: '' },
+  shippingCost:    { type: Number, default: 0 },
+  shouldIncludeShipping: { type: Boolean, default: false },
+  shippingAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
   createdAt:      { type: Date, default: Date.now },
 });
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
-
 // ════════════════════════════════════════════════════════════
 //  NORMALIZER
 // ════════════════════════════════════════════════════════════
@@ -267,7 +275,107 @@ const normalize = {
     };
   },
   mercadolibre: (raw) => {
-  const doc   = _cleanDoc(raw.billing_info?.doc_number || '');
+  // 👇 EXTRAER DNI/CUIT
+  let docNumber = '';
+  let docType = '';
+  
+  if (raw.buyer?.billing_info?.doc_number) {
+    docNumber = raw.buyer.billing_info.doc_number;
+    docType = raw.buyer.billing_info.doc_type;
+  } else if (raw.billing_info?.doc_number) {
+    docNumber = raw.billing_info.doc_number;
+  } else if (raw.buyer?.identification?.number) {
+    docNumber = raw.buyer.identification.number;
+    docType = raw.buyer.identification.type;
+  }
+  
+  const docClean = _cleanDoc(docNumber);
+  
+  // 👇 TIPO DE RESPONSABILIDAD (para Factura A, B o C)
+  let taxCondition = 'consumidor_final';
+  let customerDoc = '0';
+  
+  if (docClean) {
+    if (docClean.length === 11) {
+      taxCondition = 'responsable_inscripto'; // CUIT → Factura A (RI → RI)
+      customerDoc = docClean;
+    } else if (docClean.length >= 7 && docClean.length <= 8) {
+      taxCondition = 'consumidor_final'; // DNI → Factura B (RI → CF) o Factura C (Monotributo → CF)
+      customerDoc = docClean;
+    } else {
+      customerDoc = docClean;
+    }
+  }
+  
+  // 👇 DATOS DEL COMPRADOR (nombre real)
+  const buyer = raw.buyer || {};
+  const firstName = buyer.first_name || '';
+  const lastName = buyer.last_name || '';
+  const nickname = buyer.nickname || '';
+  
+  let customerName = '';
+  if (firstName && lastName) {
+    customerName = `${firstName} ${lastName}`.trim();
+  } else if (firstName) {
+    customerName = firstName;
+  } else {
+    customerName = nickname;
+  }
+  
+  // 👇 DIRECCIÓN DE ENVÍO
+  const shipping = raw.shipping || {};
+  const address = shipping.receiver_address || {};
+  
+  const customerAddress = {
+    street: address.street_name || '',
+    streetNumber: address.street_number || '',
+    city: address.city?.name || '',
+    state: address.state?.name || '',
+    zipCode: address.zip_code || '',
+    country: address.country?.name || ''
+  };
+  
+  // 👇 MODO DE ENVÍO - VERSIÓN CORREGIDA
+  let shippingType = 'unknown';
+  let shippingCarrier = '';
+  let shippingCost = 0;
+  let shouldIncludeShipping = false;
+  
+  if (shipping.shipping_mode) {
+    shippingType = shipping.shipping_mode;
+  }
+  if (shipping.tags && shipping.tags.includes('fulfillment')) {
+    shippingType = 'fulfillment';
+  }
+  
+  // 👇 REGLAS CORREGIDAS PARA FACTURACIÓN
+  if (shippingType === 'flex' || shippingType === 'self_service') {
+    shippingCarrier = 'MercadoEnvíos Flex';
+    shouldIncludeShipping = true;  // ✅ Flex SÍ se factura
+  } 
+  else if (shippingType === 'custom') {
+    shippingCarrier = 'Envío personalizado';
+    shouldIncludeShipping = true;  // ✅ Envío custom SÍ se factura
+  }
+  else if (shippingType === 'fulfillment') {
+    shippingCarrier = 'MercadoEnvíos Full';
+    shouldIncludeShipping = false; // ❌ Full NO se factura
+  }
+  else if (shippingType === 'me2') {
+    shippingCarrier = 'MercadoEnvíos';
+    shouldIncludeShipping = false; // ❌ MercadoEnvíos estándar NO se factura
+  }
+  else {
+    shippingCarrier = shipping.shipping_option?.name || 'Envío a convenir';
+    shouldIncludeShipping = false;
+  }
+  
+  // Costo de envío (solo si aplica y está disponible)
+  if (shouldIncludeShipping && shipping.shipping_option?.cost) {
+    shippingCost = parseFloat(shipping.shipping_option.cost) || 0;
+  }
+  
+  // 👇 PRODUCTOS
   const items = (raw.order_items || []).map(i => ({
     nombre:   i.item?.title || 'Producto',
     cantidad: i.quantity    || 1,
@@ -275,28 +383,43 @@ const normalize = {
     sku:      i.item?.seller_sku || '',
   }));
   
-  // 👇 MEJORAR EL CONCEPTO (productos reales)
-  const concepto = items.length
-    ? items.map(i => i.nombre).join(', ')
-    : 'Venta Mercado Libre';
+  // 👇 CONCEPTO (incluir envío solo si aplica)
+  let concepto = items.length ? items.map(i => i.nombre).join(', ') : 'Venta Mercado Libre';
+  if (shouldIncludeShipping && shippingCost > 0) {
+    concepto += ` + Envío (${shippingCarrier})`;
+  }
   
-  // 👇 MEJORAR EL NOMBRE DEL CLIENTE (nombre real, no nickname)
-  const buyer = raw.buyer || {};
-  const customerName = buyer.first_name && buyer.last_name
-    ? `${buyer.first_name} ${buyer.last_name}`.trim()
-    : buyer.nickname || 'Cliente ML';
+  // 👇 AGREGAR ITEM DE ENVÍO SOLO SI CORRESPONDE
+  const allItems = [...items];
+  if (shouldIncludeShipping && shippingCost > 0) {
+    allItems.push({
+      nombre: `Envío - ${shippingCarrier}`,
+      cantidad: 1,
+      precio: shippingCost,
+      sku: 'SHIPPING',
+    });
+  }
   
   return {
     externalId:    String(raw.id),
-    customerName:  customerName,  // 👈 Nombre real (ej: "Juan Pérez")
+    customerName:  customerName,
     customerEmail: buyer.email || '',
-    customerDoc:   _resolveDoc(doc, parseFloat(raw.total_amount)||0),
+    customerDoc:   customerDoc,
+    taxCondition:  taxCondition,
+    customerZipCode: address.zip_code || '',
+    customerAddress: customerAddress,
+    shippingType: shippingType,
+    shippingCarrier: shippingCarrier,
+    shippingCost: shouldIncludeShipping ? shippingCost : 0,
+    shouldIncludeShipping: shouldIncludeShipping,
     amount:        parseFloat(raw.total_amount) || 0,
     currency:      raw.currency_id || 'ARS',
-    concepto,      // 👈 Productos reales (ej: "Curso de marroquinería")
-    items,         // 👈 Array de productos para detalles
+    concepto,
+    items: allItems,
+    orderDate:     raw.date_created ? new Date(raw.date_created) : undefined,
   };
 },
+
   vtex: (raw) => {
     const c = raw.clientProfileData || {};
     const doc = _cleanDoc(c.document || '');
@@ -2168,60 +2291,6 @@ app.delete('/api/me/logo', requireAuthAPI, async (req, res) => {
     res.json({ ok: true });
   } catch(e) {
     res.status(500).json({ error: e.message });
-  }
-});
-// Ruta temporal para actualizar órdenes de MercadoLibre (eliminar después)
-app.post('/api/debug/update-ml-orders', requireAuthAPI, async (req, res) => {
-  try {
-    const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
-    if (!integration) return res.json({ error: 'No hay integración ML' });
-    
-    const token = await _getMLToken(integration);
-    const sellerId = integration.credentials.sellerId;
-    
-    let offset = 0;
-    let updated = 0;
-    const LIMIT = 50;
-    
-    while (true) {
-      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-        headers: { Authorization: `Bearer ${token}` },
-        params: { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' }
-      });
-      const orders = data.results || [];
-      if (!orders.length) break;
-      
-      for (const raw of orders) {
-        const canonical = normalize.mercadolibre(raw);
-        const result = await Order.updateOne(
-          { 
-            userId: integration.userId, 
-            platform: 'mercadolibre', 
-            externalId: canonical.externalId 
-          },
-          { 
-            $set: {
-              customerName: canonical.customerName,
-              customerEmail: canonical.customerEmail,
-              customerDoc: canonical.customerDoc,
-              amount: canonical.amount,
-              currency: canonical.currency,
-              concepto: canonical.concepto,
-              items: canonical.items,
-              orderDate: canonical.orderDate
-            }
-          }
-        );
-        if (result.modifiedCount > 0) updated++;
-      }
-      offset += LIMIT;
-      if (offset >= (data.paging?.total || 0)) break;
-    }
-    
-    res.json({ ok: true, updated });
-  } catch(e) {
-    console.error('Update ML orders error:', e.message);
-    res.json({ error: e.message });
   }
 });
 // ════════════════════════════════════════════════════════════

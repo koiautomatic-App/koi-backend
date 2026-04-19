@@ -534,7 +534,8 @@ async function enrichMercadoLibreOrder(order, token) {
   if (order.shipmentId && !order.shippingMode) {
     try {
       console.log(`   Obteniendo datos del envío ${order.shipmentId}...`);
-      const shipmentRes = await axios.get(`https://api.mercadolibre.com/marketplace/shipments/${order.shipmentId}`, {
+      // ✅ CORRECCIÓN: Se eliminó '/marketplace' de la URL
+      const shipmentRes = await axios.get(`https://api.mercadolibre.com/shipments/${order.shipmentId}`, {
         headers: { 
           Authorization: `Bearer ${token}`,
           'x-format-new': 'true'
@@ -583,9 +584,7 @@ async function enrichMercadoLibreOrder(order, token) {
   
   return updated;
 }
-const canonical = normalize.mercadolibre(fullOrder);
-console.log(`📦 Canonical para ${raw.id}: buyerId=${canonical.buyerId}, shipmentId=${canonical.shipmentId}`);
-const result = await upsertOrder(integration, canonical);
+
 
 // ════════════════════════════════════════════════════════════
 //  UPSERT ENGINE
@@ -643,7 +642,6 @@ async function upsertOrder(integration, canonical) {
   }
   return doc;
 }
-
 // ════════════════════════════════════════════════════════════
 //  MÓDULO AFIP/WSFE v2 — Firma PKCS#7 real con node-forge
 //

@@ -2846,7 +2846,7 @@ app.get('/api/debug/ml-shipment-raw/:shipmentId', requireAuthAPI, async (req, re
   }
 });
 // 🆕 Obtener datos fiscales del comprador (documento + condición fiscal)
-// Usa el endpoint de resumen de percepciones de ML
+// Usa el endpoint de resumen de percepciones de ML con el parámetro group obligatorio
 app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
   try {
     const integration = await Integration.findOne({ userId: req.userId, platform: 'mercadolibre' });
@@ -2855,8 +2855,8 @@ app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
     const token = await _getMLToken(integration);
     const date = req.params.date; // Formato: YYYY-MM-DD (ej: 2025-10-01)
     
-    // Endpoint de resumen de percepciones
-    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/periods/key/${date}/perceptions/summary`, {
+    // ✅ IMPORTANTE: Agregar el parámetro group=ML como dice la documentación
+    const response = await axios.get(`https://api.mercadolibre.com/billing/integration/periods/key/${date}/perceptions/summary?group=ML`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     
@@ -2867,14 +2867,13 @@ app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
       date: date,
       total_perceptions: perceptions.length,
       perceptions: perceptions,
-      // Extraer solo los campos relevantes para facturación
       buyers_info: perceptions.map(p => ({
         buyer_name: p.buyer_name,
         legal_document_number: p.legal_document_number,
         user_fiscal_condition: p.user_fiscal_condition,
         buyer_state_name: p.buyer_state_name,
         amount: p.amount,
-        sale_number: p.sale_number
+        perception_charge_number: p.perception_charge_number
       }))
     });
   } catch(e) {
@@ -2883,7 +2882,7 @@ app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
       error: e.message, 
       status: e.response?.status, 
       data: e.response?.data,
-      note: 'Verificar que la fecha sea correcta (formato YYYY-MM-DD) y que haya percepciones para ese período'
+      note: 'Verificar que la fecha sea correcta (formato YYYY-MM-DD) y que el grupo sea ML'
     });
   }
 });
@@ -2893,4 +2892,3 @@ app.get('/api/debug/ml-perceptions/:date', requireAuthAPI, async (req, res) => {
 app.listen(PORT, () => {
   console.log(`🚀 KOI-Factura v4.0 | Puerto ${PORT} | ${BASE}`);
 });
-

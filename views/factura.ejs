@@ -26,38 +26,26 @@
       border: 0.5px solid rgba(255,255,255,0.08);
     }
 
-    /* Accent line top — naranja a verde, igual que el dashboard KOI */
-    .accent-bar {
-      height: 3px;
-      background: linear-gradient(90deg, #F97316 0%, #22C55E 100%);
+    /* ── ZONA VENDEDOR (blanca) ── */
+    .vendor-zone {
+      background: #ffffff;
+      padding: 32px 32px 28px;
+      border-bottom: none;
     }
 
-    /* ── HEADER ── */
-    .header {
-      padding: 28px 32px 24px;
-      background: #0D0D10;
-      border-bottom: 0.5px solid rgba(255,255,255,0.07);
-    }
-
-    .header-inner {
+    .vendor-top {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 16px;
-    }
-
-    .brand-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
+      gap: 18px;
+      margin-bottom: 20px;
     }
 
     .logo-box {
-      width: 44px;
-      height: 44px;
-      background: #1A1A1F;
-      border-radius: 11px;
-      border: 0.5px solid rgba(255,255,255,0.1);
+      width: 64px;
+      height: 64px;
+      border-radius: 14px;
+      background: #F3F4F6;
+      border: 1px solid #E5E7EB;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -72,24 +60,31 @@
     }
 
     .logo-fallback {
-      font-size: 18px;
+      font-size: 28px;
       font-weight: 800;
-      color: #F97316;
-      letter-spacing: -0.5px;
+      color: #0F172A;
+      letter-spacing: -1px;
     }
 
     .empresa-nombre {
-      font-size: 17px;
-      font-weight: 700;
-      color: #F9FAFB;
-      letter-spacing: -0.3px;
-      line-height: 1.2;
+      font-size: 22px;
+      font-weight: 800;
+      color: #0F172A;
+      letter-spacing: -0.5px;
+      line-height: 1.15;
     }
 
     .empresa-sub {
       font-size: 12px;
-      color: #4B5563;
-      margin-top: 3px;
+      color: #9CA3AF;
+      margin-top: 4px;
+      font-weight: 400;
+    }
+
+    .vendor-divider {
+      height: 1px;
+      background: #F3F4F6;
+      margin-bottom: 18px;
     }
 
     /* ── META (nro + fecha) ── */
@@ -122,22 +117,23 @@
 
     .meta-item.right { text-align: right; }
 
-    /* ── DESTINATARIO ── */
-    .dest-band {
-      padding: 18px 32px;
-      border-bottom: 0.5px solid rgba(255,255,255,0.07);
+    /* ── TRANSICIÓN ── */
+    .transition-bar {
+      height: 3px;
+      background: linear-gradient(90deg, #F97316 0%, #22C55E 100%);
     }
 
+    /* ── DESTINATARIO (dentro zona blanca) ── */
     .dest-name {
-      font-size: 15px;
+      font-size: 14px;
       font-weight: 600;
-      color: #F9FAFB;
+      color: #0F172A;
     }
 
     .dest-msg {
       font-size: 13px;
       color: #6B7280;
-      margin-top: 5px;
+      margin-top: 6px;
       padding-left: 12px;
       border-left: 2px solid #F97316;
     }
@@ -397,26 +393,28 @@
 <body>
   <div class="invoice-container">
 
-    <div class="accent-bar"></div>
-
-    <!-- HEADER -->
-    <div class="header">
-      <div class="header-inner">
-        <div class="brand-row">
-          <div class="logo-box">
-            <% if (logoUrl && logoUrl !== '') { %>
-              <img src="<%= logoUrl %>" alt="Logo">
-            <% } else { %>
-              <span class="logo-fallback">K</span>
-            <% } %>
-          </div>
-          <div>
-            <div class="empresa-nombre"><%= nombreFantasia %></div>
-            <div class="empresa-sub"><%= razonSocial %> &nbsp;·&nbsp; CUIT <%= cuitFmt %></div>
-          </div>
+    <!-- ZONA VENDEDOR (blanca) -->
+    <div class="vendor-zone">
+      <div class="vendor-top">
+        <div class="logo-box">
+          <% if (logoUrl && logoUrl !== '') { %>
+            <img src="<%= logoUrl %>" alt="Logo">
+          <% } else { %>
+            <span class="logo-fallback"><%= nombreFantasia.charAt(0) %></span>
+          <% } %>
+        </div>
+        <div>
+          <div class="empresa-nombre"><%= nombreFantasia %></div>
+          <div class="empresa-sub"><%= razonSocial %> &nbsp;·&nbsp; CUIT <%= cuitFmt %></div>
         </div>
       </div>
+      <div class="vendor-divider"></div>
+      <div class="dest-name">Estimado/a <strong><%= customerName %></strong></div>
+      <div class="dest-msg">Adjuntamos el comprobante correspondiente a tu compra.</div>
     </div>
+
+    <!-- TRANSICIÓN naranja → verde -->
+    <div class="transition-bar"></div>
 
     <!-- COMPROBANTE + FECHA -->
     <div class="meta-band">
@@ -428,12 +426,6 @@
         <div class="meta-label">Fecha</div>
         <div class="meta-val"><%= fecha %></div>
       </div>
-    </div>
-
-    <!-- DESTINATARIO -->
-    <div class="dest-band">
-      <div class="dest-name">Estimado/a <strong><%= customerName %></strong></div>
-      <div class="dest-msg">Adjuntamos el comprobante correspondiente a tu compra.</div>
     </div>
 
     <!-- DETALLE PRODUCTOS -->

@@ -1472,6 +1472,36 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     const cuitRaw = user?.settings?.cuit || '';
     const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
 
+    // 👇 NUEVO: Determinar tipo de factura
+    let tipoFactura = 'FACTURA C';
+    let condicionComprador = 'Consumidor Final';
+    let impNeto = null;
+    let impIVA = null;
+
+    if (orden.tipoComprobante === 1) {
+      tipoFactura = 'FACTURA A';
+      condicionComprador = 'Responsable Inscripto';
+      // Calcular IVA discriminado
+      const total = orden.amount;
+      impNeto = (total / 1.21).toFixed(2);
+      impIVA = (total - (total / 1.21)).toFixed(2);
+    } else if (orden.tipoComprobante === 6) {
+      tipoFactura = 'FACTURA B';
+      condicionComprador = 'Consumidor Final';
+    } else if (orden.tipoComprobante === 11) {
+      tipoFactura = 'FACTURA C';
+      condicionComprador = 'Consumidor Final';
+    }
+
+    // Formatear números
+    const fmtARS = n => new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n || 0);
+
+    // 👇 NUEVO: Formatear impuestos para Factura A
+    const impNetoFormatted = impNeto ? fmtARS(parseFloat(impNeto)) : null;
+    const impIVAFormatted = impIVA ? fmtARS(parseFloat(impIVA)) : null;
+
     // Datos del comprobante
     const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
     const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
@@ -1479,11 +1509,6 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     const fecha = (orden.orderDate || orden.createdAt)
       ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
       : '—';
-
-    // Importes
-    const fmtARS = n => new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    }).format(n || 0);
 
     // Items
     const items = orden.items?.length
@@ -1512,52 +1537,54 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       : '—';
     const caeDisplay = caeNum || '(pendiente)';
 
-
     // QR AFIP
-let urlQrAfip = null;
-let qrImageHtml = '';  // ← AGREGAR ESTA LÍNEA
+    let urlQrAfip = null;
+    let qrImageHtml = '';
 
-if (caeNum && cuitRaw) {
-  const qrData = {
-    ver: 1,
-    fecha,
-    cuit: parseInt(cuitRaw.replace(/\D/g,'')),
-    ptoVta: parseInt(ptoVta),
-    tipoCmp: orden.tipoComprobante || 11,
-    nroCmp: orden.nroComprobante || 0,
-    importe: orden.amount,
-    moneda: 'PES',
-    ctz: 1,
-    tipoDocRec: 99,
-    nroDocRec: 0,
-    tipoCodAut: 'E',
-    codAut: parseInt(caeNum),
-  };
-  const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
-  urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
-  qrImageHtml = generarQRHtml(urlQrAfip);  // ← AGREGAR ESTA LÍNEA
-}
+    if (caeNum && cuitRaw) {
+      const qrData = {
+        ver: 1,
+        fecha,
+        cuit: parseInt(cuitRaw.replace(/\D/g,'')),
+        ptoVta: parseInt(ptoVta),
+        tipoCmp: orden.tipoComprobante || 11,
+        nroCmp: orden.nroComprobante || 0,
+        importe: orden.amount,
+        moneda: 'PES',
+        ctz: 1,
+        tipoDocRec: 99,
+        nroDocRec: 0,
+        tipoCodAut: 'E',
+        codAut: parseInt(caeNum),
+      };
+      const b64 = Buffer.from(JSON.stringify(qrData)).toString('base64');
+      urlQrAfip = `https://www.afip.gob.ar/fe/qr/?p=${b64}`;
+      qrImageHtml = generarQRHtml(urlQrAfip);
+    }
 
- // Renderizar con EJS
-const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
-  logoUrl: user?.settings?.logoUrl || '',        // ← viene de user.settings.logoUrl
-  nombreFantasia,
-  razonSocial,
-  cuitFmt,
-  nroComp,
-  fecha,
-  filasItems,
-  total: fmtARS(orden.amount),
-  caeDisplay,
-  caeVto,
-  urlQrAfip,
-  qrImageHtml,        // ← AGREGAR ESTA LÍNEA
-  sinCae: !caeNum,
-  customerName: orden.customerName || orden.customerEmail || 'Cliente'  // ← así se llama el campo en tu schema
-});
+    // Renderizar con EJS
+    const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+      logoUrl: user?.settings?.logoUrl || '',
+      nombreFantasia,
+      razonSocial,
+      cuitFmt,
+      tipoFactura,                    // 👈 NUEVO
+      nroComp,
+      fecha,
+      filasItems,
+      total: fmtARS(orden.amount),
+      impNeto: impNetoFormatted,      // 👈 NUEVO (para Factura A)
+      impIVA: impIVAFormatted,        // 👈 NUEVO (para Factura A)
+      caeDisplay,
+      caeVto,
+      urlQrAfip,
+      qrImageHtml,
+      sinCae: !caeNum,
+      customerName: orden.customerName || orden.customerEmail || 'Cliente'
+    });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Disposition', `inline; filename="FC-${nroComp}.html"`);
+    res.setHeader('Content-Disposition', `inline; filename="${tipoFactura.replace(' ', '_')}-${nroComp}.html"`);
     res.send(html);
   } catch(e) {
     console.error('PDF error:', e.message);

@@ -1412,10 +1412,4 @@
       .koi-cta-area { padding:20px 20px; }
       .susc-btn-mp { font-size:14px; padding:13px 18px; }
     }
-    #categoriaGroup {
-  transition: all 0.3s ease;
-}
-
-#categoriaGroup[style*="display: none"] {
-  display: none !important;
-}
+   

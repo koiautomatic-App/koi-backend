@@ -1629,6 +1629,34 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
 async function generarFacturaHtml(userId, orden) {
   const user = await User.findById(userId).select('nombre apellido settings').lean();
 
+  // ============================================================
+  // 1. DETERMINAR TIPO DE COMPROBANTE (misma lógica que en PDF)
+  // ============================================================
+  const docLen = (orden.customerDoc || '').replace(/\D/g, '').length;
+  const condicionEmisor = user?.settings?.condicionFiscal || 'responsable_inscripto';
+
+  let tipoFactura = 'FACTURA C';
+  let impNeto = null;
+  let impIVA = null;
+
+  if (condicionEmisor === 'monotributo' || condicionEmisor === 'exento') {
+    tipoFactura = 'FACTURA C';
+  } else {
+    if (docLen === 11) {
+      tipoFactura = 'FACTURA A';
+      const total = orden.amount;
+      impNeto = total / 1.21;
+      impIVA = total - impNeto;
+    } else if (docLen >= 7 && docLen <= 8) {
+      tipoFactura = 'FACTURA B';
+    } else {
+      tipoFactura = 'FACTURA C';
+    }
+  }
+
+  // ============================================================
+  // 2. DATOS DEL EMISOR
+  // ============================================================
   const nombreFantasia = user?.settings?.razonSocial
     || `${user?.nombre||''} ${user?.apellido||''}`.trim()
     || 'Sono Handmade';
@@ -1636,6 +1664,9 @@ async function generarFacturaHtml(userId, orden) {
   const cuitRaw = user?.settings?.cuit || '';
   const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
 
+  // ============================================================
+  // 3. DATOS DEL COMPROBANTE
+  // ============================================================
   const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
   const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
   const nroComp = `${ptoVta}-${nroCbte}`;
@@ -1643,10 +1674,19 @@ async function generarFacturaHtml(userId, orden) {
     ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
     : '—';
 
+  // ============================================================
+  // 4. IMPORTES
+  // ============================================================
   const fmtARS = n => new Intl.NumberFormat('es-AR', {
     minimumFractionDigits: 2, maximumFractionDigits: 2
   }).format(n || 0);
 
+  const impNetoFormatted = impNeto ? fmtARS(impNeto) : null;
+  const impIVAFormatted = impIVA ? fmtARS(impIVA) : null;
+
+  // ============================================================
+  // 5. ITEMS
+  // ============================================================
   const items = orden.items?.length
     ? orden.items
     : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
@@ -1666,12 +1706,18 @@ async function generarFacturaHtml(userId, orden) {
     </tr>`;
   }).join('');
 
+  // ============================================================
+  // 6. CAE
+  // ============================================================
   const caeNum = orden.caeNumber || null;
   const caeVto = orden.caeExpiry
     ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
     : '—';
   const caeDisplay = caeNum || '(pendiente)';
 
+  // ============================================================
+  // 7. QR AFIP
+  // ============================================================
   let urlQrAfip = null;
   let qrImageHtml = '';
   if (caeNum && cuitRaw) {
@@ -1695,15 +1741,21 @@ async function generarFacturaHtml(userId, orden) {
     qrImageHtml = generarQRHtml(urlQrAfip);
   }
 
+  // ============================================================
+  // 8. RENDERIZAR EJS
+  // ============================================================
   return await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
     logoUrl: user?.settings?.logoUrl || '',
     nombreFantasia,
     razonSocial,
     cuitFmt,
+    tipoFactura,                    // 👈 NUEVO
     nroComp,
     fecha,
     filasItems,
     total: fmtARS(orden.amount),
+    impNeto: impNetoFormatted,      // 👈 NUEVO
+    impIVA: impIVAFormatted,        // 👈 NUEVO
     caeDisplay,
     caeVto,
     urlQrAfip,
@@ -1712,7 +1764,6 @@ async function generarFacturaHtml(userId, orden) {
     customerName: orden.customerName || orden.customerEmail || 'Cliente'
   });
 }
-
 // ════════════════════════════════════════════════════════════
 //  API — ENVIAR FACTURA POR MAIL
 // ════════════════════════════════════════════════════════════

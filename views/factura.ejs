@@ -38,7 +38,6 @@
       border-bottom: 1px solid #efe8df;
     }
 
-    /* Logo dinámico */
     .logo-img {
       max-width: 80px;
       max-height: 60px;
@@ -360,7 +359,6 @@
     <div class="accent-bar"></div>
 
     <div class="header">
-      <!-- Logo dinámico desde Cloudinary -->
       <% if (logoUrl && logoUrl !== '') { %>
         <img src="<%= logoUrl %>" class="logo-img" alt="Logo de la empresa">
       <% } else { %>
@@ -378,7 +376,7 @@
       <div class="datos-card">
         <div class="datos-row">
           <span class="datos-label">COMPROBANTE</span>
-          <span class="datos-valor"><%= nroComp %></span>
+          <span class="datos-valor"><%= tipoFactura %> Nº <%= nroComp %></span>
         </div>
         <div class="datos-row">
           <span class="datos-label">FECHA</span>
@@ -389,6 +387,20 @@
           <span class="datos-valor total-valor">$ <%= total %></span>
         </div>
       </div>
+
+      <!-- IVA DISCRIMINADO (SOLO PARA FACTURA A) -->
+      <% if (tipoFactura === 'FACTURA A' && impNeto && impIVA) { %>
+        <div class="datos-card" style="margin-top: 16px;">
+          <div class="datos-row">
+            <span class="datos-label">SUBTOTAL</span>
+            <span class="datos-valor">$ <%= impNeto %></span>
+          </div>
+          <div class="datos-row">
+            <span class="datos-label">IVA 21%</span>
+            <span class="datos-valor">$ <%= impIVA %></span>
+          </div>
+        </div>
+      <% } %>
 
       <div class="qr-cae-container">
         <div class="qr-wrapper">

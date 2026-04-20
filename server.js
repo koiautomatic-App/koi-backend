@@ -1464,7 +1464,48 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     const user = await User.findById(req.userId)
       .select('nombre apellido settings').lean();
 
-    // Datos del emisor
+    // ============================================================
+    // 1. DETERMINAR TIPO DE COMPROBANTE (basado en customerDoc)
+    // ============================================================
+    const docLen = (orden.customerDoc || '').replace(/\D/g, '').length;
+    let tipoComprobante = 11;  // default: Factura C
+    let tipoFactura = 'FACTURA C';
+    let condicionComprador = 'Consumidor Final';
+    let impNeto = null;
+    let impIVA = null;
+
+    // Obtener condición fiscal del emisor desde settings
+    const condicionEmisor = user?.settings?.condicionFiscal || 'responsable_inscripto';
+
+    if (condicionEmisor === 'monotributo' || condicionEmisor === 'exento') {
+      // Monotributo o Exento → siempre Factura C
+      tipoComprobante = 11;
+      tipoFactura = 'FACTURA C';
+      condicionComprador = 'Consumidor Final';
+    } else {
+      // Responsable Inscripto
+      if (docLen === 11) {
+        tipoComprobante = 1;
+        tipoFactura = 'FACTURA A';
+        condicionComprador = 'Responsable Inscripto';
+        // Calcular IVA discriminado
+        const total = orden.amount;
+        impNeto = (total / 1.21);
+        impIVA = total - impNeto;
+      } else if (docLen >= 7 && docLen <= 8) {
+        tipoComprobante = 6;
+        tipoFactura = 'FACTURA B';
+        condicionComprador = 'Consumidor Final';
+      } else {
+        tipoComprobante = 11;
+        tipoFactura = 'FACTURA C';
+        condicionComprador = 'Consumidor Final';
+      }
+    }
+
+    // ============================================================
+    // 2. DATOS DEL EMISOR
+    // ============================================================
     const nombreFantasia = user?.settings?.razonSocial
       || `${user?.nombre||''} ${user?.apellido||''}`.trim()
       || 'Sono Handmade';
@@ -1472,37 +1513,9 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     const cuitRaw = user?.settings?.cuit || '';
     const cuitFmt = cuitRaw.replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3');
 
-    // 👇 NUEVO: Determinar tipo de factura
-    let tipoFactura = 'FACTURA C';
-    let condicionComprador = 'Consumidor Final';
-    let impNeto = null;
-    let impIVA = null;
-
-    if (orden.tipoComprobante === 1) {
-      tipoFactura = 'FACTURA A';
-      condicionComprador = 'Responsable Inscripto';
-      // Calcular IVA discriminado
-      const total = orden.amount;
-      impNeto = (total / 1.21).toFixed(2);
-      impIVA = (total - (total / 1.21)).toFixed(2);
-    } else if (orden.tipoComprobante === 6) {
-      tipoFactura = 'FACTURA B';
-      condicionComprador = 'Consumidor Final';
-    } else if (orden.tipoComprobante === 11) {
-      tipoFactura = 'FACTURA C';
-      condicionComprador = 'Consumidor Final';
-    }
-
-    // Formatear números
-    const fmtARS = n => new Intl.NumberFormat('es-AR', {
-      minimumFractionDigits: 2, maximumFractionDigits: 2
-    }).format(n || 0);
-
-    // 👇 NUEVO: Formatear impuestos para Factura A
-    const impNetoFormatted = impNeto ? fmtARS(parseFloat(impNeto)) : null;
-    const impIVAFormatted = impIVA ? fmtARS(parseFloat(impIVA)) : null;
-
-    // Datos del comprobante
+    // ============================================================
+    // 3. DATOS DEL COMPROBANTE
+    // ============================================================
     const ptoVta = String(orden.puntoVenta || user?.settings?.arcaPtoVta || 1).padStart(4, '0');
     const nroCbte = String(orden.nroComprobante || 0).padStart(8, '0');
     const nroComp = `${ptoVta}-${nroCbte}`;
@@ -1510,7 +1523,19 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       ? new Date(orden.orderDate || orden.createdAt).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
       : '—';
 
-    // Items
+    // ============================================================
+    // 4. IMPORTES
+    // ============================================================
+    const fmtARS = n => new Intl.NumberFormat('es-AR', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(n || 0);
+
+    const impNetoFormatted = impNeto ? fmtARS(impNeto) : null;
+    const impIVAFormatted = impIVA ? fmtARS(impIVA) : null;
+
+    // ============================================================
+    // 5. ITEMS
+    // ============================================================
     const items = orden.items?.length
       ? orden.items
       : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
@@ -1530,14 +1555,18 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       </tr>`;
     }).join('');
 
-    // CAE
+    // ============================================================
+    // 6. CAE
+    // ============================================================
     const caeNum = orden.caeNumber || null;
     const caeVto = orden.caeExpiry
       ? new Date(orden.caeExpiry).toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' })
       : '—';
     const caeDisplay = caeNum || '(pendiente)';
 
-    // QR AFIP
+    // ============================================================
+    // 7. QR AFIP
+    // ============================================================
     let urlQrAfip = null;
     let qrImageHtml = '';
 
@@ -1547,7 +1576,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
         fecha,
         cuit: parseInt(cuitRaw.replace(/\D/g,'')),
         ptoVta: parseInt(ptoVta),
-        tipoCmp: orden.tipoComprobante || 11,
+        tipoCmp: tipoComprobante,
         nroCmp: orden.nroComprobante || 0,
         importe: orden.amount,
         moneda: 'PES',
@@ -1562,19 +1591,21 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       qrImageHtml = generarQRHtml(urlQrAfip);
     }
 
-    // Renderizar con EJS
+    // ============================================================
+    // 8. RENDERIZAR EJS
+    // ============================================================
     const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
       logoUrl: user?.settings?.logoUrl || '',
       nombreFantasia,
       razonSocial,
       cuitFmt,
-      tipoFactura,                    // 👈 NUEVO
+      tipoFactura,
       nroComp,
       fecha,
       filasItems,
       total: fmtARS(orden.amount),
-      impNeto: impNetoFormatted,      // 👈 NUEVO (para Factura A)
-      impIVA: impIVAFormatted,        // 👈 NUEVO (para Factura A)
+      impNeto: impNetoFormatted,
+      impIVA: impIVAFormatted,
       caeDisplay,
       caeVto,
       urlQrAfip,
@@ -1591,7 +1622,6 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error generando comprobante: ' + e.message });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  GENERAR HTML DE FACTURA (reutilizable)
 // ════════════════════════════════════════════════════════════

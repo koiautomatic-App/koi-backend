@@ -483,6 +483,18 @@
             <label class="cfg-label">CUIT</label>
             <input id="cfgCuit2" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>
           </div>
+          <div class="config-group">
+  <label>Condición Fiscal del Emisor</label>
+  <select id="condicionFiscal" class="config-select">
+    <option value="responsable_inscripto">Responsable Inscripto</option>
+    <option value="monotributo">Monotributista</option>
+    <option value="exento">Exento</option>
+  </select>
+  <p class="help-text">
+    Responsable Inscripto: emite Factura A (a RI) o Factura B (a CF)<br>
+    Monotributista/Exento: emite solo Factura C
+  </p>
+</div>
           <div class="cfg-field">
             <label class="cfg-label">Email de contacto</label>
             <input id="cfgEmail2" class="cfg-input" type="email" placeholder="tu@email.com"/>
@@ -1156,19 +1168,7 @@
           <label class="cfg-label">CUIT</label>
           <input id="cfgCuit" class="cfg-input" type="text" placeholder="XX-XXXXXXXX-X"/>
         </div>
-        <div class="config-group">
-  <label>Condición Fiscal del Emisor</label>
-  <select id="condicionFiscal" class="config-select">
-    <option value="responsable_inscripto">Responsable Inscripto</option>
-    <option value="monotributo">Monotributista</option>
-    <option value="exento">Exento</option>
-  </select>
-  <p class="help-text">
-    Responsable Inscripto: emite Factura A (a RI) o Factura B (a CF)<br>
-    Monotributista/Exento: emite solo Factura C
-  </p>
-</div>
-
+        
         <div class="cfg-field">
           <label class="cfg-label">Categoría Monotributo</label>
           <select id="cfgCategoria" class="cfg-input">

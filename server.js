@@ -2511,10 +2511,13 @@ const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
 
-// 🔴 ULTRA FORZADO: Ignorar completamente el estado de login
+// Raíz: sirve index.html (landing) si no está logueado
 app.get('/', (req, res) => {
-  console.log('🚀🚀🚀 GET / - MODO ULTRA FORZADO - SIRVIENDO HOME.HTML DIRECTAMENTE 🚀🚀🚀');
-  res.sendFile(path.join(__dirname, 'public', 'home.html'));
+  console.log('🚀 GET /');
+  if (isLoggedIn(req)) {
+    return res.redirect('/dashboard');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
 app.get('/login', (req, res) => {
@@ -2526,9 +2529,8 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/dashboard', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
-
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

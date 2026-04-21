@@ -62,7 +62,6 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: BASE, credentials: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
 app.use(session({
   secret:            process.env.SESSION_SECRET || 'koi-session-dev',
   resave:            false,
@@ -71,6 +70,38 @@ app.use(session({
 }));
 app.use(passport.initialize());
 app.use(passport.session());
+
+// ════════════════════════════════════════════════════════════
+//  PÁGINAS HTML
+// ════════════════════════════════════════════════════════════
+const isLoggedIn = (req) => {
+  try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
+};
+
+// 🔴 ULTRA FORZADO: Ignorar completamente el estado de login
+app.get('/', (req, res) => {
+  console.log('🚀🚀🚀 GET / - MODO ULTRA FORZADO - SIRVIENDO HOME.HTML DIRECTAMENTE 🚀🚀🚀');
+  res.sendFile(path.join(__dirname, 'public', 'home.html'));
+});
+
+app.get('/login', (req, res) => {
+  console.log('🔐 GET /login');
+  if (isLoggedIn(req)) {
+    return res.redirect('/dashboard');
+  }
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/dashboard', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
+});
+
+// ════════════════════════════════════════════════════════════
+//  ARCHIVOS ESTÁTICOS (AL FINAL - para que no interfiera)
+// ════════════════════════════════════════════════════════════
+app.use(express.static(path.join(__dirname, 'public')));
+
+// El resto de tus rutas (API, webhooks, etc.) van después
 
 // ════════════════════════════════════════════════════════════
 //  MONGODB
@@ -2504,30 +2535,7 @@ app.post('/api/integrations/:platform/toggle', requireAuthAPI, async (req, res) 
   }
 });
 
-// ════════════════════════════════════════════════════════════
-//  PÁGINAS HTML
-// ════════════════════════════════════════════════════════════
-const isLoggedIn = (req) => {
-  try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
-};
 
-// 🔴 ULTRA FORZADO: Ignorar completamente el estado de login
-app.get('/', (req, res) => {
-  console.log('🚀🚀🚀 GET / - MODO ULTRA FORZADO - SIRVIENDO HOME.HTML DIRECTAMENTE 🚀🚀🚀');
-  res.sendFile(path.join(__dirname, 'public', 'home.html'));
-});
-
-app.get('/login', (req, res) => {
-  console.log('🔐 GET /login');
-  if (isLoggedIn(req)) {
-    return res.redirect('/dashboard');
-  }
-  res.sendFile(path.join(__dirname, 'public', 'login.html'));
-});
-
-app.get('/dashboard', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));
-});
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

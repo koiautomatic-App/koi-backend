@@ -2510,11 +2510,29 @@ app.post('/api/integrations/:platform/toggle', requireAuthAPI, async (req, res) 
 const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
-app.get('/', (req, res) => res.redirect(isLoggedIn(req) ? '/dashboard' : '/login'));
-app.get('/login', (req, res) => isLoggedIn(req) ? res.redirect('/dashboard') : res.sendFile(path.join(__dirname,'public','login.html')));
-app.get('/dashboard', requireAuth, (req, res) => res.sendFile(path.join(__dirname,'public','index.html')));
-app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 
+// Raíz: muestra home.html (landing) si no está logueado
+app.get('/', (req, res) => {
+  if (isLoggedIn(req)) {
+    res.redirect('/dashboard');
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'home.html'));
+  }
+});
+
+app.get('/login', (req, res) => {
+  if (isLoggedIn(req)) {
+    res.redirect('/dashboard');
+  } else {
+    res.sendFile(path.join(__dirname, 'public', 'login.html'));
+  }
+});
+
+app.get('/dashboard', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));  // Sigue siendo index.html
+});
+
+app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

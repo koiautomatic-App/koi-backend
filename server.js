@@ -2511,18 +2511,27 @@ const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
 
-console.log('🔥🔥🔥 SERVIDOR ACTUALIZADO - 21 DE ABRIL 2026 - VERSIÓN CON HOME.HTML 🔥🔥🔥');  // 👈 AGREGÁ ESTA LÍNEA
+console.log('🔥🔥🔥 SERVIDOR ACTUALIZADO - 22 DE ABRIL 2026 - VERSIÓN FORZADA 🔥🔥🔥');
 
-// Raíz: muestra home.html (landing) si no está logueado
+// 🔴 TEMPORAL: Forzar home.html en la raíz SIEMPRE (para probar)
 app.get('/', (req, res) => {
-  console.log('🚀 GET / - Entró a la raíz');  // 👈 AGREGÁ ESTA LÍNEA TAMBIÉN
+  console.log('🚀🚀🚀 GET / - FORZANDO HOME.HTML (MODO PRUEBA) 🚀🚀🚀');
+  console.log('   Cookies:', req.cookies);
+  console.log('   Logged in?', isLoggedIn(req));
+  // IGNORAR isLoggedIn por ahora, forzar home.html
+  res.sendFile(path.join(__dirname, 'public', 'home.html'));
+});
+
+app.get('/login', (req, res) => {
+  console.log('🔐 GET /login');
   if (isLoggedIn(req)) {
-    console.log('   → Usuario logueado, redirigiendo a /dashboard');
-    res.redirect('/dashboard');
-  } else {
-    console.log('   → Usuario NO logueado, sirviendo home.html');
-    res.sendFile(path.join(__dirname, 'public', 'home.html'));
+    return res.redirect('/dashboard');
   }
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/dashboard', requireAuth, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo

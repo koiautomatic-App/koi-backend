@@ -1,0 +1,858 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>KOI-FACTURA | Facturación electrónica sin complicaciones</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #080810;
+      color: #F9FAFB;
+      overflow-x: hidden;
+    }
+
+    a { text-decoration: none; color: inherit; }
+
+    /* ── NAV ── */
+    .nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      height: 68px;
+      background: rgba(8, 8, 16, 0.98);
+      border-bottom: 0.5px solid rgba(255,255,255,0.06);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(12px);
+    }
+
+    .nav-logo { display: flex; align-items: center; gap: 12px; }
+
+    .nav-fish {
+      width: 36px;
+      height: 36px;
+      border-radius: 9px;
+      background: linear-gradient(135deg, #1a1a24, #111118);
+      border: 0.5px solid rgba(249,115,22,0.3);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 17px;
+      font-weight: 900;
+      color: #F97316;
+    }
+
+    .nav-name { font-size: 16px; font-weight: 800; color: #F9FAFB; letter-spacing: -0.3px; }
+    .nav-name span { color: #F97316; }
+
+    .nav-links { display: flex; gap: 32px; }
+    .nav-links a { font-size: 13px; font-weight: 500; color: #4B5563; transition: color .2s; }
+    .nav-links a:hover { color: #F9FAFB; }
+
+    .nav-right { display: flex; gap: 10px; align-items: center; }
+
+    .btn-ghost {
+      font-size: 13px; font-weight: 600; color: #6B7280;
+      padding: 8px 18px; border-radius: 8px;
+      border: 0.5px solid rgba(255,255,255,0.08);
+      transition: all .2s;
+    }
+    .btn-ghost:hover { color: #F9FAFB; border-color: rgba(255,255,255,0.15); }
+
+    .btn-primary {
+      font-size: 13px; font-weight: 700; color: #fff;
+      padding: 8px 20px; border-radius: 8px;
+      background: linear-gradient(90deg, #F97316, #FB923C);
+      transition: opacity .2s;
+    }
+    .btn-primary:hover { opacity: .9; }
+
+    /* ── HERO ── */
+    .hero-wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 80px 48px 0;
+      display: grid;
+      grid-template-columns: 1fr 340px;
+      gap: 56px;
+      align-items: center;
+    }
+
+    .hero-eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(249,115,22,0.07);
+      border: 0.5px solid rgba(249,115,22,0.2);
+      border-radius: 100px;
+      padding: 5px 14px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #FB923C;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      margin-bottom: 26px;
+    }
+
+    .hero-eyebrow-dot { width: 5px; height: 5px; border-radius: 50%; background: #F97316; }
+
+    .hero-h1 {
+      font-size: 54px;
+      font-weight: 900;
+      line-height: 1.03;
+      letter-spacing: -0.04em;
+      color: #F9FAFB;
+      margin-bottom: 20px;
+    }
+
+    .hero-h1 .orange { color: #F97316; }
+    .hero-h1 .dim { color: #2D2D3A; }
+
+    .hero-sub {
+      font-size: 17px;
+      color: #6B7280;
+      line-height: 1.7;
+      margin-bottom: 36px;
+      max-width: 460px;
+    }
+
+    .hero-actions { display: flex; gap: 12px; margin-bottom: 32px; }
+
+    .btn-hero-primary {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 15px; font-weight: 700; color: #fff;
+      padding: 14px 28px; border-radius: 10px;
+      background: linear-gradient(90deg, #F97316, #FB923C);
+      transition: opacity .2s;
+    }
+    .btn-hero-primary:hover { opacity: .9; }
+
+    .btn-hero-secondary {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 14px; font-weight: 600; color: #9CA3AF;
+      padding: 14px 22px; border-radius: 10px;
+      border: 0.5px solid rgba(255,255,255,0.08);
+      transition: all .2s;
+    }
+    .btn-hero-secondary:hover { color: #F9FAFB; border-color: rgba(255,255,255,0.15); }
+
+    .hero-proof { display: flex; align-items: center; gap: 16px; }
+    .hero-proof-stat { font-size: 12px; color: #4B5563; display: flex; align-items: center; gap: 5px; }
+    .hero-proof-stat strong { color: #22C55E; font-weight: 700; }
+    .hero-proof-div { width: 1px; height: 14px; background: rgba(255,255,255,0.08); }
+
+    .hero-visual { display: flex; justify-content: center; align-items: center; }
+
+    .koi-ring {
+      width: 300px;
+      height: 300px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 40% 40%, rgba(249,115,22,0.08), transparent 70%);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      animation: float 6s ease-in-out infinite;
+    }
+
+    @keyframes float {
+      0%, 100% { transform: translateY(0px); }
+      50% { transform: translateY(-14px); }
+    }
+
+    .koi-ring::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      border-radius: 50%;
+      border: 0.5px solid rgba(249,115,22,0.12);
+    }
+
+    .koi-ring::after {
+      content: '';
+      position: absolute;
+      inset: 20px;
+      border-radius: 50%;
+      border: 0.5px solid rgba(249,115,22,0.07);
+    }
+
+    .koi-inner {
+      width: 220px;
+      height: 220px;
+      background: linear-gradient(135deg, rgba(249,115,22,0.08), rgba(34,197,94,0.05));
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 0.5px solid rgba(249,115,22,0.15);
+      position: relative;
+      z-index: 1;
+    }
+
+    .koi-letter {
+      font-size: 110px;
+      font-weight: 900;
+      color: #F97316;
+      letter-spacing: -6px;
+      opacity: 0.85;
+      line-height: 1;
+      user-select: none;
+    }
+
+    /* ── LAYOUT HELPERS ── */
+    .section-wrap {
+      max-width: 1000px;
+      margin: 0 auto;
+      padding: 0 48px;
+    }
+
+    .section { padding: 80px 0; }
+
+    .divider {
+      height: 0.5px;
+      background: linear-gradient(90deg, transparent, rgba(249,115,22,0.2), transparent);
+      margin: 0 48px;
+    }
+
+    .section-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #F97316;
+      margin-bottom: 14px;
+      text-align: center;
+    }
+
+    .section-h2 {
+      font-size: 36px;
+      font-weight: 800;
+      color: #F9FAFB;
+      letter-spacing: -0.03em;
+      line-height: 1.15;
+      text-align: center;
+      margin-bottom: 12px;
+    }
+
+    .section-sub {
+      font-size: 16px;
+      color: #6B7280;
+      text-align: center;
+      margin-bottom: 52px;
+      line-height: 1.65;
+      max-width: 460px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    /* ── FLUJO ── */
+    .flow-grid {
+      display: grid;
+      grid-template-columns: 1fr 48px 1fr 48px 1fr;
+      align-items: start;
+      gap: 0;
+    }
+
+    .flow-step { text-align: center; padding: 0 12px; }
+
+    .flow-num {
+      width: 52px;
+      height: 52px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 16px;
+      font-weight: 800;
+      margin: 0 auto 18px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .fn1 { background: linear-gradient(135deg, #F97316, #FB923C); color: #fff; }
+    .fn2 { background: #0F0F18; border: 1.5px solid rgba(255,255,255,0.12); color: #9CA3AF; }
+    .fn3 { background: linear-gradient(135deg, #16A34A, #22C55E); color: #fff; }
+
+    .flow-title { font-size: 14px; font-weight: 700; color: #F9FAFB; margin-bottom: 8px; }
+    .flow-desc { font-size: 13px; color: #6B7280; line-height: 1.6; }
+
+    .flow-arrow { display: flex; align-items: center; justify-content: center; padding-top: 14px; opacity: .25; }
+
+    /* ── MODOS DE OPERACIÓN ── */
+    .modes-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+    .mode-card {
+      background: #0D0D16;
+      border: 0.5px solid rgba(255,255,255,0.06);
+      border-radius: 16px;
+      padding: 28px;
+    }
+
+    .mode-card.accent {
+      border-color: rgba(249,115,22,0.18);
+      background: rgba(249,115,22,0.03);
+    }
+
+    .mode-card.wide {
+      grid-column: 1 / -1;
+      background: rgba(34,197,94,0.03);
+      border-color: rgba(34,197,94,0.1);
+    }
+
+    .mode-icon-row { display: flex; align-items: center; gap: 10px; margin-bottom: 16px; }
+
+    .mode-icon {
+      width: 38px;
+      height: 38px;
+      border-radius: 9px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .mi-orange { background: rgba(249,115,22,0.1); border: 0.5px solid rgba(249,115,22,0.2); }
+    .mi-green { background: rgba(34,197,94,0.08); border: 0.5px solid rgba(34,197,94,0.15); }
+
+    .mode-tag {
+      font-size: 9px;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 3px 9px;
+      border-radius: 100px;
+    }
+
+    .tag-auto { background: rgba(34,197,94,0.08); color: #4ADE80; border: 0.5px solid rgba(34,197,94,0.18); }
+    .tag-manual { background: rgba(249,115,22,0.08); color: #FB923C; border: 0.5px solid rgba(249,115,22,0.18); }
+
+    .mode-title { font-size: 16px; font-weight: 700; color: #F9FAFB; margin-bottom: 8px; }
+    .mode-desc { font-size: 13px; color: #6B7280; line-height: 1.65; }
+
+    .mode-note {
+      font-size: 12px;
+      color: #374151;
+      margin-top: 14px;
+      padding-top: 14px;
+      border-top: 0.5px solid rgba(255,255,255,0.05);
+    }
+
+    .mode-note b { color: #9CA3AF; }
+
+    .mode-wide-inner { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+
+    /* ── INTEGRACIONES ── */
+    .integ-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 56px;
+      align-items: center;
+    }
+
+    .integ-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: rgba(249,115,22,0.07);
+      border: 0.5px solid rgba(249,115,22,0.15);
+      border-radius: 100px;
+      padding: 5px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: #FB923C;
+      margin-bottom: 20px;
+    }
+
+    .integ-h2 {
+      font-size: 30px;
+      font-weight: 800;
+      color: #F9FAFB;
+      letter-spacing: -0.03em;
+      line-height: 1.2;
+      margin-bottom: 14px;
+      text-align: left;
+    }
+
+    .integ-sub {
+      font-size: 14px;
+      color: #6B7280;
+      line-height: 1.7;
+      margin-bottom: 20px;
+    }
+
+    .integ-note {
+      background: rgba(249,115,22,0.05);
+      border: 0.5px solid rgba(249,115,22,0.15);
+      border-radius: 12px;
+      padding: 14px 16px;
+      font-size: 13px;
+      color: #9CA3AF;
+      line-height: 1.65;
+    }
+
+    .integ-note strong { color: #FB923C; }
+
+    .integ-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .int-card {
+      background: #0D0D16;
+      border: 0.5px solid rgba(255,255,255,0.06);
+      border-radius: 12px;
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .int-card.multi {
+      grid-column: 1 / -1;
+      border-color: rgba(249,115,22,0.2);
+      background: rgba(249,115,22,0.04);
+    }
+
+    .int-logo {
+      width: 36px;
+      height: 36px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 11px;
+      font-weight: 800;
+      flex-shrink: 0;
+    }
+
+    .il-ml { background: #FFE600; color: #1a1a00; }
+    .il-tn { background: #00B4D8; color: #fff; }
+    .il-mp { background: #009EE3; color: #fff; }
+    .il-woo { background: #7F54B3; color: #fff; }
+    .il-api { background: rgba(249,115,22,0.15); color: #F97316; border: 0.5px solid rgba(249,115,22,0.25); font-size: 9px; }
+    .il-multi { background: linear-gradient(135deg,#FFE600,#F97316); color: #1a1a00; font-size: 9px; }
+
+    .int-info {}
+    .int-name { font-size: 13px; font-weight: 600; color: #F9FAFB; }
+    .int-desc { font-size: 11px; color: #4B5563; margin-top: 2px; }
+
+    /* ── PRICING ── */
+    .pricing-center { max-width: 460px; margin: 0 auto; }
+
+    .price-card {
+      background: #0D0D16;
+      border: 1.5px solid rgba(249,115,22,0.22);
+      border-radius: 20px;
+      overflow: hidden;
+      margin-top: 40px;
+    }
+
+    .price-top-bar { height: 3px; background: linear-gradient(90deg, #F97316, #22C55E); }
+
+    .price-inner { padding: 32px; }
+
+    .price-eyebrow {
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #F97316;
+      margin-bottom: 16px;
+    }
+
+    .price-amount { display: flex; align-items: flex-start; gap: 3px; line-height: 1; margin-bottom: 6px; }
+    .price-cur { font-size: 20px; font-weight: 700; color: #F97316; margin-top: 5px; }
+    .price-num { font-size: 52px; font-weight: 900; color: #F9FAFB; letter-spacing: -0.04em; }
+    .price-period { font-size: 14px; color: #4B5563; font-weight: 500; align-self: flex-end; padding-bottom: 6px; margin-left: 4px; }
+    .price-note { font-size: 12px; color: #22C55E; font-weight: 600; margin-bottom: 24px; }
+
+    .price-divider { height: 0.5px; background: rgba(255,255,255,0.06); margin-bottom: 24px; }
+
+    .price-features { display: flex; flex-direction: column; gap: 10px; margin-bottom: 28px; }
+
+    .price-feature { display: flex; align-items: center; gap: 10px; }
+
+    .price-check {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: rgba(34,197,94,0.1);
+      border: 0.5px solid rgba(34,197,94,0.25);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .price-feature-text { font-size: 13px; color: #D1D5DB; font-weight: 500; }
+
+    .price-btn {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      width: 100%;
+      padding: 15px;
+      background: linear-gradient(90deg, #F97316, #FB923C);
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      font-family: 'Inter', sans-serif;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      letter-spacing: 0.02em;
+      transition: opacity .2s;
+    }
+    .price-btn:hover { opacity: .9; }
+
+    .price-footnote { text-align: center; font-size: 12px; color: #1F2937; margin-top: 14px; }
+
+    /* ── FOOTER CTA ── */
+    .footer-cta {
+      background: #0D0D16;
+      border-top: 0.5px solid rgba(255,255,255,0.05);
+      text-align: center;
+      padding: 72px 48px;
+    }
+
+    .footer-cta h2 {
+      font-size: 32px;
+      font-weight: 900;
+      color: #F9FAFB;
+      letter-spacing: -0.03em;
+      margin-bottom: 12px;
+    }
+
+    .footer-cta p { font-size: 15px; color: #6B7280; margin-bottom: 32px; }
+
+    /* ── FOOTER ── */
+    .footer {
+      padding: 28px 48px;
+      border-top: 0.5px solid rgba(255,255,255,0.04);
+      background: #050508;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-left { display: flex; align-items: center; gap: 12px; }
+    .footer-brand { font-size: 11px; font-weight: 800; color: #F97316; letter-spacing: 0.08em; }
+    .footer-copy { font-size: 11px; color: #1F2937; }
+
+    .footer-links { display: flex; gap: 24px; }
+    .footer-links a { font-size: 11px; color: #1F2937; transition: color .2s; }
+    .footer-links a:hover { color: #4B5563; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 768px) {
+      .nav { padding: 0 20px; }
+      .nav-links { display: none; }
+      .hero-wrap { grid-template-columns: 1fr; padding: 48px 24px 0; }
+      .hero-visual { display: none; }
+      .hero-h1 { font-size: 38px; }
+      .section-wrap { padding: 0 24px; }
+      .flow-grid { grid-template-columns: 1fr; gap: 24px; }
+      .flow-arrow { display: none; }
+      .modes-grid { grid-template-columns: 1fr; }
+      .integ-grid { grid-template-columns: 1fr; gap: 32px; }
+      .integ-cards { grid-template-columns: 1fr; }
+      .footer { flex-direction: column; gap: 16px; text-align: center; padding: 24px; }
+      .footer-cta { padding: 48px 24px; }
+      .divider { margin: 0 24px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <div class="nav-logo">
+      <div class="nav-fish">K</div>
+      <span class="nav-name">KOI<span>-FACTURA</span></span>
+    </div>
+    <div class="nav-links">
+      <a href="#">Cómo funciona</a>
+      <a href="#">Integraciones</a>
+      <a href="#">Planes</a>
+      <a href="#">Ayuda</a>
+    </div>
+    <div class="nav-right">
+      <a href="/login" class="btn-ghost">Iniciar sesión</a>
+      <a href="/login?tab=register" class="btn-primary">Empezá gratis</a>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <div class="hero-wrap">
+    <div>
+      <div class="hero-eyebrow">
+        <div class="hero-eyebrow-dot"></div>
+        AFIP · WSFE · ARCA conectado
+      </div>
+      <h1 class="hero-h1">
+        Tu negocio.<br>
+        <span class="orange">Tu factura.</span><br>
+        <span class="dim">Sin vueltas.</span>
+      </h1>
+      <p class="hero-sub">Conectá tu tienda, sincronizá con ARCA y empezá a emitir facturas electrónicas en minutos. Automático o manual — vos elegís.</p>
+      <div class="hero-actions">
+        <a href="/login?tab=register" class="btn-hero-primary">
+          <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Empezá gratis ahora
+        </a>
+        <a href="#como-funciona" class="btn-hero-secondary">Ver cómo funciona</a>
+      </div>
+      <div class="hero-proof">
+        <div class="hero-proof-stat"><strong>+2.400</strong> vendedores activos</div>
+        <div class="hero-proof-div"></div>
+        <div class="hero-proof-stat"><strong>$40.000</strong> plan único</div>
+        <div class="hero-proof-div"></div>
+        <div class="hero-proof-stat"><strong>Sin</strong> permanencia</div>
+      </div>
+    </div>
+    <div class="hero-visual">
+      <div class="koi-ring">
+        <div class="koi-inner">
+          <span class="koi-letter">K</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="height: 80px;"></div>
+  <div class="divider"></div>
+
+  <!-- CÓMO FUNCIONA -->
+  <div id="como-funciona" class="section-wrap">
+    <div class="section">
+      <div class="section-eyebrow">Cómo funciona</div>
+      <h2 class="section-h2">Tres pasos y ya estás facturando</h2>
+      <p class="section-sub">Sin llamadas al contador ni configuraciones técnicas.</p>
+      <div class="flow-grid">
+        <div class="flow-step">
+          <div class="flow-num fn1">1</div>
+          <div class="flow-title">Conectá tu tienda</div>
+          <div class="flow-desc">Vinculá tu canal de ventas — Mercado Libre, Tiendanube, tu sistema propio o cualquier plataforma compatible.</div>
+        </div>
+        <div class="flow-arrow">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M15 8l4 4-4 4" stroke="#F97316" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num fn2">2</div>
+          <div class="flow-title">Sincronizá con ARCA</div>
+          <div class="flow-desc">KOI se vincula con AFIP-WSFE automáticamente usando tu CUIT y clave fiscal. Sin pasos técnicos de tu lado.</div>
+        </div>
+        <div class="flow-arrow">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M15 8l4 4-4 4" stroke="#22C55E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </div>
+        <div class="flow-step">
+          <div class="flow-num fn3">3</div>
+          <div class="flow-title">¡Listo! Facturás</div>
+          <div class="flow-desc">Automático con cada venta o manual cuando querés. KOI genera el PDF con QR AFIP y lo envía al cliente.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- MODOS DE OPERACIÓN -->
+  <div class="section-wrap">
+    <div class="section">
+      <div class="section-eyebrow">Modo de operación</div>
+      <h2 class="section-h2">Automático o manual.<br>Vos mandás.</h2>
+      <p class="section-sub">Tanto la facturación como el envío al cliente son configurables de forma independiente.</p>
+      <div class="modes-grid">
+
+        <div class="mode-card accent">
+          <div class="mode-icon-row">
+            <div class="mode-icon mi-orange">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M3 9l4 4 8-8" stroke="#F97316" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <span class="mode-tag tag-auto">Automático</span>
+          </div>
+          <div class="mode-title">Facturación automática</div>
+          <div class="mode-desc">Con cada venta, KOI emite el comprobante al instante sin que toques nada. Ideal para tiendas con volumen.</div>
+          <div class="mode-note"><b>Envío:</b> también podés configurar el envío del PDF al cliente de forma automática por mail.</div>
+        </div>
+
+        <div class="mode-card">
+          <div class="mode-icon-row">
+            <div class="mode-icon mi-green">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 3v6l4 2" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg>
+            </div>
+            <span class="mode-tag tag-manual">Manual</span>
+          </div>
+          <div class="mode-title">Facturación manual</div>
+          <div class="mode-desc">Emitís vos desde el dashboard cuando querés. Revisás cada venta antes de facturar. Total control.</div>
+          <div class="mode-note"><b>Envío:</b> también podés elegir cuándo y cómo enviar el comprobante al cliente.</div>
+        </div>
+
+        <div class="mode-card wide">
+          <div class="mode-wide-inner">
+            <div class="mode-icon mi-green">
+              <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M5 9h8M9 5l4 4-4 4" stroke="#22C55E" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </div>
+            <div>
+              <div class="mode-title" style="margin-bottom: 6px;">Podés combinarlos como quieras</div>
+              <div class="mode-desc">Por ejemplo: facturación automática con envío manual. O facturación manual con envío automático. Cada parte se configura de forma independiente en tu cuenta.</div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- INTEGRACIONES -->
+  <div id="integraciones" class="section-wrap">
+    <div class="section">
+      <div class="integ-grid">
+        <div>
+          <div class="integ-badge">
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6h8M6 2l4 4-4 4" stroke="#FB923C" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            Integraciones
+          </div>
+          <h2 class="integ-h2">Conectá todos tus canales de venta a la vez</h2>
+          <p class="integ-sub">Un mismo cliente puede tener Mercado Libre y Tiendanube al mismo tiempo. KOI consolida todo y factura desde un solo lugar, sin duplicados.</p>
+          <div class="integ-note">
+            <strong>Multi-integración simultánea:</strong> no tenés que elegir una sola plataforma. Conectás todas las que uses y KOI las gestiona juntas, con una única configuración fiscal.
+          </div>
+        </div>
+        <div>
+          <div class="integ-cards">
+            <div class="int-card multi">
+              <div class="int-logo il-multi">ML+TN</div>
+              <div class="int-info">
+                <div class="int-name">Múltiples tiendas en simultáneo</div>
+                <div class="int-desc">Mercado Libre + Tiendanube + tu sistema, al mismo tiempo</div>
+              </div>
+            </div>
+            <div class="int-card">
+              <div class="int-logo il-ml">ML</div>
+              <div class="int-info">
+                <div class="int-name">Mercado Libre</div>
+                <div class="int-desc">Ventas y órdenes</div>
+              </div>
+            </div>
+            <div class="int-card">
+              <div class="int-logo il-tn">TN</div>
+              <div class="int-info">
+                <div class="int-name">Tiendanube</div>
+                <div class="int-desc">Tu tienda online</div>
+              </div>
+            </div>
+            <div class="int-card">
+              <div class="int-logo il-mp">MP</div>
+              <div class="int-info">
+                <div class="int-name">Mercado Pago</div>
+                <div class="int-desc">Cobros digitales</div>
+              </div>
+            </div>
+            <div class="int-card">
+              <div class="int-logo il-api">API REST</div>
+              <div class="int-info">
+                <div class="int-name">Tu sistema propio</div>
+                <div class="int-desc">Integración por API</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- PRICING -->
+  <div id="planes" class="section-wrap">
+    <div class="section">
+      <div class="section-eyebrow">Planes</div>
+      <h2 class="section-h2">Un plan. Sin vueltas.</h2>
+      <p class="section-sub">Todo incluido desde el primer día. Sin niveles, sin letras chicas, sin sorpresas.</p>
+      <div class="pricing-center">
+        <div class="price-card">
+          <div class="price-top-bar"></div>
+          <div class="price-inner">
+            <div class="price-eyebrow">Plan único · mensual</div>
+            <div class="price-amount">
+              <span class="price-cur">$</span>
+              <span class="price-num">40.000</span>
+              <span class="price-period">/ mes</span>
+            </div>
+            <div class="price-note">Sin permanencia · Cancelás cuando querés</div>
+            <div class="price-divider"></div>
+            <div class="price-features">
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Facturas ilimitadas (A, B y C)</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Facturación automática o manual (a elección)</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Envío automático o manual al cliente</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Multi-integración simultánea (ML, TN y más)</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">PDF con QR AFIP incluido en cada factura</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Dashboard en vivo + API REST incluida</span>
+              </div>
+              <div class="price-feature">
+                <div class="price-check"><svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 4.5l2 2 4-4" stroke="#22C55E" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
+                <span class="price-feature-text">Soporte por WhatsApp</span>
+              </div>
+            </div>
+            <button class="price-btn" onclick="location.href='/login?tab=register'">
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              Activar KOI ahora
+            </button>
+            <div class="price-footnote">Débito automático · Mercado Pago</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- FOOTER CTA -->
+  <div class="footer-cta">
+    <h2>¿Listo para empezar?</h2>
+    <p>Sumáte a los miles de vendedores que ya simplificaron su facturación.</p>
+    <a href="/login?tab=register" class="btn-hero-primary" style="display:inline-flex;">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      Activar KOI ahora
+    </a>
+  </div>
+
+  <!-- FOOTER -->
+  <footer class="footer">
+    <div class="footer-left">
+      <div class="nav-fish" style="width:26px;height:26px;border-radius:6px;font-size:12px;">K</div>
+      <span class="footer-brand">KOI-FACTURA</span>
+      <span class="footer-copy">· Sistema de Facturación Electrónica</span>
+    </div>
+    <div class="footer-links">
+      <a href="#">Términos y condiciones</a>
+      <a href="#">Privacidad</a>
+      <a href="#">Contacto</a>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -2511,28 +2511,19 @@ const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
 
+console.log('🔥🔥🔥 SERVIDOR ACTUALIZADO - 21 DE ABRIL 2026 - VERSIÓN CON HOME.HTML 🔥🔥🔥');  // 👈 AGREGÁ ESTA LÍNEA
+
 // Raíz: muestra home.html (landing) si no está logueado
 app.get('/', (req, res) => {
+  console.log('🚀 GET / - Entró a la raíz');  // 👈 AGREGÁ ESTA LÍNEA TAMBIÉN
   if (isLoggedIn(req)) {
+    console.log('   → Usuario logueado, redirigiendo a /dashboard');
     res.redirect('/dashboard');
   } else {
+    console.log('   → Usuario NO logueado, sirviendo home.html');
     res.sendFile(path.join(__dirname, 'public', 'home.html'));
   }
 });
-
-app.get('/login', (req, res) => {
-  if (isLoggedIn(req)) {
-    res.redirect('/dashboard');
-  } else {
-    res.sendFile(path.join(__dirname, 'public', 'login.html'));
-  }
-});
-
-app.get('/dashboard', requireAuth, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'index.html'));  // Sigue siendo index.html
-});
-
-app.get('/health', (_, res) => res.json({ status: 'ok', ts: Date.now() }));
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

@@ -2511,14 +2511,9 @@ const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
 
-console.log('🔥🔥🔥 SERVIDOR ACTUALIZADO - 22 DE ABRIL 2026 - VERSIÓN FORZADA 🔥🔥🔥');
-
-// 🔴 TEMPORAL: Forzar home.html en la raíz SIEMPRE (para probar)
+// 🔴 ULTRA FORZADO: Ignorar completamente el estado de login
 app.get('/', (req, res) => {
-  console.log('🚀🚀🚀 GET / - FORZANDO HOME.HTML (MODO PRUEBA) 🚀🚀🚀');
-  console.log('   Cookies:', req.cookies);
-  console.log('   Logged in?', isLoggedIn(req));
-  // IGNORAR isLoggedIn por ahora, forzar home.html
+  console.log('🚀🚀🚀 GET / - MODO ULTRA FORZADO - SIRVIENDO HOME.HTML DIRECTAMENTE 🚀🚀🚀');
   res.sendFile(path.join(__dirname, 'public', 'home.html'));
 });
 

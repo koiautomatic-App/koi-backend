@@ -1,4 +1,5 @@
 /* Admin CSS - KOI Factura - Estilo Dark + Verde Neón */
+/* Versión 2.0 - Estados Activo/Intermedio/Inactivo + Tooltips */
 
 * {
     margin: 0;
@@ -13,13 +14,17 @@ body {
     overflow-x: hidden;
 }
 
-/* Layout */
+/* ============================================================
+   LAYOUT
+   ============================================================ */
 .admin-wrapper {
     display: flex;
     min-height: 100vh;
 }
 
-/* Sidebar */
+/* ============================================================
+   SIDEBAR
+   ============================================================ */
 .sidebar {
     width: 280px;
     background: #0D0D16;
@@ -112,14 +117,18 @@ body {
     margin-top: 2rem;
 }
 
-/* Main Content */
+/* ============================================================
+   MAIN CONTENT
+   ============================================================ */
 .main-content {
     flex: 1;
     margin-left: 280px;
     padding: 2rem;
 }
 
-/* Header */
+/* ============================================================
+   HEADER
+   ============================================================ */
 .admin-header {
     display: flex;
     justify-content: space-between;
@@ -147,7 +156,9 @@ body {
     flex-wrap: wrap;
 }
 
-/* Botones */
+/* ============================================================
+   BOTONES
+   ============================================================ */
 .btn {
     padding: 0.5rem 1rem;
     border-radius: 8px;
@@ -205,7 +216,9 @@ body {
     background: rgba(239,68,68,0.25);
 }
 
-/* Stats Cards */
+/* ============================================================
+   STATS CARDS
+   ============================================================ */
 .stats-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
@@ -241,7 +254,9 @@ body {
     letter-spacing: -0.02em;
 }
 
-/* Tabs */
+/* ============================================================
+   TABS
+   ============================================================ */
 .admin-tabs {
     display: flex;
     gap: 0.5rem;
@@ -290,7 +305,9 @@ body {
     to { opacity: 1; transform: translateY(0); }
 }
 
-/* Cards */
+/* ============================================================
+   CARDS
+   ============================================================ */
 .card {
     background: #0D0D16;
     border: 0.5px solid rgba(255,255,255,0.06);
@@ -298,7 +315,9 @@ body {
     overflow: hidden;
 }
 
-/* Tabla */
+/* ============================================================
+   TABLA DE USUARIOS
+   ============================================================ */
 .admin-table {
     width: 100%;
     border-collapse: collapse;
@@ -330,11 +349,14 @@ body {
     background: rgba(255,255,255,0.02);
 }
 
-/* Badges */
+/* ============================================================
+   ESTADOS - BADGES
+   ============================================================ */
 .status-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.5rem;
+    flex-wrap: wrap;
 }
 
 .status-dot {
@@ -361,7 +383,46 @@ body {
 .status-text.error { background: rgba(239,68,68,0.1); color: #F87171; border: 0.5px solid rgba(239,68,68,0.2); }
 .status-text.inactive { background: rgba(107,114,128,0.1); color: #9CA3AF; border: 0.5px solid rgba(107,114,128,0.2); }
 
-/* Inputs */
+/* ============================================================
+   DETALLES DE CONEXIÓN
+   ============================================================ */
+.conexion-detalle {
+    font-size: 0.7rem;
+    color: #6B7280;
+    margin-top: 6px;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+}
+
+.conexion-tienda {
+    background: rgba(0,230,118,0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    color: #00E676;
+}
+
+.conexion-arca {
+    background: rgba(59,130,246,0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    color: #60A5FA;
+}
+
+.conexion-pendiente {
+    background: rgba(251,191,36,0.08);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    color: #FBBF24;
+}
+
+/* ============================================================
+   INPUTS
+   ============================================================ */
 .pto-input {
     width: 80px;
     background: #111118;
@@ -379,7 +440,9 @@ body {
     border-color: #00E676;
 }
 
-/* Acciones */
+/* ============================================================
+   ACCIONES - BOTONES
+   ============================================================ */
 .action-group {
     display: flex;
     gap: 0.5rem;
@@ -394,6 +457,7 @@ body {
     cursor: pointer;
     transition: all 0.2s;
     border: none;
+    position: relative;
 }
 
 .action-btn-success {
@@ -416,7 +480,29 @@ body {
     background: rgba(239,68,68,0.2);
 }
 
-/* Info cliente */
+/* ============================================================
+   TOOLTIPS
+   ============================================================ */
+.action-btn:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #1A1A24;
+    color: #F9FAFB;
+    padding: 4px 8px;
+    border-radius: 6px;
+    font-size: 10px;
+    white-space: nowrap;
+    z-index: 10;
+    border: 0.5px solid rgba(255,255,255,0.1);
+    pointer-events: none;
+}
+
+/* ============================================================
+   INFO CLIENTE
+   ============================================================ */
 .client-name {
     font-weight: 600;
     color: #F9FAFB;
@@ -456,7 +542,9 @@ body {
     color: #00E676;
 }
 
-/* Toast */
+/* ============================================================
+   TOAST NOTIFICATIONS
+   ============================================================ */
 .toast-container {
     position: fixed;
     bottom: 1.5rem;
@@ -487,7 +575,9 @@ body {
     to { opacity: 1; transform: translateX(0); }
 }
 
-/* Modal Health Check */
+/* ============================================================
+   MODAL HEALTH CHECK
+   ============================================================ */
 .modal-overlay {
     position: fixed;
     top: 0;
@@ -573,7 +663,9 @@ body {
 .health-badge.down { background: rgba(239,68,68,0.1); color: #F87171; border: 0.5px solid rgba(239,68,68,0.2); }
 .health-badge.warning { background: rgba(251,191,36,0.1); color: #FBBF24; border: 0.5px solid rgba(251,191,36,0.2); }
 
-/* Estados de carga */
+/* ============================================================
+   ESTADOS DE CARGA
+   ============================================================ */
 .loading-row td, .empty-row td, .error-row td {
     padding: 3rem;
     text-align: center;
@@ -584,7 +676,9 @@ body {
     color: #F87171;
 }
 
-/* Scrollbar */
+/* ============================================================
+   SCROLLBAR
+   ============================================================ */
 ::-webkit-scrollbar {
     width: 6px;
     height: 6px;
@@ -603,6 +697,9 @@ body {
     background: #00E676;
 }
 
+/* ============================================================
+   UTILIDADES
+   ============================================================ */
 .text-center {
     text-align: center;
 }
@@ -611,7 +708,9 @@ body {
     text-align: right;
 }
 
-/* Responsive */
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
 @media (max-width: 768px) {
     .sidebar {
         transform: translateX(-100%);
@@ -636,5 +735,10 @@ body {
     
     .action-group {
         flex-direction: column;
+    }
+    
+    .conexion-detalle {
+        flex-direction: column;
+        align-items: flex-start;
     }
 }

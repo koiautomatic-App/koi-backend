@@ -2537,27 +2537,31 @@ app.get('/dashboard', requireAuth, (req, res) => {
 // ════════════════════════════════════════════════════════════
 
 // Middleware para verificar si es administrador
-const requireAdmin = (req, res, next) => {
-  const token = req.cookies.koi_token;
-  if (!token) {
-    return res.status(403).send('Acceso denegado: no autenticado');
-  }
-  
+const requireAdmin = async (req, res, next) => {
   try {
-    const decoded = jwt.verify(token, JWT_SECRET);
-    req.userId = decoded.id;
+    const token = req.cookies.koi_token;
+    if (!token) {
+      return res.status(403).send('Acceso denegado: no autenticado');
+    }
     
-    User.findById(req.userId).then(user => {
-      if (user && user.role === 'admin') {
-        next();
-      } else {
-        res.status(403).send('Acceso denegado: se requieren permisos de administrador');
-      }
-    }).catch(() => {
-      res.status(403).send('Acceso denegado');
-    });
+    const decoded = jwt.verify(token, JWT_SECRET);
+    const userId = decoded.id;
+    
+    const user = await User.findById(userId).select('role email').lean();
+    
+    console.log('🔍 requireAdmin - Usuario encontrado:', user?.email);
+    console.log('🔍 requireAdmin - Rol:', user?.role);
+    
+    if (user && user.role === 'admin') {
+      req.userId = userId;
+      next();
+    } else {
+      console.log('❌ Acceso denegado - rol no es admin:', user?.role);
+      res.status(403).send('Acceso denegado: se requieren permisos de administrador');
+    }
   } catch (error) {
-    res.status(403).send('Acceso denegado: token inválido');
+    console.error('❌ Error en requireAdmin:', error.message);
+    res.status(403).send('Acceso denegado: error de verificación');
   }
 };
 

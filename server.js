@@ -2655,6 +2655,16 @@ app.get('/api/admin/logs', requireAuth, requireAdmin, async (req, res) => {
     res.json({ ok: true, logs: [] });
 });
 
+// Obtener todas las integraciones (para admin)
+app.get('/api/admin/integrations', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const integrations = await Integration.find().select('userId platform storeName status').lean();
+        res.json({ ok: true, integrations });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

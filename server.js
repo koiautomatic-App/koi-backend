@@ -2536,23 +2536,31 @@ app.get('/dashboard', requireAuth, (req, res) => {
 //  ADMIN
 // ════════════════════════════════════════════════════════════
 
-const requireAdmin = async (req, res, next) => {
+// Middleware para verificar si es administrador
+const requireAdmin = (req, res, next) => {
+  // Usar la misma lógica que requireAuth
+  const token = req.cookies.koi_token;
+  if (!token) {
+    return res.status(403).send('Acceso denegado: no autenticado');
+  }
+  
   try {
-    const user = await User.findById(req.userId);
-    if (user && user.role === 'admin') {
-      next();
-    } else {
-      res.status(403).send('Acceso denegado: se requieren permisos de administrador');
-    }
+    const decoded = jwt.verify(token, JWT_SECRET);
+    req.userId = decoded.id;
+    
+    User.findById(req.userId).then(user => {
+      if (user && user.role === 'admin') {
+        next();
+      } else {
+        res.status(403).send('Acceso denegado: se requieren permisos de administrador');
+      }
+    }).catch(() => {
+      res.status(403).send('Acceso denegado');
+    });
   } catch (error) {
-    res.status(403).send('Acceso denegado');
+    res.status(403).send('Acceso denegado: token inválido');
   }
 };
-
-app.get('/admin', requireAuth, requireAdmin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

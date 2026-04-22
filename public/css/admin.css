@@ -742,3 +742,18 @@ body {
         align-items: flex-start;
     }
 }
+.action-btn-config {
+    background: rgba(0,230,118,0.1);
+    color: #00E676;
+    border: 0.5px solid rgba(0,230,118,0.2);
+    padding: 0.25rem 0.6rem;
+    border-radius: 6px;
+    font-size: 0.65rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.action-btn-config:hover {
+    background: rgba(0,230,118,0.2);
+}

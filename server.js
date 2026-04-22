@@ -2531,6 +2531,28 @@ app.get('/login', (req, res) => {
 app.get('/dashboard', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
+
+// ════════════════════════════════════════════════════════════
+//  ADMIN
+// ════════════════════════════════════════════════════════════
+
+const requireAdmin = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId);
+    if (user && user.role === 'admin') {
+      next();
+    } else {
+      res.status(403).send('Acceso denegado: se requieren permisos de administrador');
+    }
+  } catch (error) {
+    res.status(403).send('Acceso denegado');
+  }
+};
+
+app.get('/admin', requireAuth, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

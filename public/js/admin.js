@@ -154,4 +154,246 @@ window.actualizarPtoVenta = async function(userId, ptoVenta) {
     try {
         const res = await fetch('/api/admin/actualizar-pto', {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json'
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId, puntoVenta: parseInt(ptoVenta) })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Punto de venta actualizado', 'success');
+        } else {
+            showToast(data.error || 'Error al actualizar', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    }
+};
+
+// Forzar sincronización
+window.forzarSync = async function(userId) {
+    try {
+        const res = await fetch('/api/admin/forzar-sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Sincronización forzada iniciada', 'success');
+        } else {
+            showToast(data.error || 'Error al sincronizar', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    }
+};
+
+// Desvincular usuario
+window.desvincular = async function(userId) {
+    if (!confirm('¿Estás seguro de que querés desvincular este usuario de AFIP?')) return;
+    
+    try {
+        const res = await fetch('/api/admin/desvincular', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ userId })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            showToast('Usuario desvinculado', 'success');
+            fetchPendientes();
+        } else {
+            showToast(data.error || 'Error al desvincular', 'error');
+        }
+    } catch (error) {
+        showToast('Error de conexión', 'error');
+    }
+};
+
+// Copiar al portapapeles
+window.copyToClipboard = function(text) {
+    navigator.clipboard.writeText(text);
+    showToast('Copiado al portapapeles', 'success');
+};
+
+// Exportar CSV
+function exportarCSV() {
+    fetch('/api/admin/export-csv')
+        .then(res => res.blob())
+        .then(blob => {
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `usuarios_${new Date().toISOString().slice(0, 19)}.csv`;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            window.URL.revokeObjectURL(url);
+            showToast('Exportación completada', 'success');
+        })
+        .catch(() => showToast('Error al exportar', 'error'));
+}
+
+// Health Check
+function openHealthModal() {
+    healthModal.classList.add('active');
+    checkHealth();
+}
+
+function closeHealthModal() {
+    healthModal.classList.remove('active');
+}
+
+async function checkHealth() {
+    try {
+        const res = await fetch('/api/admin/health');
+        const data = await res.json();
+        
+        const dbEl = document.getElementById('dbStatus');
+        dbEl.textContent = data.db ? '🟢 Online' : '🔴 Offline';
+        dbEl.className = `health-badge ${data.db ? 'up' : 'down'}`;
+        
+        const afipEl = document.getElementById('afipStatus');
+        afipEl.textContent = data.afip ? '🟢 Conectado' : '⚠️ No disponible';
+        afipEl.className = `health-badge ${data.afip ? 'up' : 'warning'}`;
+        
+        const emailEl = document.getElementById('emailStatus');
+        emailEl.textContent = data.email ? '🟢 Activo' : '⚠️ No disponible';
+        emailEl.className = `health-badge ${data.email ? 'up' : 'warning'}`;
+        
+        const apiEl = document.getElementById('apiStatus');
+        apiEl.textContent = data.api ? '🟢 Activa' : '🔴 Inactiva';
+        apiEl.className = `health-badge ${data.api ? 'up' : 'down'}`;
+        
+        const memEl = document.getElementById('memoryStatus');
+        const memPercent = data.memoryUsage || 0;
+        memEl.textContent = memPercent < 70 ? `🟢 ${memPercent}% usado` : memPercent < 90 ? `🟡 ${memPercent}% usado` : `🔴 ${memPercent}% usado`;
+        memEl.className = `health-badge ${memPercent < 70 ? 'up' : memPercent < 90 ? 'warning' : 'down'}`;
+        
+        const uptimeEl = document.getElementById('uptimeStatus');
+        const uptime = data.uptime || 0;
+        const hours = Math.floor(uptime / 3600);
+        const minutes = Math.floor((uptime % 3600) / 60);
+        uptimeEl.textContent = `${hours}h ${minutes}m`;
+        uptimeEl.className = 'health-badge up';
+        
+    } catch (error) {
+        console.error('Health check error:', error);
+        showToast('Error al obtener estado del sistema', 'error');
+    }
+}
+
+// Funciones de utilidad
+function escapeHtml(str) {
+    if (!str) return '';
+    return str.replace(/[&<>]/g, function(m) {
+        if (m === '&') return '&amp;';
+        if (m === '<') return '&lt;';
+        if (m === '>') return '&gt;';
+        return m;
+    });
+}
+
+// Switch de tabs
+function switchTab(tabId) {
+    // Actualizar nav items
+    document.querySelectorAll('.nav-item').forEach(item => {
+        if (item.getAttribute('data-tab') === tabId) {
+            item.classList.add('active');
+        } else {
+            item.classList.remove('active');
+        }
+    });
+    
+    // Actualizar tab buttons
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        if (btn.getAttribute('data-tab') === tabId) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+    });
+    
+    // Actualizar panes
+    document.querySelectorAll('.tab-pane').forEach(pane => {
+        if (pane.id === `tab-${tabId}`) {
+            pane.classList.add('active');
+        } else {
+            pane.classList.remove('active');
+        }
+    });
+    
+    // Cargar datos según el tab
+    if (tabId === 'usuarios') {
+        fetchPendientes();
+    } else if (tabId === 'logs') {
+        loadLogs();
+    }
+}
+
+// Cerrar sesión
+function cerrarSesion() {
+    fetch('/auth/logout').then(() => {
+        window.location.href = '/login';
+    });
+}
+
+// Funciones de configuración
+function toggleMaintenance() {
+    fetch('/api/admin/toggle-maintenance', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            showToast(data.message || 'Modo mantenimiento cambiado', 'info');
+        })
+        .catch(() => showToast('Error', 'error'));
+}
+
+function clearCache() {
+    fetch('/api/admin/clear-cache', { method: 'POST' })
+        .then(res => res.json())
+        .then(data => {
+            showToast(data.message || 'Caché limpiado', 'success');
+        })
+        .catch(() => showToast('Error', 'error'));
+}
+
+// Event Listeners
+document.addEventListener('DOMContentLoaded', () => {
+    // Cargar datos iniciales
+    loadStats();
+    fetchPendientes();
+    
+    // Navegación sidebar
+    document.querySelectorAll('.nav-item[data-tab]').forEach(item => {
+        item.addEventListener('click', () => {
+            const tab = item.getAttribute('data-tab');
+            switchTab(tab);
+        });
+    });
+    
+    // Tabs
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const tab = btn.getAttribute('data-tab');
+            switchTab(tab);
+        });
+    });
+    
+    // Botones
+    if (refreshBtn) refreshBtn.addEventListener('click', () => fetchPendientes());
+    if (exportBtn) exportBtn.addEventListener('click', () => exportarCSV());
+    if (healthBtn) healthBtn.addEventListener('click', () => openHealthModal());
+    if (logoutBtn) logoutBtn.addEventListener('click', () => cerrarSesion());
+    if (maintenanceBtn) maintenanceBtn.addEventListener('click', () => toggleMaintenance());
+    if (clearCacheBtn) clearCacheBtn.addEventListener('click', () => clearCache());
+    if (closeHealthModalBtn) closeHealthModalBtn.addEventListener('click', () => closeHealthModal());
+    
+    // Cerrar modal al hacer clic fuera
+    healthModal.addEventListener('click', (e) => {
+        if (e.target === healthModal) closeHealthModal();
+    });
+});
+
+// Sidebar mobile toggle (opcional)
+window.toggleSidebar = function() {
+    sidebar.classList.toggle('mobile-open');
+};

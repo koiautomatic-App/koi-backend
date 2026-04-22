@@ -1,178 +1,157 @@
-// Admin JS - KOI Factura
+/**
+ * KOI Admin Panel - JavaScript
+ * Funcionalidades: stats, usuarios, logs, health check, export CSV
+ */
 
-// Mostrar toast de notificación
-function mostrarToast(mensaje, tipo = 'success') {
+// DOM Elements
+const sidebar = document.getElementById('sidebar');
+const navItems = document.querySelectorAll('.nav-item');
+const tabBtns = document.querySelectorAll('.tab-btn');
+const tabPanes = document.querySelectorAll('.tab-pane');
+const refreshBtn = document.getElementById('refreshBtn');
+const exportBtn = document.getElementById('exportBtn');
+const healthBtn = document.getElementById('healthBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const maintenanceBtn = document.getElementById('maintenanceBtn');
+const clearCacheBtn = document.getElementById('clearCacheBtn');
+const healthModal = document.getElementById('healthModal');
+const closeHealthModalBtn = document.getElementById('closeHealthModalBtn');
+
+// Toast notifications
+function showToast(message, type = 'info') {
     const container = document.getElementById('toastContainer');
-    if (!container) return;
     const toast = document.createElement('div');
-    toast.className = `toast toast-${tipo}`;
-    toast.textContent = mensaje;
+    toast.className = `toast toast-${type}`;
+    const icon = type === 'success' ? 'fa-check-circle' : 
+                 type === 'error' ? 'fa-exclamation-circle' : 
+                 type === 'warning' ? 'fa-exclamation-triangle' : 'fa-info-circle';
+    toast.innerHTML = `<i class="fas ${icon}"></i> ${message}`;
     container.appendChild(toast);
-    setTimeout(() => toast.remove(), 3000);
+    setTimeout(() => toast.remove(), 2500);
 }
 
-// Copiar texto al portapapeles
-async function copiarTexto(texto, label) {
+// Cargar estadísticas
+async function loadStats() {
     try {
-        await navigator.clipboard.writeText(texto);
-        mostrarToast(`${label} copiado al portapapeles`, 'success');
-    } catch (err) {
-        mostrarToast('Error al copiar', 'error');
+        const res = await fetch('/api/admin/stats');
+        const data = await res.json();
+        if (data.ok) {
+            document.getElementById('totalUsers').textContent = data.totalUsers || 0;
+            document.getElementById('afipLinked').textContent = data.afipLinked || 0;
+            document.getElementById('pendingUsers').textContent = data.pendingUsers || 0;
+            document.getElementById('invoicesToday').textContent = data.invoicesToday || 0;
+        }
+    } catch (error) {
+        console.error('Error loading stats:', error);
+        showToast('Error al cargar estadísticas', 'error');
     }
 }
 
-// Escape HTML para prevenir XSS
-function escapeHtml(str) {
-    if (!str) return '';
-    return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-}
-
-// Obtener clase para el estado
-function getStatusClass(status) {
-    const classes = {
-        'vinculado': 'vinculado',
-        'pendiente': 'pendiente',
-        'error': 'error',
-        'desvinculado': 'desvinculado',
-        'en_proceso': 'en_proceso'
-    };
-    return classes[status] || 'pendiente';
-}
-
-// Obtener texto legible del estado
-function getStatusText(status) {
-    const textos = {
-        'vinculado': '✓ Vinculado',
-        'pendiente': '⏳ Pendiente',
-        'error': '✗ Error',
-        'desvinculado': '○ Desvinculado',
-        'en_proceso': '⟳ En proceso'
-    };
-    return textos[status] || status;
-}
-
-// Cargar lista de usuarios pendientes
+// Cargar usuarios
 async function fetchPendientes() {
     const tbody = document.getElementById('listaPendientes');
-    if (!tbody) return;
-    
-    tbody.innerHTML = '<tr class="loading-row"><td colspan="5">Cargando usuarios...</td></tr>';
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="6"><i class="fas fa-spinner fa-pulse"></i> Cargando usuarios...<\/td><\/tr>';
     
     try {
-        const res = await fetch('/api/admin/pendientes');
+        const res = await fetch('/api/admin/users');
         const data = await res.json();
         
-        if (!data.ok) {
-            tbody.innerHTML = `<tr class="error-row"><td colspan="5">Error: ${data.error || 'No autorizado'}</td></tr>`;
-            mostrarToast(data.error || 'Error al cargar usuarios', 'error');
+        if (!data.ok || !data.users) {
+            tbody.innerHTML = '<tr class="error-row"><td colspan="6"><i class="fas fa-exclamation-triangle"></i> Error al cargar usuarios<\/td><\/tr>';
             return;
         }
         
-        if (!data.lista || data.lista.length === 0) {
-            tbody.innerHTML = '<tr class="empty-row"><td colspan="5">No hay usuarios con CUIT registrados</td></tr>';
+        if (data.users.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="6"><i class="fas fa-inbox"></i> No hay usuarios registrados<\/td><\/tr>';
             return;
         }
         
-        tbody.innerHTML = data.lista.map(item => {
-            const statusClass = getStatusClass(item.status);
-            const statusText = getStatusText(item.status);
-            
-            return `
+        tbody.innerHTML = data.users.map(user => `
             <tr>
                 <td>
-                    <div class="client-name">${escapeHtml(item.cliente)}</div>
-                    <div class="client-email">${escapeHtml(item.email)}</div>
+                    <div class="client-name">${escapeHtml(user.nombre || 'Sin nombre')} ${escapeHtml(user.apellido || '')}</div>
+                    <div class="client-email">${escapeHtml(user.email)}</div>
                 </td>
                 <td>
                     <div class="fiscal-data">
-                        <span class="fiscal-code">${escapeHtml(item.cuit)}</span>
-                        <button class="copy-icon" onclick="copiarTexto('${escapeHtml(item.cuit)}', 'CUIT')">📋</button>
+                        <span class="fiscal-code">${user.settings?.cuit || 'No configurado'}</span>
+                        <button class="copy-icon" onclick="copyToClipboard('${user.settings?.cuit || ''}')"><i class="fas fa-copy"></i></button>
                     </div>
-                    <div class="fiscal-data">
-                        <span class="fiscal-code">${escapeHtml(item.claveFiscal)}</span>
-                        <button class="copy-icon" onclick="copiarTexto('${escapeHtml(item.claveFiscal)}', 'Clave fiscal')">📋</button>
+                    <div style="font-size: 0.7rem; color: #4B5563; margin-top: 4px;">
+                        ${user.settings?.arcaClave ? '<i class="fas fa-lock"></i> Clave configurada' : '<i class="fas fa-lock-open"></i> Sin clave ARCA'}
                     </div>
                 </td>
                 <td class="text-center">
-                    <input type="number" id="pv-${item.id}" value="${item.puntoVenta || 1}" class="pto-input">
+                    <input type="number" class="pto-input" value="${user.settings?.puntoVenta || 1}" 
+                           onchange="actualizarPtoVenta('${user._id}', this.value)">
                 </td>
                 <td>
                     <div class="status-badge">
-                        <span class="status-dot ${statusClass}"></span>
-                        <span class="status-text ${statusClass}">${statusText}</span>
+                        <span class="status-dot ${user.settings?.cuit ? 'active' : 'pending'}"></span>
+                        <span class="status-text ${user.settings?.cuit ? 'active' : 'pending'}">
+                            ${user.settings?.cuit ? 'Vinculado' : 'Pendiente'}
+                        </span>
                     </div>
-                    ${item.notas ? `<div class="nota-text">${escapeHtml(item.notas)}</div>` : ''}
+                </td>
+                <td>
+                    <span class="status-text ${user.plan === 'pro' ? 'active' : 'inactive'}">
+                        ${user.plan === 'pro' ? '<i class="fas fa-star"></i> Pro' : '<i class="fas fa-user"></i> Free'}
+                    </span>
                 </td>
                 <td class="text-right">
                     <div class="action-group">
-                        <button class="action-btn action-btn-success" onclick="updateStatus('${item.id}', 'vinculado')">Vincular OK</button>
-                        <button class="action-btn action-btn-error" onclick="updateStatus('${item.id}', 'error')">Error</button>
-                        <button class="action-btn action-btn-unlink" onclick="updateStatus('${item.id}', 'desvinculado')">Desvincular</button>
+                        <button class="action-btn action-btn-success" onclick="forzarSync('${user._id}')">
+                            <i class="fas fa-sync-alt"></i> Sync
+                        </button>
+                        <button class="action-btn action-btn-error" onclick="desvincular('${user._id}')">
+                            <i class="fas fa-unlink"></i> Reset
+                        </button>
                     </div>
                 </td>
             </tr>
-            `;
-        }).join('');
+        `).join('');
     } catch (error) {
         console.error('Error:', error);
-        tbody.innerHTML = `<tr class="error-row"><td colspan="5">Error de conexión: ${error.message}</td></tr>`;
-        mostrarToast('Error de conexión con el servidor', 'error');
+        tbody.innerHTML = '<tr class="error-row"><td colspan="6"><i class="fas fa-exclamation-triangle"></i> Error de conexión<\/td><\/tr>';
     }
 }
 
-// Actualizar estado de un usuario
-async function updateStatus(userId, nuevoStatus) {
-    const ptoVta = document.getElementById(`pv-${userId}`).value;
-    
-    let mensajePredeterminado = '';
-    if (nuevoStatus === 'vinculado') mensajePredeterminado = 'Vinculación aprobada - Cliente puede facturar';
-    if (nuevoStatus === 'error') mensajePredeterminado = 'Error en la vinculación - Revisar datos';
-    if (nuevoStatus === 'desvinculado') mensajePredeterminado = 'Usuario desvinculado del sistema';
-    
-    const notas = prompt("Notas para el cliente (opcional):", mensajePredeterminado);
-    if (notas === null) return;
+// Cargar logs
+async function loadLogs() {
+    const tbody = document.getElementById('logsList');
+    tbody.innerHTML = '<tr class="loading-row"><td colspan="4"><i class="fas fa-spinner fa-pulse"></i> Cargando logs...<\/td><\/tr>';
     
     try {
-        const res = await fetch('/api/admin/update-status', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                userId, 
-                nuevoStatus, 
-                notas: notas || mensajePredeterminado,
-                puntoVenta: ptoVta
-            })
-        });
-        
+        const res = await fetch('/api/admin/logs');
         const data = await res.json();
         
-        if (res.ok) {
-            mostrarToast(`✅ Usuario actualizado a "${nuevoStatus}"`, 'success');
-            fetchPendientes();
-        } else {
-            mostrarToast(`❌ Error: ${data.error || 'No se pudo actualizar'}`, 'error');
+        if (!data.ok || !data.logs) {
+            tbody.innerHTML = '<tr class="error-row"><td colspan="4"><i class="fas fa-exclamation-triangle"></i> Error al cargar logs<\/td><\/tr>';
+            return;
         }
+        
+        if (data.logs.length === 0) {
+            tbody.innerHTML = '<tr class="empty-row"><td colspan="4"><i class="fas fa-inbox"></i> No hay logs registrados<\/td><\/tr>';
+            return;
+        }
+        
+        tbody.innerHTML = data.logs.map(log => `
+            <tr>
+                <td style="white-space: nowrap;">${new Date(log.createdAt).toLocaleString()}</td>
+                <td>${escapeHtml(log.userEmail || 'Sistema')}</td>
+                <td>${escapeHtml(log.action)}</td>
+                <td>${escapeHtml(log.detail || '')}</td>
+            </tr>
+        `).join('');
     } catch (error) {
-        mostrarToast(`❌ Error de red: ${error.message}`, 'error');
+        console.error('Error:', error);
+        tbody.innerHTML = '<tr class="error-row"><td colspan="4"><i class="fas fa-exclamation-triangle"></i> Error de conexión<\/td><\/tr>';
     }
 }
 
-// Exportar lista a CSV
-function exportarCSV() {
-    mostrarToast('📄 Exportando CSV...', 'success');
-    setTimeout(() => {
-        window.location.href = '/api/admin/exportar-csv';
-    }, 500);
-}
-
-// Inicializar al cargar la página
-document.addEventListener('DOMContentLoaded', () => {
-    fetchPendientes();
-    // Auto-refresh cada 30 segundos
-    setInterval(fetchPendientes, 30000);
-});
+// Actualizar punto de venta
+window.actualizarPtoVenta = async function(userId, ptoVenta) {
+    try {
+        const res = await fetch('/api/admin/actualizar-pto', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json'

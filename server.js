@@ -2538,7 +2538,6 @@ app.get('/dashboard', requireAuth, (req, res) => {
 
 // Middleware para verificar si es administrador
 const requireAdmin = (req, res, next) => {
-  // Usar la misma lógica que requireAuth
   const token = req.cookies.koi_token;
   if (!token) {
     return res.status(403).send('Acceso denegado: no autenticado');
@@ -2561,6 +2560,12 @@ const requireAdmin = (req, res, next) => {
     res.status(403).send('Acceso denegado: token inválido');
   }
 };
+
+// Ruta del panel de administración
+app.get('/admin', requireAuth, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // ════════════════════════════════════════════════════════════
 //  HEALTH CHECK — Para keep-alive y monitoreo
 // ════════════════════════════════════════════════════════════

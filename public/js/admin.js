@@ -178,11 +178,17 @@ async function fetchPendientes() {
                     <div style="font-size: 0.7rem; color: #4B5563; margin-top: 4px;">
                         ${user.settings?.arcaClave ? '<i class="fas fa-lock"></i> Clave ARCA configurada' : '<i class="fas fa-lock-open"></i> Sin clave ARCA'}
                     </div>
-                 </td>
-                <td class="text-center">
-                    <input type="number" class="pto-input" value="${user.settings?.puntoVenta || 1}" 
-                           onchange="actualizarPtoVenta('${user._id}', this.value)">
-                 </td>
+<td class="text-center">
+    ${user.settings?.puntoVenta ? 
+        `<input type="number" class="pto-input" value="${user.settings.puntoVenta}" 
+                onchange="actualizarPtoVenta('${user._id}', this.value)">` :
+        `<span style="color: #6B7280; font-size: 0.7rem;">No configurado</span>
+         <button class="action-btn action-btn-success" style="margin-left: 8px;" 
+                 onclick="actualizarPtoVenta('${user._id}', 1)" title="Configurar punto de venta">
+             <i class="fas fa-plus"></i> Configurar
+         </button>`
+    }
+</td>
                 <td>
                     <div class="status-badge">
                         <i class="fas ${estado.icono}" style="color: ${estado.iconoColor}; margin-right: 6px;"></i>

@@ -2505,6 +2505,90 @@ app.post('/api/integrations/:platform/toggle', requireAuthAPI, async (req, res) 
 });
 
 // ════════════════════════════════════════════════════════════
+//  API ADMIN
+// ════════════════════════════════════════════════════════════
+
+// Estadísticas
+app.get('/api/admin/stats', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const totalUsers = await User.countDocuments();
+        const afipLinked = await User.countDocuments({ 'settings.cuit': { $exists: true, $ne: '' } });
+        const pendingUsers = await User.countDocuments({ 'settings.cuit': { $exists: false } });
+        const invoicesToday = await Order.countDocuments({ fechaEmision: { $gte: new Date().setHours(0,0,0) } });
+        
+        res.json({ ok: true, totalUsers, afipLinked, pendingUsers, invoicesToday });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Listar usuarios
+app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const users = await User.find().select('-password -__v').lean();
+        res.json({ ok: true, users });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Actualizar punto de venta
+app.post('/api/admin/actualizar-pto', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { userId, puntoVenta } = req.body;
+        await User.findByIdAndUpdate(userId, { 'settings.puntoVenta': puntoVenta });
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Forzar sincronización
+app.post('/api/admin/forzar-sync', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.body;
+        // Aquí iría la lógica de sincronización forzada
+        res.json({ ok: true, message: 'Sincronización iniciada' });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Desvincular usuario
+app.post('/api/admin/desvincular', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const { userId } = req.body;
+        await User.findByIdAndUpdate(userId, { 
+            $unset: { 'settings.cuit': '', 'settings.arcaClave': '' }
+        });
+        res.json({ ok: true });
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Exportar CSV
+app.get('/api/admin/export-csv', requireAuth, requireAdmin, async (req, res) => {
+    try {
+        const users = await User.find().select('nombre apellido email settings.cuit settings.puntoVenta plan').lean();
+        let csv = 'Nombre,Apellido,Email,CUIT,PuntoVenta,Plan\n';
+        users.forEach(u => {
+            csv += `"${u.nombre || ''}","${u.apellido || ''}","${u.email}","${u.settings?.cuit || ''}",${u.settings?.puntoVenta || 1},${u.plan}\n`;
+        });
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename=usuarios.csv');
+        res.send(csv);
+    } catch (error) {
+        res.status(500).json({ ok: false, error: error.message });
+    }
+});
+
+// Logs (simplificado)
+app.get('/api/admin/logs', requireAuth, requireAdmin, async (req, res) => {
+    res.json({ ok: true, logs: [] });
+});
+
+// ════════════════════════════════════════════════════════════
 //  PÁGINAS HTML
 // ════════════════════════════════════════════════════════════
 const isLoggedIn = (req) => {

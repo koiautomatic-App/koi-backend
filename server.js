@@ -1514,7 +1514,7 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     const nroDoc = tipoDoc === 99 ? 0 : parseInt(docClean);
     const importe = Math.abs(orden.amount);
     
-    // 6. Construir SOAP para Nota de Crédito
+    // 6. Construir SOAP para Nota de Crédito (CON CbtesAsoc)
     const soap = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -1548,6 +1548,13 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
             <ar:ImpTrib>0</ar:ImpTrib>
             <ar:MonId>PES</ar:MonId>
             <ar:MonCotiz>1</ar:MonCotiz>
+            <ar:CbtesAsoc>
+              <ar:CbteAsoc>
+                <ar:Tipo>${tipoOriginal}</ar:Tipo>
+                <ar:PtoVta>${orden.puntoVenta || 1}</ar:PtoVta>
+                <ar:Nro>${orden.nroComprobante}</ar:Nro>
+              </ar:CbteAsoc>
+            </ar:CbtesAsoc>
           </ar:FECAEDetRequest>
         </ar:FeDetReq>
       </ar:FeCAEReq>
@@ -1632,7 +1639,6 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
-
 
 // ════════════════════════════════════════════════════════════
 //  GENERAR QR HTML PARA AFIP

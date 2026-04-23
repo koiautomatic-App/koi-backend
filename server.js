@@ -1514,7 +1514,11 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     const nroDoc = tipoDoc === 99 ? 0 : parseInt(docClean);
     const importe = Math.abs(orden.amount);
     
-    // 6. Construir SOAP para Nota de Crédito (CON CbtesAsoc)
+    // 6. Construir SOAP para Nota de Crédito
+    const ptoVtaStrNC = String(ptoVta).padStart(5, '0');
+    const nroCbteStrNC = String(nroCbte).padStart(8, '0');
+    const tipoLabel = tipoNC === 13 ? 'C' : tipoNC === 2 ? 'A' : 'B';
+    
     const soap = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -1574,9 +1578,7 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     const xml = parser.parseFromString(wsfeResp.data, 'text/xml');
     
     const soapFault = xml.getElementsByTagName('faultstring')[0]?.textContent;
-    if (soapFault) {
-      throw new Error('AFIP error: ' + soapFault);
-    }
+    if (soapFault) throw new Error('AFIP error: ' + soapFault);
     
     const detResp = xml.getElementsByTagName('FECAEDetResponse')[0];
     const result = detResp?.getElementsByTagName('Resultado')[0]?.textContent;
@@ -1591,10 +1593,6 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     const caeExpiry = caeVto ? new Date(`${caeVto.slice(0,4)}-${caeVto.slice(4,6)}-${caeVto.slice(6,8)}`) : null;
     
     // 9. Guardar la Nota de Crédito
-    const tipoLabel = tipoNC === 13 ? 'C' : tipoNC === 2 ? 'A' : 'B';
-    const ptoVtaStr = String(ptoVta).padStart(5, '0');
-    const nroCbteStr = String(nroCbte).padStart(8, '0');
-    
     const ncOrder = await Order.create({
       userId: req.userId,
       integrationId: orden.integrationId,
@@ -1614,7 +1612,7 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
       tipoComprobante: tipoNC,
       puntoVenta: ptoVta,
       nroComprobante: nroCbte,
-      nroFormatted: `NC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr}`,
+      nroFormatted: `NC ${tipoLabel} ${ptoVtaStrNC}-${nroCbteStrNC}`,
       fechaEmision: new Date(),
       emailSent: false
     });

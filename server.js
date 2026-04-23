@@ -634,52 +634,50 @@ async function upsertOrder(integration, canonical) {
     ? `Monto $${canonical.amount} ≥ $${ARCA_LIMIT} sin DNI válido` : '';
   if (canonical.customerDoc === null) canonical.customerDoc = '0';
 
+  // Campos que SOLO van en $setOnInsert (no deben actualizarse después)
+  const soloSetOnInsert = {
+    userId: integration.userId,
+    integrationId: integration._id,
+    platform: integration.platform,
+    status,
+    errorLog,
+  };
+
+  // El resto de canonical va SOLO en $set
+  const { userId, integrationId, platform, ...setData } = canonical;
+  
+  // Agregar campos con valores por defecto
+  setData.buyerId = canonical.buyerId || '';
+  setData.shipmentId = canonical.shipmentId || '';
+  setData.orderEnriched = canonical.orderEnriched || false;
+  setData.taxCondition = canonical.taxCondition || 'consumidor_final';
+  setData.buyerFirstName = canonical.buyerFirstName || '';
+  setData.buyerLastName = canonical.buyerLastName || '';
+  setData.buyerIdentificationType = canonical.buyerIdentificationType || '';
+  setData.buyerIdentificationNumber = canonical.buyerIdentificationNumber || '';
+
   const doc = await Order.findOneAndUpdate(
     { userId: integration.userId, platform: integration.platform, externalId: canonical.externalId },
     { 
-      $setOnInsert: {
-        userId:        integration.userId,
-        integrationId: integration._id,
-        platform:      integration.platform,
-        ...canonical,
-        status,
-        errorLog,
-      },
-      $set: {
-        buyerId: canonical.buyerId || '',
-        shipmentId: canonical.shipmentId || '',
-        orderEnriched: canonical.orderEnriched || false,
-        customerName: canonical.customerName,
-        customerEmail: canonical.customerEmail,
-        customerDoc: canonical.customerDoc,
-        taxCondition: canonical.taxCondition,
-        amount: canonical.amount,
-        currency: canonical.currency,
-        concepto: canonical.concepto,
-        items: canonical.items,
-        orderDate: canonical.orderDate,
-        // 👇 AGREGAR ESTOS CAMPOS
-        buyerFirstName: canonical.buyerFirstName || '',
-        buyerLastName: canonical.buyerLastName || '',
-        buyerIdentificationType: canonical.buyerIdentificationType || '',
-        buyerIdentificationNumber: canonical.buyerIdentificationNumber || '',
-      }
+      $setOnInsert: soloSetOnInsert,
+      $set: setData
     },
     { upsert: true, new: true, setDefaultsOnInsert: true }
   ).catch(err => {
-    if (err.code !== 11000) console.error(`upsert error:`, err.message);
+    console.error(`upsert error:`, err.message);
     return null;
   });
 
-  console.log(`📦 Orden ${canonical.externalId}: buyerId=${doc?.buyerId}, shipmentId=${doc?.shipmentId}`);
-  console.log(`📦 [UPSERT] Orden ${canonical.externalId}: buyerFirstName=${doc?.buyerFirstName}, buyerLastName=${doc?.buyerLastName}`);
-
-  if (doc && status === 'pending_invoice') {
-    const user = await User.findById(integration.userId).select('settings').lean();
-    if (user?.settings?.factAuto && user?.settings?.cuit) {
-      emitirCAE(doc._id, user).catch(e => console.error('Auto-emit error:', e.message));
+  if (doc) {
+    console.log(`📦 Orden ${canonical.externalId}: upsert OK`);
+    if (status === 'pending_invoice') {
+      const user = await User.findById(integration.userId).select('settings').lean();
+      if (user?.settings?.factAuto && user?.settings?.cuit) {
+        emitirCAE(doc._id, user).catch(e => console.error('Auto-emit error:', e.message));
+      }
     }
   }
+  
   return doc;
 }
 

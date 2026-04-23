@@ -2225,6 +2225,50 @@ app.post('/api/woocommerce/sync-order/:id', requireAuthAPI, async (req, res) => 
     }
 });
 
+// Endpoint de diagnóstico - ver la orden cruda de WooCommerce
+app.get('/api/woocommerce/debug-order/:id', requireAuthAPI, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const integration = await Integration.findOne({ 
+            userId: req.userId, 
+            platform: 'woocommerce',
+            status: 'active'
+        });
+        
+        if (!integration) {
+            return res.status(404).json({ error: 'WooCommerce no conectado' });
+        }
+        
+        const key = integration.getKey('consumerKey');
+        const secret = integration.getKey('consumerSecret');
+        const base = integration.storeUrl;
+        
+        const { data: raw } = await axios.get(`${base}/wp-json/wc/v3/orders/${id}`, {
+            auth: { username: key, password: secret },
+            timeout: 30000
+        });
+        
+        // Mostrar datos relevantes
+        res.json({
+            ok: true,
+            order: {
+                id: raw.id,
+                status: raw.status,
+                total: raw.total,
+                customerName: `${raw.billing?.first_name || ''} ${raw.billing?.last_name || ''}`.trim(),
+                email: raw.billing?.email,
+                hasBillingInfo: !!raw.billing,
+                line_items: raw.line_items?.length || 0
+            },
+            raw: raw  // opcional, para ver todo
+        });
+        
+    } catch(e) {
+        res.status(500).json({ error: e.message });
+    }
+});
+
 // ════════════════════════════════════════════════════════════
 //  WOOCOMMERCE OAUTH
 // ════════════════════════════════════════════════════════════

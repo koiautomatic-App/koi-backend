@@ -1422,3 +1422,17 @@
     background: rgba(255,61,87,0.1);
     border-color: rgba(255,61,87,0.4);
 }
+/* Botón deshabilitado genérico */
+.act-btn:disabled,
+.act-btn.act-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Botón de cancelar siempre visible pero diferente estilo cuando está deshabilitado */
+.act-btn.act-danger:disabled {
+    color: #ff3d57;
+    border-color: rgba(255,61,87,0.1);
+    opacity: 0.5;
+    cursor: not-allowed;
+}

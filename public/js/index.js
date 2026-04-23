@@ -128,10 +128,12 @@ function renderComps(lista) {
   
   cont.innerHTML = lista.map((c, i) => {
     const emitido = c.estado === 'cae-ok';
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const esCancelada = c.status === 'cancelled';
     
-    // Botón Emitir CAE (siempre visible, pero cambia estilo y acción según estado)
-    const btnEmitir = emitido
-      ? `<button class="act-btn act-done" title="Factura ya emitida" disabled>
+    // Botón Emitir CAE (deshabilitado para NC)
+    const btnEmitir = (emitido || esNotaCredito)
+      ? `<button class="act-btn act-done" title="${esNotaCredito ? 'Nota de Crédito ya emitida' : 'Factura ya emitida'}" disabled>
           <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
             <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
           </svg>
@@ -144,32 +146,36 @@ function renderComps(lista) {
           </svg>
          </button>`;
     
-    // Botón Enviar Email (siempre visible)
+    // Botón Enviar Email (con texto adaptado para NC)
     const emailSent = c.emailSent === true;
+    const emailTitle = emailSent 
+      ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
+      : (esNotaCredito ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
+    
     const btnEmail = emailSent
-      ? `<button class="act-btn act-btn-sent" title="Factura ya enviada" disabled>
+      ? `<button class="act-btn act-btn-sent" title="${emailTitle}" disabled>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             <path d="M9 9l2 2M5 9l-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
           </svg>
          </button>`
-      : `<button class="act-btn" title="Enviar factura por email" onclick="enviarMail('${c._id||c.id}')">
+      : `<button class="act-btn" title="${emailTitle}" onclick="enviarMail('${c._id||c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
           </svg>
          </button>`;
     
-    // Botón Cancelar (siempre visible, solo cambia estilo)
-    const btnCancelar = emitido
+    // Botón Cancelar (solo para facturas emitidas, no para NC)
+    const btnCancelar = (!esNotaCredito && emitido && !esCancelada)
       ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
           </svg>
          </button>`
-      : `<button class="act-btn act-disabled" title="No se puede cancelar una factura pendiente" disabled>
+      : `<button class="act-btn act-disabled" title="${esNotaCredito ? 'No se puede cancelar una Nota de Crédito' : 'No se puede cancelar una factura pendiente'}" disabled>
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none" opacity="0.4">
             <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
             <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
@@ -188,18 +194,26 @@ function renderComps(lista) {
       }
     })();
     
+    // Mostrar monto positivo para NC
+    const montoMostrar = esNotaCredito ? Math.abs(c.monto) : c.monto;
+    
+    // Mostrar "NC" en la metadata si es nota de crédito
+    const metaTexto = esNotaCredito
+      ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
+      : (c.estado==='cae-ok' && c.cae ? `CAE ${c.cae.slice(-8)} · Vto ${c.caeVto||'—'}` : c.fecha);
+    
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">
       <div class="cae-dot ${c.estado}"></div>
       <div class="comp-info">
         <div class="comp-cliente">${origenTag}${c.cliente}</div>
         <div class="comp-meta">
-          ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}${c.estado==='cae-ok'&&c.cae ? `CAE ${c.cae.slice(-8)} · Vto ${c.caeVto||'—'}` : c.fecha}
+          ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}${metaTexto}
         </div>
       </div>
-      <div class="comp-monto">${ars(c.monto)}</div>
+      <div class="comp-monto">${ars(montoMostrar)}</div>
       <div class="comp-actions">
-        <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')">
+        <button class="act-btn" title="${esNotaCredito ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
             <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>

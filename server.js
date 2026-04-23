@@ -1468,6 +1468,170 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
     console.error('Lote error:', e.message);
   }
 });
+// Cancelar factura y emitir Nota de Crédito
+app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
+  try {
+    const orderId = req.params.id;
+    
+    // 1. Buscar la orden original
+    const orden = await Order.findOne({ _id: orderId, userId: req.userId });
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    if (orden.status !== 'invoiced') {
+      return res.status(400).json({ error: 'Solo se pueden cancelar facturas ya emitidas' });
+    }
+    
+    // 2. Obtener el usuario
+    const user = await User.findById(req.userId).select('settings').lean();
+    if (!user?.settings?.cuit) {
+      return res.status(400).json({ error: 'Configurá tu CUIT antes de emitir notas de crédito' });
+    }
+    
+    // 3. Obtener token AFIP
+    const cuit = user.settings.cuit.replace(/\D/g, '');
+    const { token, sign } = await getAfipToken(cuit);
+    
+    // 4. Determinar tipo de Nota de Crédito según la factura original
+    const tipoOriginal = orden.tipoComprobante || 11;
+    let tipoNC;
+    if (tipoOriginal === 1) tipoNC = 2;   // Nota de Crédito A
+    else if (tipoOriginal === 6) tipoNC = 7;  // Nota de Crédito B
+    else tipoNC = 13;  // Nota de Crédito C
+    
+    const ptoVta = parseInt(user.settings.arcaPtoVta || user.settings.puntoVenta || 1);
+    
+    // 5. Obtener último número de Nota de Crédito
+    const ultimo = await getUltimoComprobante(cuit, ptoVta, tipoNC, token, sign);
+    const nroCbte = ultimo + 1;
+    
+    const fecha = new Date();
+    const fechaStr = `${fecha.getFullYear()}${String(fecha.getMonth()+1).padStart(2,'0')}${String(fecha.getDate()).padStart(2,'0')}`;
+    
+    const docClean = (orden.customerDoc || '99999999').replace(/\D/g, '');
+    const tipoDoc = docClean === '99999999' ? 99 : docClean.length === 11 ? 80 : 96;
+    const nroDoc = tipoDoc === 99 ? 0 : parseInt(docClean);
+    const importe = Math.abs(orden.amount);
+    
+    // 6. Construir SOAP para Nota de Crédito
+    const soap = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECAESolicitar>
+      <ar:Auth>
+        <ar:Token>${token}</ar:Token>
+        <ar:Sign>${sign}</ar:Sign>
+        <ar:Cuit>${cuit}</ar:Cuit>
+      </ar:Auth>
+      <ar:FeCAEReq>
+        <ar:FeCabReq>
+          <ar:CantReg>1</ar:CantReg>
+          <ar:PtoVta>${ptoVta}</ar:PtoVta>
+          <ar:CbteTipo>${tipoNC}</ar:CbteTipo>
+        </ar:FeCabReq>
+        <ar:FeDetReq>
+          <ar:FECAEDetRequest>
+            <ar:Concepto>1</ar:Concepto>
+            <ar:DocTipo>${tipoDoc}</ar:DocTipo>
+            <ar:DocNro>${nroDoc}</ar:DocNro>
+            <ar:CbteDesde>${nroCbte}</ar:CbteDesde>
+            <ar:CbteHasta>${nroCbte}</ar:CbteHasta>
+            <ar:CbteFch>${fechaStr}</ar:CbteFch>
+            <ar:ImpTotal>${importe}</ar:ImpTotal>
+            <ar:ImpTotConc>0</ar:ImpTotConc>
+            <ar:ImpNeto>${importe}</ar:ImpNeto>
+            <ar:ImpOpEx>0</ar:ImpOpEx>
+            <ar:ImpIVA>0</ar:ImpIVA>
+            <ar:ImpTrib>0</ar:ImpTrib>
+            <ar:MonId>PES</ar:MonId>
+            <ar:MonCotiz>1</ar:MonCotiz>
+          </ar:FECAEDetRequest>
+        </ar:FeDetReq>
+      </ar:FeCAEReq>
+    </ar:FECAESolicitar>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+    
+    // 7. Enviar a AFIP
+    const wsfeResp = await axios.post(AFIP_URLS.wsfe, soap, {
+      headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECAESolicitar' },
+      httpsAgent,
+      timeout: 30000
+    });
+    
+    // 8. Parsear respuesta
+    const parser = new DOMParser();
+    const xml = parser.parseFromString(wsfeResp.data, 'text/xml');
+    
+    const soapFault = xml.getElementsByTagName('faultstring')[0]?.textContent;
+    if (soapFault) {
+      throw new Error('AFIP error: ' + soapFault);
+    }
+    
+    const detResp = xml.getElementsByTagName('FECAEDetResponse')[0];
+    const result = detResp?.getElementsByTagName('Resultado')[0]?.textContent;
+    
+    if (result !== 'A') {
+      const errMsg = detResp?.getElementsByTagName('Msg')[0]?.textContent || 'Error desconocido';
+      throw new Error('AFIP rechazó: ' + errMsg);
+    }
+    
+    const cae = detResp.getElementsByTagName('CAE')[0]?.textContent;
+    const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;
+    const caeExpiry = caeVto ? new Date(`${caeVto.slice(0,4)}-${caeVto.slice(4,6)}-${caeVto.slice(6,8)}`) : null;
+    
+    // 9. Guardar la Nota de Crédito
+    const tipoLabel = tipoNC === 13 ? 'C' : tipoNC === 2 ? 'A' : 'B';
+    const ptoVtaStr = String(ptoVta).padStart(5, '0');
+    const nroCbteStr = String(nroCbte).padStart(8, '0');
+    
+    const ncOrder = await Order.create({
+      userId: req.userId,
+      integrationId: orden.integrationId,
+      platform: orden.platform,
+      externalId: `${orden.externalId}-NC-${Date.now()}`,
+      customerName: orden.customerName,
+      customerEmail: orden.customerEmail,
+      customerDoc: orden.customerDoc,
+      amount: -orden.amount,
+      currency: orden.currency,
+      concepto: `Nota de Crédito - Factura original #${orden.externalId}`,
+      items: orden.items,
+      orderDate: new Date(),
+      status: 'invoiced',
+      caeNumber: cae,
+      caeExpiry: caeExpiry,
+      tipoComprobante: tipoNC,
+      puntoVenta: ptoVta,
+      nroComprobante: nroCbte,
+      nroFormatted: `NC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr}`,
+      fechaEmision: new Date(),
+      emailSent: false
+    });
+    
+    // 10. Marcar la factura original como cancelada
+    await Order.findByIdAndUpdate(orderId, {
+      status: 'cancelled',
+      errorLog: `Cancelada - Nota de Crédito #${ncOrder.nroFormatted}`
+    });
+    
+    console.log(`✅ Nota de Crédito emitida para orden ${orden.externalId}: ${ncOrder.nroFormatted}`);
+    
+    res.json({
+      ok: true,
+      nroNC: ncOrder.nroFormatted,
+      cae: cae,
+      message: 'Nota de Crédito emitida correctamente'
+    });
+    
+  } catch(e) {
+    console.error('Cancelar factura error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 
 // ════════════════════════════════════════════════════════════

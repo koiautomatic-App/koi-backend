@@ -1468,7 +1468,7 @@ function filtrarComprobantes() {
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td><tr>`;
     renderTotalesComp([]);
     return;
   }
@@ -1480,7 +1480,7 @@ function renderComprobantes(lista) {
       ? `<span class="estado-chip anulado">✕ Anulado</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
 
-    // 👇 NUEVO ORIGEN PILL BASADO EN platform
+    // 👇 ORIGEN PILL BASADO EN platform
     const origenPill = (() => {
       switch (c.platform) {
         case 'mercadolibre':
@@ -1534,6 +1534,13 @@ function renderComprobantes(lista) {
             </svg>
           </button>
           ${btnAnular}
+          <!-- 👇 NUEVO BOTÓN CANCELAR / NOTA DE CRÉDITO -->
+          <button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+              <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+            </svg>
+          </button>
         </div>
       </td>
     </tr>`;
@@ -1921,3 +1928,30 @@ document.addEventListener('DOMContentLoaded', () => {
     condicionSelect.addEventListener('change', toggleCategoriaField);
   }
 });
+
+// Cancelar factura y emitir Nota de Crédito
+async function cancelarFactura(orderId) {
+    if (!confirm('¿Cancelar esta factura?\n\nSe emitirá una Nota de Crédito vinculada a la factura original.')) return;
+    
+    toast('Procesando cancelación y generando Nota de Crédito...', 'info');
+    
+    try {
+        const res = await fetch(`/api/orders/${orderId}/cancelar`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+            toast(`✅ Nota de Crédito emitida: ${data.nroNC}`, 'success');
+            setTimeout(() => cargarTodosComprobantes(paginaActual, busquedaActual), 1500);
+            setTimeout(() => _recargarDashConPeriodo(), 2000);
+        } else {
+            toast('❌ Error: ' + data.error, 'error');
+        }
+    } catch(e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}

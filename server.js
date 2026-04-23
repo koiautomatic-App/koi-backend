@@ -1159,24 +1159,56 @@ async function enviarFacturaMail(orderId) {
 const BULK_SYNC = {
 
   async woocommerce(integration) {
-    const key    = integration.getKey('consumerKey');
-    const secret = integration.getKey('consumerSecret');
-    const base   = integration.storeUrl;
-    let page = 1, total = 0;
-    while (true) {
+  const key    = integration.getKey('consumerKey');
+  const secret = integration.getKey('consumerSecret');
+  const base   = integration.storeUrl;
+  let page = 1, total = 0;
+  
+  // 👇 Usar lastSyncAt para traer solo órdenes nuevas
+  const params = {
+    per_page: 100,
+    page,
+    status: 'completed',
+    orderby: 'date',
+    order: 'desc'
+  };
+  
+  if (integration.lastSyncAt) {
+    params.after = integration.lastSyncAt.toISOString();
+    console.log(`📅 Sincronizando órdenes después de: ${params.after}`);
+  }
+  
+  while (true) {
+    try {
       const { data } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
-        auth:   { username: key, password: secret },
-        params: { per_page: 100, page, status: 'completed', orderby: 'date', order: 'desc' },
+        auth: { username: key, password: secret },
+        params,
         timeout: 30_000,
       });
+      
       if (!data?.length) break;
-      await Promise.all(data.map(raw => upsertOrder(integration, normalize.woocommerce(raw))));
-      total += data.length;
+      
+      for (const raw of data) {
+        try {
+          await upsertOrder(integration, normalize.woocommerce(raw));
+          total++;
+        } catch(e) {
+          console.error(`Error procesando orden ${raw.id}:`, e.message);
+        }
+      }
+      
       if (data.length < 100) break;
       page++;
+      params.page = page;
+    } catch(e) {
+      console.error(`Error en página ${page}:`, e.message);
+      break;
     }
-    return total;
-  },
+  }
+  
+  console.log(`✅ WooCommerce sync: ${total} órdenes procesadas`);
+  return total;
+}
 
   async tiendanube(integration) {
     const token   = integration.getKey('apiToken');
@@ -1197,7 +1229,7 @@ const BULK_SYNC = {
     return total;
   },
 
- async mercadolibre(integration) {
+  async mercadolibre(integration) {
   const accessToken = await _getMLToken(integration);
   const sellerId    = integration.credentials.sellerId;
   let offset = 0, total = 0;
@@ -2139,6 +2171,61 @@ async function _backfillConceptoWoo(integration, userId) {
 
   console.log(`[Backfill] ✅ Completado — OK: ${ok} | Skipped: ${skipped} | Errores: ${err}`);
 }
+
+// ════════════════════════════════════════════════════════════
+//  API — Sincronización específica de WooCommerce
+// ════════════════════════════════════════════════════════════
+
+// Sincronizar una orden específica de WooCommerce (útil para recuperar órdenes perdidas)
+app.post('/api/woocommerce/sync-order/:id', requireAuthAPI, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const integration = await Integration.findOne({ 
+            userId: req.userId, 
+            platform: 'woocommerce',
+            status: 'active'
+        });
+        
+        if (!integration) {
+            return res.status(404).json({ error: 'WooCommerce no conectado' });
+        }
+        
+        const key = integration.getKey('consumerKey');
+        const secret = integration.getKey('consumerSecret');
+        const base = integration.storeUrl;
+        
+        console.log(`🔄 Sincronizando orden específica: ${id}`);
+        
+        const { data: raw } = await axios.get(`${base}/wp-json/wc/v3/orders/${id}`, {
+            auth: { username: key, password: secret },
+            timeout: 30000
+        });
+        
+        if (!raw || !raw.id) {
+            return res.status(404).json({ error: 'Orden no encontrada en WooCommerce' });
+        }
+        
+        const canonical = normalize.woocommerce(raw);
+        const order = await upsertOrder(integration, canonical);
+        
+        console.log(`✅ Orden ${id} sincronizada: ${order.customerName} - $${order.amount}`);
+        
+        res.json({ 
+            ok: true, 
+            order: {
+                id: order.externalId,
+                customer: order.customerName,
+                amount: order.amount,
+                status: order.status
+            }
+        });
+        
+    } catch(e) {
+        console.error('Sync order error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
 
 // ════════════════════════════════════════════════════════════
 //  WOOCOMMERCE OAUTH

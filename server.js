@@ -1159,56 +1159,55 @@ async function enviarFacturaMail(orderId) {
 const BULK_SYNC = {
 
   async woocommerce(integration) {
-  const key    = integration.getKey('consumerKey');
-  const secret = integration.getKey('consumerSecret');
-  const base   = integration.storeUrl;
-  let page = 1, total = 0;
-  
-  // 👇 Usar lastSyncAt para traer solo órdenes nuevas
-  const params = {
-    per_page: 100,
-    page,
-    status: 'completed',
-    orderby: 'date',
-    order: 'desc'
-  };
-  
-  if (integration.lastSyncAt) {
-    params.after = integration.lastSyncAt.toISOString();
-    console.log(`📅 Sincronizando órdenes después de: ${params.after}`);
-  }
-  
-  while (true) {
-    try {
-      const { data } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
-        auth: { username: key, password: secret },
-        params,
-        timeout: 30_000,
-      });
-      
-      if (!data?.length) break;
-      
-      for (const raw of data) {
-        try {
-          await upsertOrder(integration, normalize.woocommerce(raw));
-          total++;
-        } catch(e) {
-          console.error(`Error procesando orden ${raw.id}:`, e.message);
-        }
-      }
-      
-      if (data.length < 100) break;
-      page++;
-      params.page = page;
-    } catch(e) {
-      console.error(`Error en página ${page}:`, e.message);
-      break;
+    const key    = integration.getKey('consumerKey');
+    const secret = integration.getKey('consumerSecret');
+    const base   = integration.storeUrl;
+    let page = 1, total = 0;
+    
+    const params = {
+      per_page: 100,
+      page,
+      status: 'completed',
+      orderby: 'date',
+      order: 'desc'
+    };
+    
+    if (integration.lastSyncAt) {
+      params.after = integration.lastSyncAt.toISOString();
+      console.log(`📅 Sincronizando órdenes después de: ${params.after}`);
     }
-  }
-  
-  console.log(`✅ WooCommerce sync: ${total} órdenes procesadas`);
-  return total;
-}
+    
+    while (true) {
+      try {
+        const { data } = await axios.get(`${base}/wp-json/wc/v3/orders`, {
+          auth: { username: key, password: secret },
+          params,
+          timeout: 30_000,
+        });
+        
+        if (!data?.length) break;
+        
+        for (const raw of data) {
+          try {
+            await upsertOrder(integration, normalize.woocommerce(raw));
+            total++;
+          } catch(e) {
+            console.error(`Error procesando orden ${raw.id}:`, e.message);
+          }
+        }
+        
+        if (data.length < 100) break;
+        page++;
+        params.page = page;
+      } catch(e) {
+        console.error(`Error en página ${page}:`, e.message);
+        break;
+      }
+    }
+    
+    console.log(`✅ WooCommerce sync: ${total} órdenes procesadas`);
+    return total;
+  },  // 👈 COMA (cierra woocommerce)
 
   async tiendanube(integration) {
     const token   = integration.getKey('apiToken');
@@ -1227,50 +1226,49 @@ const BULK_SYNC = {
       page++;
     }
     return total;
-  },
+  },  // 👈 COMA
 
   async mercadolibre(integration) {
-  const accessToken = await _getMLToken(integration);
-  const sellerId    = integration.credentials.sellerId;
-  let offset = 0, total = 0;
-  const LIMIT = 50;
-  while (true) {
-    const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
-      headers: { Authorization: `Bearer ${accessToken}` },
-      params:  { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' },
-      timeout: 30_000,
-    });
-    const orders = data.results || [];
-    if (!orders.length) break;
-    
-    for (const raw of orders) {
-      // 👇 OBTENER LA ORDEN COMPLETA
-      let fullOrder = raw;
-      try {
-        const orderDetail = await axios.get(`https://api.mercadolibre.com/orders/${raw.id}`, {
-          headers: { Authorization: `Bearer ${accessToken}` }
-        });
-        fullOrder = orderDetail.data;
-        await new Promise(r => setTimeout(r, 100));
-        console.log(`📦 Orden ${raw.id}: buyerId=${fullOrder.buyer?.id}, shipmentId=${fullOrder.shipping?.id}`);
-      } catch(e) {
-        console.error(`Error obteniendo detalle de orden ${raw.id}:`, e.message);
-      }
+    const accessToken = await _getMLToken(integration);
+    const sellerId    = integration.credentials.sellerId;
+    let offset = 0, total = 0;
+    const LIMIT = 50;
+    while (true) {
+      const { data } = await axios.get('https://api.mercadolibre.com/orders/search', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+        params:  { seller: sellerId, limit: LIMIT, offset, sort: 'date_desc' },
+        timeout: 30_000,
+      });
+      const orders = data.results || [];
+      if (!orders.length) break;
       
-      const canonical = normalize.mercadolibre(fullOrder);
-      const result = await upsertOrder(integration, canonical);
-      
-      if (result && (canonical.buyerId || canonical.shipmentId)) {
-        await new Promise(r => setTimeout(r, 200));
-        await enrichMercadoLibreOrder(result, accessToken);
+      for (const raw of orders) {
+        let fullOrder = raw;
+        try {
+          const orderDetail = await axios.get(`https://api.mercadolibre.com/orders/${raw.id}`, {
+            headers: { Authorization: `Bearer ${accessToken}` }
+          });
+          fullOrder = orderDetail.data;
+          await new Promise(r => setTimeout(r, 100));
+          console.log(`📦 Orden ${raw.id}: buyerId=${fullOrder.buyer?.id}, shipmentId=${fullOrder.shipping?.id}`);
+        } catch(e) {
+          console.error(`Error obteniendo detalle de orden ${raw.id}:`, e.message);
+        }
+        
+        const canonical = normalize.mercadolibre(fullOrder);
+        const result = await upsertOrder(integration, canonical);
+        
+        if (result && (canonical.buyerId || canonical.shipmentId)) {
+          await new Promise(r => setTimeout(r, 200));
+          await enrichMercadoLibreOrder(result, accessToken);
+        }
       }
+      total  += orders.length;
+      offset += LIMIT;
+      if (offset >= (data.paging?.total || 0)) break;
     }
-    total  += orders.length;
-    offset += LIMIT;
-    if (offset >= (data.paging?.total || 0)) break;
-  }
-  return total;
-},
+    return total;
+  },  // 👈 COMA
 
   async vtex(integration) {
     const apiKey   = integration.getKey('apiKey');
@@ -1291,10 +1289,10 @@ const BULK_SYNC = {
       page++;
     }
     return total;
-  },
+  },  // 👈 COMA (opcional si es el último)
 };
 
-// Disparar sync en background (no bloquea la respuesta HTTP)
+// Disparar sync en background
 function startBackgroundSync(integration) {
   const syncFn = BULK_SYNC[integration.platform];
   if (!syncFn) return;

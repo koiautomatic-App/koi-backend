@@ -2594,44 +2594,41 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       return ventasMap.get(key) || 0;
     });
     
-  // 🆕 5. ÚLTIMAS 50 VENTAS (misma lógica: tiene CAE O status invoiced)
+ // 🆕 5. ÚLTIMAS 50 VENTAS (TODAS las órdenes, con o sin CAE)
 const ultimas = await Order.find({
-  userId,
-  $or: [
-    { status: 'invoiced' },
-    { caeNumber: { $exists: true, $ne: null } }
-  ]
+  userId
 })
-.sort({ fechaEmision: -1 })
+.sort({ createdAt: -1, orderDate: -1 })
 .limit(50)
-.select('customerName amount fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt')
+.select('customerName amount createdAt orderDate fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt externalId')
 .lean();
-    // Agregar concepto formateado para mostrar
-    const ultimasConConcepto = ultimas.map(v => ({
-      ...v,
-      conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
-    }));
-    
-    res.json({
-      ok: true,
-      totalFacturado,
-      totalFacturas,
-      hoyMonto,
-      hoyCount,
-      pendientesCAE,
-      chartDias,
-      chartVentas,
-      ultimas: ultimasConConcepto,
-      periodo: {
-        desde: fechaDesde,
-        hasta: fechaHasta
-      }
-    });
-    
-  } catch(e) {
-    console.error('Dashboard stats error:', e);
-    res.status(500).json({ error: e.message });
+
+// Agregar concepto formateado para mostrar
+const ultimasConConcepto = ultimas.map(v => ({
+  ...v,
+  conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
+}));
+
+res.json({
+  ok: true,
+  totalFacturado,
+  totalFacturas,
+  hoyMonto,
+  hoyCount,
+  pendientesCAE,
+  chartDias,
+  chartVentas,
+  ultimas: ultimasConConcepto,
+  periodo: {
+    desde: fechaDesde,
+    hasta: fechaHasta
   }
+});
+
+} catch(e) {
+  console.error('Dashboard stats error:', e);
+  res.status(500).json({ error: e.message });
+}
 });
 // ════════════════════════════════════════════════════════════
 //  API — TOGGLE INTEGRACIÓN (para activar/desactivar desde frontend)

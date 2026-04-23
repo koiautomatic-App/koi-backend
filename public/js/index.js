@@ -1804,25 +1804,34 @@ async function emitirLote() {
   }
 }
 
-async function enviarMail(orderId){
+async function enviarMail(orderId) {
   if (!orderId) return;
-  toast('Enviando factura por mail…','info');
+  
+  // Obtener la orden para saber su estado
   try {
+    const ordenRes = await fetch(`/api/orders/${orderId}`, { credentials: 'include' });
+    const orden = await ordenRes.json();
+    const esCancelada = orden.status === 'cancelled';
+    const tipoMensaje = esCancelada ? 'Nota de Crédito' : 'factura';
+    
+    toast(`Enviando ${tipoMensaje} por mail…`, 'info');
+    
     const res = await api.post(`/api/orders/${orderId}/mail`, {});
+    
     if (res.ok) {
-      toast(res.message || 'Mail enviado correctamente', 'success');
+      toast(res.message || `${tipoMensaje} enviada correctamente`, 'success');
       
-      // Actualizar visualmente el botón (cambiar clase a iluminado)
+      // Actualizar visualmente el botón
       const buttons = document.querySelectorAll(`button[onclick*="enviarMail('${orderId}')"]`);
       buttons.forEach(btn => {
         btn.classList.remove('act-btn');
         btn.classList.add('act-btn-sent');
-        btn.title = 'Factura ya enviada';
+        btn.title = `${tipoMensaje} ya enviada`;
         btn.disabled = true;
         btn.onclick = null;
       });
       
-      // Recargar la lista para mantener consistencia
+      // Recargar la lista
       setTimeout(() => cargarTodosComprobantes(paginaActual, busquedaActual), 1500);
     } else {
       toast(res.message || 'Error al enviar', 'error');

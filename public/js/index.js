@@ -118,21 +118,65 @@ function renderChart(d){
   });
 }
 
-function renderComps(lista){
+function renderComps(lista) {
   document.getElementById('compBadge').textContent = lista.length;
   const cont = document.getElementById('compList');
-  if(!lista.length){
+  if (!lista.length) {
     cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
     return;
   }
   
   cont.innerHTML = lista.map((c, i) => {
     const emitido = c.estado === 'cae-ok';
-    const btnEmitir = emitido
-      ? `<button class="act-btn act-done" title="Emitido ✓" disabled><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg></button>`
-      : `<button class="act-btn act-warn" title="Emitir CAE — requiere credenciales AFIP" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
     
-    // 👇 ORIGEN TAG (ML, WOO, etc.)
+    // Botón Emitir CAE (siempre visible, pero cambia estilo y acción según estado)
+    const btnEmitir = emitido
+      ? `<button class="act-btn act-done" title="Factura ya emitida" disabled>
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+          </svg>
+         </button>`
+      : `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+            <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+            <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+          </svg>
+         </button>`;
+    
+    // Botón Enviar Email (siempre visible)
+    const emailSent = c.emailSent === true;
+    const btnEmail = emailSent
+      ? `<button class="act-btn act-btn-sent" title="Factura ya enviada" disabled>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9 9l2 2M5 9l-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+         </button>`
+      : `<button class="act-btn" title="Enviar factura por email" onclick="enviarMail('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+         </button>`;
+    
+    // Botón Cancelar (siempre visible, solo cambia estilo)
+    const btnCancelar = emitido
+      ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`
+      : `<button class="act-btn act-disabled" title="No se puede cancelar una factura pendiente" disabled>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none" opacity="0.4">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`;
+    
+    // ORIGEN TAG
     const origenTag = (() => {
       switch (c.platform) {
         case 'mercadolibre':
@@ -143,13 +187,6 @@ function renderComps(lista){
           return '';
       }
     })();
-    
-    // 👇 EMAIL SENT
-    const emailSent = c.emailSent === true;
-    const emailClass = emailSent ? 'act-btn act-btn-sent' : 'act-btn';
-    const emailTitle = emailSent ? 'Factura ya enviada' : 'Enviar factura por email';
-    const emailDisabled = emailSent ? 'disabled' : '';
-    const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
     
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">
@@ -162,11 +199,15 @@ function renderComps(lista){
       </div>
       <div class="comp-monto">${ars(c.monto)}</div>
       <div class="comp-actions">
-        <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
-        ${btnEmitir}
-        <button class="${emailClass}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
-          <svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg>
+        <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
         </button>
+        ${btnEmitir}
+        ${btnEmail}
+        ${btnCancelar}
       </div>
     </div>`;
   }).join('');
@@ -1468,7 +1509,7 @@ function filtrarComprobantes() {
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td><tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td></tr>`;
     renderTotalesComp([]);
     return;
   }
@@ -1480,7 +1521,6 @@ function renderComprobantes(lista) {
       ? `<span class="estado-chip anulado">✕ Anulado</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
 
-    // 👇 ORIGEN PILL BASADO EN platform
     const origenPill = (() => {
       switch (c.platform) {
         case 'mercadolibre':
@@ -1521,26 +1561,45 @@ function renderComprobantes(lista) {
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
+          <!-- PDF -->
           <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id||c.id}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
+          <!-- Emitir CAE -->
+          ${c.estado === 'emitido' 
+            ? `<button class="act-btn act-done" title="Factura ya emitida" disabled>
+                <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                  <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+                </svg>
+               </button>`
+            : `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
+                <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                  <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+                  <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+                  <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+                </svg>
+               </button>`
+          }
+          <!-- Enviar Email -->
           <button class="act-btn ${emailSent ? 'act-btn-sent' : ''}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
-          ${btnAnular}
-          <!-- 👇 NUEVO BOTÓN CANCELAR / NOTA DE CRÉDITO -->
-          <button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
+          <!-- Cancelar / Nota de Crédito -->
+          <button class="act-btn act-danger" 
+                  title="${c.estado === 'emitido' ? 'Cancelar factura - Emitir Nota de Crédito' : 'No se puede cancelar una factura pendiente'}" 
+                  ${c.estado !== 'emitido' ? 'disabled' : `onclick="cancelarFactura('${c._id||c.id}')"`}>
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
               <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
             </svg>
           </button>
+          ${btnAnular}
         </div>
       </td>
     </tr>`;

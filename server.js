@@ -1650,13 +1650,25 @@ function generarQRHtml(url) {
 }    
 
 // ════════════════════════════════════════════════════════════
-//  API — PDF DE FACTURA (usando EJS)
+//  API — PDF DE FACTURA / NOTA DE CRÉDITO (usando EJS)
 // ════════════════════════════════════════════════════════════
 
 app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
   try {
-    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    let orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    // ⭐ Si la orden está cancelada, buscar la Nota de Crédito asociada
+    if (orden.status === 'cancelled') {
+      const nc = await Order.findOne({ 
+        userId: req.userId,
+        externalId: { $regex: `^${orden.externalId}-NC` }
+      }).lean();
+      if (nc) {
+        orden = nc;
+        console.log(`📄 Mostrando Nota de Crédito para orden cancelada ${orden.externalId}`);
+      }
+    }
 
     const user = await User.findById(req.userId)
       .select('nombre apellido settings').lean();
@@ -1671,31 +1683,38 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     let impNeto = null;
     let impIVA = null;
 
+    // Detectar si es Nota de Crédito para mostrar el título correcto
+    const esNotaCredito = orden.nroFormatted?.startsWith('NC') || orden.amount < 0;
+    if (esNotaCredito) {
+      tipoFactura = 'NOTA DE CRÉDITO C';
+    }
+
     // Obtener condición fiscal del emisor desde settings
     const condicionEmisor = user?.settings?.condicionFiscal || 'responsable_inscripto';
 
     if (condicionEmisor === 'monotributo' || condicionEmisor === 'exento') {
-      // Monotributo o Exento → siempre Factura C
-      tipoComprobante = 11;
-      tipoFactura = 'FACTURA C';
+      // Monotributo o Exento → siempre Factura C / NC C
+      tipoComprobante = esNotaCredito ? 13 : 11;
+      if (!esNotaCredito) tipoFactura = 'FACTURA C';
       condicionComprador = 'Consumidor Final';
     } else {
       // Responsable Inscripto
       if (docLen === 11) {
-        tipoComprobante = 1;
-        tipoFactura = 'FACTURA A';
+        tipoComprobante = esNotaCredito ? 2 : 1;
+        tipoFactura = esNotaCredito ? 'NOTA DE CRÉDITO A' : 'FACTURA A';
         condicionComprador = 'Responsable Inscripto';
-        // Calcular IVA discriminado
-        const total = orden.amount;
-        impNeto = (total / 1.21);
-        impIVA = total - impNeto;
+        if (!esNotaCredito) {
+          const total = orden.amount;
+          impNeto = (total / 1.21);
+          impIVA = total - impNeto;
+        }
       } else if (docLen >= 7 && docLen <= 8) {
-        tipoComprobante = 6;
-        tipoFactura = 'FACTURA B';
+        tipoComprobante = esNotaCredito ? 7 : 6;
+        tipoFactura = esNotaCredito ? 'NOTA DE CRÉDITO B' : 'FACTURA B';
         condicionComprador = 'Consumidor Final';
       } else {
-        tipoComprobante = 11;
-        tipoFactura = 'FACTURA C';
+        tipoComprobante = esNotaCredito ? 13 : 11;
+        tipoFactura = esNotaCredito ? 'NOTA DE CRÉDITO C' : 'FACTURA C';
         condicionComprador = 'Consumidor Final';
       }
     }
@@ -1721,8 +1740,9 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       : '—';
 
     // ============================================================
-    // 4. IMPORTES
+    // 4. IMPORTES (para NC el monto es positivo en el PDF)
     // ============================================================
+    const montoMostrar = Math.abs(orden.amount);
     const fmtARS = n => new Intl.NumberFormat('es-AR', {
       minimumFractionDigits: 2, maximumFractionDigits: 2
     }).format(n || 0);
@@ -1735,7 +1755,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     // ============================================================
     const items = orden.items?.length
       ? orden.items
-      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: orden.amount }];
+      : [{ nombre: orden.concepto || 'Productos / Servicios', cantidad: 1, precio: montoMostrar }];
 
     const escapeHtml = (str) => {
       if (!str) return '';
@@ -1743,11 +1763,11 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     };
 
     const filasItems = items.map(item => {
-      const subtotal = (item.precio || 0) * (item.cantidad || 1);
+      const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
       return `<tr>
         <td>${escapeHtml(item.nombre || 'Producto')}</td>
         <td>${item.cantidad || 1}</td>
-        <td>$ ${fmtARS(item.precio || 0)}</td>
+        <td>$ ${fmtARS(Math.abs(item.precio || 0))}</td>
         <td>$ ${fmtARS(subtotal)}</td>
       </tr>`;
     }).join('');
@@ -1775,7 +1795,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
         ptoVta: parseInt(ptoVta),
         tipoCmp: tipoComprobante,
         nroCmp: orden.nroComprobante || 0,
-        importe: orden.amount,
+        importe: montoMostrar,
         moneda: 'PES',
         ctz: 1,
         tipoDocRec: 99,
@@ -1800,7 +1820,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
       nroComp,
       fecha,
       filasItems,
-      total: fmtARS(orden.amount),
+      total: fmtARS(montoMostrar),
       impNeto: impNetoFormatted,
       impIVA: impIVAFormatted,
       caeDisplay,
@@ -1812,7 +1832,7 @@ app.get('/api/orders/:id/pdf', requireAuthAPI, async (req, res) => {
     });
 
     res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Disposition', `inline; filename="${tipoFactura.replace(' ', '_')}-${nroComp}.html"`);
+    res.setHeader('Content-Disposition', `inline; filename="${tipoFactura.replace(/ /g, '_')}-${nroComp}.html"`);
     res.send(html);
   } catch(e) {
     console.error('PDF error:', e.message);
@@ -1962,17 +1982,35 @@ async function generarFacturaHtml(userId, orden) {
   });
 }
 // ════════════════════════════════════════════════════════════
-//  API — ENVIAR FACTURA POR MAIL
+//  API — ENVIAR FACTURA / NOTA DE CRÉDITO POR MAIL
 // ════════════════════════════════════════════════════════════
 
 app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
   try {
-    const orden = await Order.findOne({ _id: req.params.id, userId: req.userId });
+    let orden = await Order.findOne({ _id: req.params.id, userId: req.userId });
     if (!orden) {
       return res.status(404).json({ error: 'Orden no encontrada' });
     }
 
-    if (!orden.customerEmail) {
+    // ⭐ Si la orden está cancelada, buscar la Nota de Crédito asociada
+    let ordenParaEnviar = orden;
+    let esNotaCredito = false;
+    
+    if (orden.status === 'cancelled') {
+      const nc = await Order.findOne({ 
+        userId: req.userId,
+        externalId: { $regex: `^${orden.externalId}-NC` }
+      });
+      if (nc) {
+        ordenParaEnviar = nc;
+        esNotaCredito = true;
+        console.log(`📧 Enviando Nota de Crédito para orden cancelada ${orden.externalId}`);
+      } else {
+        return res.status(404).json({ error: 'No se encontró la Nota de Crédito asociada' });
+      }
+    }
+
+    if (!ordenParaEnviar.customerEmail) {
       return res.status(400).json({ error: 'El cliente no tiene email registrado' });
     }
 
@@ -1987,15 +2025,20 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
       || 'Sono Handmade';
     
-    // Generar el HTML de la factura
-    const facturaHtml = await generarFacturaHtml(req.userId, orden);
+    // Generar el HTML del comprobante (factura o NC)
+    const facturaHtml = await generarFacturaHtml(req.userId, ordenParaEnviar);
+    
+    // Determinar el asunto según el tipo de comprobante
+    const subject = esNotaCredito
+      ? `🧾 Nota de Crédito de ${nombreFantasiaEmail} - Pedido #${orden.externalId}`
+      : `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`;
     
     // Enviar el email con Resend
     const { data, error } = await resend.emails.send({
       from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
       reply_to: replyToEmail,
-      to: orden.customerEmail,
-      subject: `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`,
+      to: ordenParaEnviar.customerEmail,
+      subject: subject,
       html: facturaHtml
     });
 
@@ -2003,20 +2046,20 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       throw new Error(error.message);
     }
 
-    // 👇 ACTUALIZAR ESTADO DEL EMAIL EN LA ORDEN
-    await Order.findByIdAndUpdate(orden._id, {
+    // Actualizar estado del email en el comprobante enviado
+    await Order.findByIdAndUpdate(ordenParaEnviar._id, {
       emailSent: true,
       emailSentAt: new Date()
     });
 
-    console.log(`📧 Factura enviada a ${orden.customerEmail}`);
+    console.log(`📧 ${esNotaCredito ? 'Nota de Crédito' : 'Factura'} enviada a ${ordenParaEnviar.customerEmail}`);
     console.log(`   Responder a: ${replyToEmail}`);
     console.log(`   Message ID: ${data.id}`);
 
     res.json({ 
       ok: true, 
-      message: 'Factura enviada por email',
-      email: orden.customerEmail 
+      message: esNotaCredito ? 'Nota de Crédito enviada por email' : 'Factura enviada por email',
+      email: ordenParaEnviar.customerEmail 
     });
 
   } catch(e) {

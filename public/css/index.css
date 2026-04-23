@@ -1412,4 +1412,13 @@
       .koi-cta-area { padding:20px 20px; }
       .susc-btn-mp { font-size:14px; padding:13px 18px; }
     }
-   
+   /* Botón de cancelar / Nota de Crédito */
+.act-btn.act-danger {
+    color: #ff3d57;
+    border-color: rgba(255,61,87,0.2);
+}
+
+.act-btn.act-danger:hover {
+    background: rgba(255,61,87,0.1);
+    border-color: rgba(255,61,87,0.4);
+}

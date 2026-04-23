@@ -3227,6 +3227,68 @@ app.post('/api/woocommerce/diagnose-upsert', requireAuthAPI, async (req, res) =>
         res.status(500).json({ error: e.message, stack: e.stack });
     }
 });
+// Endpoint para regenerar webhookSecret de WooCommerce
+app.post('/api/woocommerce/regenerate-webhook-secret', requireAuthAPI, async (req, res) => {
+    try {
+        const crypto = require('crypto');
+        const newSecret = crypto.randomBytes(24).toString('hex');
+        
+        const integration = await Integration.findOne({ 
+            userId: req.userId, 
+            platform: 'woocommerce' 
+        });
+        
+        if (!integration) {
+            return res.status(404).json({ error: 'WooCommerce no conectado' });
+        }
+        
+        // Actualizar webhookSecret
+        integration.webhookSecret = newSecret;
+        await integration.save();
+        
+        // Registrar webhook en WooCommerce
+        const key = integration.getKey('consumerKey');
+        const secret = integration.getKey('consumerSecret');
+        const base = integration.storeUrl;
+        const webhookUrl = `${BASE}/webhook/woocommerce/${newSecret}`;
+        
+        // Eliminar webhooks existentes para evitar duplicados
+        const { data: existing } = await axios.get(`${base}/wp-json/wc/v3/webhooks`, {
+            auth: { username: key, password: secret },
+            params: { per_page: 100 }
+        });
+        
+        for (const webhook of existing) {
+            if (webhook.delivery_url?.includes('koi-factura')) {
+                await axios.delete(`${base}/wp-json/wc/v3/webhooks/${webhook.id}`, {
+                    auth: { username: key, password: secret }
+                });
+            }
+        }
+        
+        // Crear nuevo webhook
+        await axios.post(`${base}/wp-json/wc/v3/webhooks`, {
+            name: 'KOI-Factura',
+            topic: 'order.created',
+            delivery_url: webhookUrl,
+            status: 'active'
+        }, {
+            auth: { username: key, password: secret }
+        });
+        
+        console.log(`🔌 Webhook registrado: ${webhookUrl}`);
+        
+        res.json({ 
+            ok: true, 
+            webhookSecret: newSecret,
+            webhookUrl
+        });
+        
+    } catch(e) {
+        console.error('Error:', e.message);
+        res.status(500).json({ error: e.message });
+    }
+});
 // ════════════════════════════════════════════════════════════
 //  START
 // ════════════════════════════════════════════════════════════

@@ -682,6 +682,85 @@ async function upsertOrder(integration, canonical) {
   }
   return doc;
 }
+
+// ════════════════════════════════════════════════════════════
+//  ENDPOINT DE DIAGNÓSTICO PARA UPSERTORDER
+// ════════════════════════════════════════════════════════════
+
+app.post('/api/woocommerce/diagnose-upsert', requireAuthAPI, async (req, res) => {
+    try {
+        const integration = await Integration.findOne({ 
+            userId: req.userId, 
+            platform: 'woocommerce',
+            status: 'active'
+        });
+        
+        if (!integration) {
+            return res.status(404).json({ error: 'WooCommerce no conectado' });
+        }
+        
+        const key = integration.getKey('consumerKey');
+        const secret = integration.getKey('consumerSecret');
+        const base = integration.storeUrl;
+        
+        // Obtener orden #17408
+        const { data: raw } = await axios.get(`${base}/wp-json/wc/v3/orders/17408`, {
+            auth: { username: key, password: secret }
+        });
+        
+        const canonical = normalize.woocommerce(raw);
+        
+        // Intentar validar cada campo crítico
+        const validation = {
+            userId: integration.userId,
+            userIdType: typeof integration.userId,
+            platform: integration.platform,
+            externalId: canonical.externalId,
+            customerName: canonical.customerName,
+            customerEmail: canonical.customerEmail,
+            amount: canonical.amount,
+            hasItems: Array.isArray(canonical.items),
+            itemsLength: canonical.items?.length
+        };
+        
+        // Intentar guardar directamente con create para ver el error
+        let directSave = null;
+        let directError = null;
+        
+        try {
+            directSave = await Order.create({
+                userId: integration.userId,
+                platform: integration.platform,
+                externalId: canonical.externalId,
+                customerName: canonical.customerName,
+                customerEmail: canonical.customerEmail,
+                amount: canonical.amount,
+                concepto: canonical.concepto,
+                items: canonical.items || [],
+                status: 'pending_invoice'
+            });
+        } catch(e) {
+            directError = e.message;
+            console.error('Direct create error:', e);
+        }
+        
+        res.json({
+            validation,
+            directSave: directSave ? { id: directSave._id, externalId: directSave.externalId } : null,
+            directError,
+            canonical: {
+                externalId: canonical.externalId,
+                customerName: canonical.customerName,
+                amount: canonical.amount,
+                concepto: canonical.concepto?.substring(0, 100)
+            }
+        });
+        
+    } catch(e) {
+        console.error('Diagnose error:', e.message);
+        res.status(500).json({ error: e.message, stack: e.stack });
+    }
+});
 // ════════════════════════════════════════════════════════════
 //  MÓDULO AFIP/WSFE v2 — Firma PKCS#7 real con node-forge
 //

@@ -2173,7 +2173,6 @@ async function _backfillConceptoWoo(integration, userId) {
 // ════════════════════════════════════════════════════════════
 //  API — Sincronización específica de WooCommerce
 // ════════════════════════════════════════════════════════════
-
 // Sincronizar una orden específica de WooCommerce (útil para recuperar órdenes perdidas)
 app.post('/api/woocommerce/sync-order/:id', requireAuthAPI, async (req, res) => {
     try {
@@ -2207,6 +2206,34 @@ app.post('/api/woocommerce/sync-order/:id', requireAuthAPI, async (req, res) => 
         const canonical = normalize.woocommerce(raw);
         const order = await upsertOrder(integration, canonical);
         
+        // 👉 MANEJAR CASO order === null
+        if (!order) {
+            console.error(`❌ upsertOrder devolvió null para orden ${id}`);
+            
+            // Buscar si ya existe
+            const existing = await Order.findOne({ 
+                userId: integration.userId, 
+                platform: 'woocommerce', 
+                externalId: String(id) 
+            });
+            
+            if (existing) {
+                console.log(`✅ Orden ${id} ya existía en la base de datos`);
+                return res.json({ 
+                    ok: true, 
+                    order: {
+                        id: existing.externalId,
+                        customer: existing.customerName,
+                        amount: existing.amount,
+                        status: existing.status
+                    },
+                    message: 'Orden ya existente'
+                });
+            }
+            
+            return res.status(500).json({ error: 'upsertOrder devolvió null sin razón aparente' });
+        }
+        
         console.log(`✅ Orden ${id} sincronizada: ${order.customerName} - $${order.amount}`);
         
         res.json({ 
@@ -2224,6 +2251,7 @@ app.post('/api/woocommerce/sync-order/:id', requireAuthAPI, async (req, res) => 
         res.status(500).json({ error: e.message });
     }
 });
+
 
 // Endpoint de diagnóstico - ver la orden cruda de WooCommerce
 app.get('/api/woocommerce/debug-order/:id', requireAuthAPI, async (req, res) => {

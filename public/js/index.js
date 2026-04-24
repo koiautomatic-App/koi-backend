@@ -144,7 +144,7 @@ function renderComps(lista) {
   
   cont.innerHTML = lista.map((c, i) => {
     const esCancelada = c.status === 'cancelled';
-    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const esNotaCredito = c.monto < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'cae-ok';
     
     // Botón Emitir CAE (deshabilitado para NC o ya emitidas)
@@ -210,14 +210,16 @@ function renderComps(lista) {
       }
     })();
     
-    // 👇 MONTO CORREGIDO CON FALLBACK A 0
-    const montoRaw = (c.amount !== undefined && c.amount !== null) ? c.amount : 0;
+    // 👇 USAR c.monto (NO c.amount)
+    const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
+                   : (c.amount !== undefined && c.amount !== null) ? c.amount 
+                   : 0;
     const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
     
     // Texto de metadata (CAE o NC)
     const metaTexto = esCancelada
       ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
-      : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.orderDate || c.fecha);
+      : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.fecha || c.orderDate);
     
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">

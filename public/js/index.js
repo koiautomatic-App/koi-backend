@@ -1554,6 +1554,16 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
+    // 👇 BOTÓN CANCELAR (para facturas emitidas)
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && c.origen !== 'manual')
+      ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c.orderId || c._id || c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`
+      : '';
+    
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
       ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
@@ -1571,7 +1581,7 @@ function renderComprobantes(lista) {
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
-       </td>
+        </td>
       <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
       <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${ars(montoMostrar)}</td>
@@ -1604,10 +1614,11 @@ function renderComprobantes(lista) {
               <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
+          ${btnCancelar}
           ${btnAnular}
         </div>
-       </td>
-     </tr>`;
+        </td>
+      </tr>`;
   }
   
   tbody.innerHTML = html;

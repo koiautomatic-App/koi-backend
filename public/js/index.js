@@ -545,25 +545,20 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
       Cargando comprobantes…
     </tr>`;
 
-  // Construir URL con parámetros de paginación, búsqueda y FECHAS
   const params = new URLSearchParams({
     limit: 25,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
-  
-  // 👇 AGREGAR ESTAS DOS LÍNEAS PARA LAS FECHAS
   if (_rangoDesde) params.set('desde', _rangoDesde.toISOString().split('T')[0]);
   if (_rangoHasta) params.set('hasta', _rangoHasta.toISOString().split('T')[0]);
   
-  // Cargar desde la API REST con paginación
   api.get(`/api/orders?${params.toString()}`)
     .then(raw => {
       const orders = raw.orders || [];
       totalPaginas = raw.pagination?.pages || 1;
       
       _todosComp = orders.map(o => {
-        // Generar concepto desde items si existe
         let conceptoMostrar = o.concepto || '';
         if (!conceptoMostrar && o.items && o.items.length > 0) {
           conceptoMostrar = o.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
@@ -573,19 +568,24 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
         }
         
         return {
-  id:         o.externalId || o._id,
-  _id:        o._id,
-  cliente:    o.customerName  || 'Sin nombre',
-  email:      o.customerEmail || '',
-  concepto:   conceptoMostrar,
-  fecha:      o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
-  tipo:       'Factura C',
-  monto:      o.amount || 0,
-  estado:     o.status === 'invoiced' ? 'emitido' : 'pendiente',
-  origen:     o.platform === 'manual' ? 'manual' : 'woo',
-  platform:   o.platform,  // 👈 AGREGADO
-  emailSent:  o.emailSent || false,
-};
+          id: o.externalId || o._id,
+          _id: o._id,
+          cliente: o.customerName || 'Sin nombre',
+          email: o.customerEmail || '',
+          concepto: conceptoMostrar,
+          fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+          tipo: 'Factura C',
+          monto: o.amount || 0,
+          estado: o.status === 'invoiced' ? 'emitido' : 'pendiente',
+          origen: o.platform === 'manual' ? 'manual' : 'woo',
+          platform: o.platform,
+          emailSent: o.emailSent || false,
+          amount: o.amount,
+          nroFormatted: o.nroFormatted,
+          status: o.status,
+          caeNumber: o.caeNumber,
+          caeExpiry: o.caeExpiry
+        };
       });
       
       filtrarComprobantes();
@@ -593,22 +593,10 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
     })
     .catch(err => {
       console.error(`Error (intento ${intento}/3):`, err.message);
-      
       if (intento < 3) {
-        const delay = intento * 2000;
-        setTimeout(() => {
-          cargarTodosComprobantes(page, search, intento + 1);
-        }, delay);
+        setTimeout(() => cargarTodosComprobantes(page, search, intento + 1), intento * 2000);
       } else {
-        document.getElementById('manualesBody').innerHTML =
-          `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
-            ⚠️ Error de conexión. Recargá la página o intentá más tarde.
-            <br><br>
-            <button onclick="cargarTodosComprobantes(1, '')" style="padding:8px 16px;margin-top:10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">
-              Reintentar
-            </button>
-           </div>
-          `;
+        document.getElementById('manualesBody').innerHTML = `<tr><td colspan="8">Error de conexión. Recargá la página.</td></tr>`;
       }
     });
 }

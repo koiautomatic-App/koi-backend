@@ -2907,6 +2907,17 @@ const isLoggedIn = (req) => {
   try { jwt.verify(req.cookies.koi_token, JWT_SECRET); return true; } catch { return false; }
 };
 
+// Servir archivos estáticos con headers anti-caché para JS
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  }
+}));
+
 // Raíz: sirve index.html (landing) si no está logueado
 app.get('/', (req, res) => {
   console.log('🚀 GET /');
@@ -2925,9 +2936,12 @@ app.get('/login', (req, res) => {
 });
 
 app.get('/dashboard', requireAuth, (req, res) => {
+  // Headers anti-caché para que el navegador no cachee el dashboard
+  res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
-
 // ════════════════════════════════════════════════════════════
 //  ADMIN
 // ════════════════════════════════════════════════════════════

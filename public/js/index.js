@@ -89,6 +89,15 @@ function renderMetrics(d){
   set('mcHoy', ars(d.hoyFacturado),  'dcHoy', d.hoyDelta,  d.hoyTipo);
   set('mcPend',d.pendientesCAE,       'dcPend',d.pendDelta, d.pendTipo);
   set('mcMes', ars(d.mesFacturado),   'dcMes', d.mesDelta,  d.mesTipo);
+  
+  // 👇 NUEVA MÉTRICA - Notas de Crédito
+  if (document.getElementById('mcNC')) {
+    const ncMonto = d.notasCredito?.montoTotal || 0;
+    const ncCantidad = d.notasCredito?.cantidad || 0;
+    document.getElementById('mcNC').innerText = `-${ars(ncMonto)}`;
+    document.getElementById('dcNC').innerText = `${ncCantidad} NC emitida${ncCantidad !== 1 ? 's' : ''}`;
+  }
+  
   if(d.pendientesCAE>0) document.getElementById('mcPend').style.color='var(--yellow)';
   document.getElementById('navBadge').textContent=d.pendientesCAE;
 }

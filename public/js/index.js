@@ -1547,15 +1547,13 @@ function renderComprobantes(lista) {
   }
 
   tbody.innerHTML = lista.map((c, i) => {
-    // Detectar si es una orden cancelada (Nota de Crédito)
+    // 👇 MISMA DETECCIÓN QUE DASHBOARD
     const esCancelada = c.status === 'cancelled';
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
-    const emitido = c.estado === 'emitido';
+    const emitido = c.estado === 'emitido' || esNotaCredito;
     
-    // Estado Chip
-    const estadoChip = esCancelada
-      ? `<span class="estado-chip anulado">✕ Cancelada</span>`
-      : emitido
+    // Estado Chip - igual que Dashboard
+    const estadoChip = emitido
       ? `<span class="estado-chip ok">● Emitido</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
     
@@ -1575,25 +1573,26 @@ function renderComprobantes(lista) {
       }
     })();
     
-    // Botón Anular (solo para manuales no canceladas)
-    const btnAnular = c.origen === 'manual' && !esCancelada && !emitido
+    // Botón Anular (solo para manuales no emitidas)
+    const btnAnular = c.origen === 'manual' && !emitido
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
-    // Email sent
+    // Email sent - misma lógica que Dashboard
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
-      ? (esCancelada ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
-      : (esCancelada ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
+      ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
+      : (esNotaCredito ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
     const emailDisabled = emailSent ? 'disabled' : '';
     const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
     
-    // Monto a mostrar (positivo para NC)
-    const montoMostrar = esCancelada ? Math.abs(c.monto) : c.monto;
+    // Monto a mostrar (positivo para NC) - misma lógica que Dashboard
+    const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
+    const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     
-    // Texto del comprobante (CAE o NC)
-    const comprobanteTexto = esCancelada
-      ? `NC ${c.caeNumber?.slice(-8) || '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
+    // Texto del comprobante (CAE o NC) - misma lógica que Dashboard
+    const comprobanteTexto = esNotaCredito
+      ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
       : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.fecha);
     
     return `
@@ -1611,14 +1610,14 @@ function renderComprobantes(lista) {
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
           <!-- Ver PDF / NC -->
-          <button class="act-btn" title="${esCancelada ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
+          <button class="act-btn" title="${esNotaCredito ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
-          <!-- Emitir CAE (solo si no está cancelada y no está emitida) -->
-          ${!esCancelada && !emitido 
+          <!-- Emitir CAE (solo si no está emitida y no es NC) -->
+          ${!emitido && !esNotaCredito
             ? `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
@@ -1626,7 +1625,7 @@ function renderComprobantes(lista) {
                   <circle cx='7' cy='10' r='.6' fill='currentColor'/>
                 </svg>
                </button>`
-            : `<button class="act-btn act-done" title="${esCancelada ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
+            : `<button class="act-btn act-done" title="${esNotaCredito ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
                 </svg>
@@ -1639,8 +1638,8 @@ function renderComprobantes(lista) {
               <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
-          <!-- Cancelar (solo si está emitida y no cancelada) -->
-          ${emitido && !esCancelada
+          <!-- Cancelar (solo si está emitida y no es NC) -->
+          ${emitido && !esNotaCredito && !esCancelada
             ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
                   <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>

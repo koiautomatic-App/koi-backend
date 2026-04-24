@@ -20,8 +20,24 @@ const MOCK = {
 };
 
 /* ── HELPERS ───────────────────────────────────────── */
-const ars = n => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n);
-const arsShort = n => n>=1e6?`$${(n/1e6).toFixed(2)}M`:n>=1e3?`$${(n/1e3).toFixed(0)}k`:`$${n}`;
+const ars = n => {
+  const num = Number(n);
+  if (isNaN(num) || num === null || num === undefined) return '$0';
+  return new Intl.NumberFormat('es-AR', {
+    style: 'currency',
+    currency: 'ARS',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0
+  }).format(num);
+};
+
+const arsShort = n => {
+  const num = Number(n);
+  if (isNaN(num)) return '$0';
+  return num >= 1e6 ? `$${(num / 1e6).toFixed(2)}M` 
+       : num >= 1e3 ? `$${(num / 1e3).toFixed(0)}k` 
+       : `$${num}`;
+};
 
 const ICONS = {success:'check_circle',error:'error',info:'info',warn:'warning'};
 function toast(msg,type='info'){
@@ -194,8 +210,9 @@ function renderComps(lista) {
       }
     })();
     
-    // Monto a mostrar (positivo para NC)
-    const montoMostrar = esCancelada ? Math.abs(c.amount) : c.amount;
+    // 👇 MONTO CORREGIDO CON FALLBACK A 0
+    const montoRaw = (c.amount !== undefined && c.amount !== null) ? c.amount : 0;
+    const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
     
     // Texto de metadata (CAE o NC)
     const metaTexto = esCancelada
@@ -204,7 +221,7 @@ function renderComps(lista) {
     
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">
-      <div class="cae-dot ${c.estado}"></div>
+      <div class="cae-dot ${c.estado || (emitido ? 'cae-ok' : 'cae-pend')}"></div>
       <div class="comp-info">
         <div class="comp-cliente">${origenTag}${c.customerName || c.cliente}</div>
         <div class="comp-meta">

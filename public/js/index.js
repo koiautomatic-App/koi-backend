@@ -142,7 +142,6 @@ function renderComps(lista) {
   }
   
   cont.innerHTML = lista.map((c, i) => {
-    // 👇 DETECCIÓN CORREGIDA
     const esCancelada = c.status === 'cancelled';
     const esNotaCredito = c.status === 'cancelled' || c.monto < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'cae-ok';
@@ -210,13 +209,13 @@ function renderComps(lista) {
       }
     })();
     
-    // 👇 MONTO USANDO c.monto PRIMERO
+    // Monto
     const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
                    : (c.amount !== undefined && c.amount !== null) ? c.amount 
                    : 0;
     const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
     
-    // Texto de metadata (CAE o NC)
+    // Texto de metadata
     const metaTexto = esCancelada
       ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
       : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.fecha || c.orderDate);

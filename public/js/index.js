@@ -2074,3 +2074,16 @@ async function cancelarFactura(orderId) {
         toast('Error: ' + e.message, 'error');
     }
 }
+// Forzar regeneración automática al cargar la página
+(function() {
+    const originalLoad = window.onload;
+    window.onload = function(e) {
+        if (originalLoad) originalLoad(e);
+        setTimeout(() => {
+            fetch('/api/stats/dashboard', { credentials: 'include', cache: 'no-cache' })
+                .then(r => r.json())
+                .then(data => renderComps(data.ultimas))
+                .catch(() => {});
+        }, 100);
+    };
+})();

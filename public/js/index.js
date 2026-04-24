@@ -133,7 +133,6 @@ function renderChart(d){
     }
   });
 }
-
 function renderComps(lista) {
   document.getElementById('compBadge').textContent = lista.length;
   const cont = document.getElementById('compList');
@@ -143,8 +142,9 @@ function renderComps(lista) {
   }
   
   cont.innerHTML = lista.map((c, i) => {
+    // 👇 DETECCIÓN CORREGIDA
     const esCancelada = c.status === 'cancelled';
-    const esNotaCredito = c.monto < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const esNotaCredito = c.status === 'cancelled' || c.monto < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'cae-ok';
     
     // Botón Emitir CAE (deshabilitado para NC o ya emitidas)
@@ -210,7 +210,7 @@ function renderComps(lista) {
       }
     })();
     
-    // 👇 USAR c.monto (NO c.amount)
+    // 👇 MONTO USANDO c.monto PRIMERO
     const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
                    : (c.amount !== undefined && c.amount !== null) ? c.amount 
                    : 0;

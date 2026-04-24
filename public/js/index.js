@@ -142,10 +142,10 @@ function renderComps(lista) {
   }
   
   cont.innerHTML = lista.map((c, i) => {
-    // 👇 DETECCIÓN: usa c.amount para detectar NC (porque tiene valor negativo)
-    const esCancelada = c.status === 'cancelled';
-    const esNotaCredito = c.status === 'cancelled' || c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
-    const emitido = c.estado === 'cae-ok';
+    // 👇 DETECCIÓN CORREGIDA
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const emitido = c.estado === 'cae-ok' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '');
+    const esCancelada = c.status === 'cancelled' || esNotaCredito;
     
     // Botón Emitir CAE
     const btnEmitir = (emitido || esCancelada)
@@ -210,7 +210,7 @@ function renderComps(lista) {
       }
     })();
     
-    // 👇 MONTO: usa c.monto (tiene el valor positivo) o c.amount si es necesario
+    // MONTO
     const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
                    : (c.amount !== undefined && c.amount !== null) ? Math.abs(c.amount) 
                    : 0;

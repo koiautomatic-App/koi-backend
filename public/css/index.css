@@ -1436,3 +1436,16 @@
     opacity: 0.5;
     cursor: not-allowed;
 }
+.metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Opcional: para pantallas más grandes, que se vea bien */
+@media (min-width: 768px) {
+  .metrics-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}

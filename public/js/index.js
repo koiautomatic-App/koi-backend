@@ -1541,18 +1541,18 @@ function filtrarComprobantes() {
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');
   if (!lista.length) {
-    tbody.innerHTML = `<td><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">Sin comprobantes</td></tr>`;
     renderTotalesComp([]);
     return;
   }
 
   tbody.innerHTML = lista.map((c, i) => {
-    // 👇 MISMA DETECCIÓN QUE DASHBOARD
+    // 👇 DETECCIÓN CORREGIDA
     const esCancelada = c.status === 'cancelled';
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
-    const emitido = c.estado === 'emitido' || esNotaCredito;
+    const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
     
-    // Estado Chip - igual que Dashboard
+    // Estado Chip
     const estadoChip = emitido
       ? `<span class="estado-chip ok">● Emitido</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
@@ -1578,7 +1578,7 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
-    // Email sent - misma lógica que Dashboard
+    // Email sent
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
       ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
@@ -1586,11 +1586,11 @@ function renderComprobantes(lista) {
     const emailDisabled = emailSent ? 'disabled' : '';
     const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
     
-    // Monto a mostrar (positivo para NC) - misma lógica que Dashboard
+    // Monto a mostrar (positivo para NC)
     const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     
-    // Texto del comprobante (CAE o NC) - misma lógica que Dashboard
+    // Texto del comprobante
     const comprobanteTexto = esNotaCredito
       ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
       : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.fecha);
@@ -1598,7 +1598,7 @@ function renderComprobantes(lista) {
     return `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
-      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</tr>
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
@@ -1616,7 +1616,7 @@ function renderComprobantes(lista) {
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
-          <!-- Emitir CAE (solo si no está emitida y no es NC) -->
+          <!-- Emitir CAE -->
           ${!emitido && !esNotaCredito
             ? `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
@@ -1638,7 +1638,7 @@ function renderComprobantes(lista) {
               <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
-          <!-- Cancelar (solo si está emitida y no es NC) -->
+          <!-- Cancelar -->
           ${emitido && !esNotaCredito && !esCancelada
             ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
                 <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1650,8 +1650,8 @@ function renderComprobantes(lista) {
           }
           ${btnAnular}
         </div>
-      </td>
-    </tr>`;
+      <td>
+    </table>`;
   }).join('');
 
   renderTotalesComp(lista);

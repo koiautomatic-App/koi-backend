@@ -2794,6 +2794,49 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
         { status: { $ne: 'invoiced' } }
       ]
     });
+    // ⏳ 3. PENDIENTES CAE (órdenes SIN CAE Y SIN status invoiced)
+const pendientesCAE = await Order.countDocuments({
+  userId,
+  $and: [
+    { caeNumber: { $exists: false } },
+    { status: { $ne: 'invoiced' } }
+  ]
+});
+
+// 🧾 3.5. NOTAS DE CRÉDITO (misma lógica que en renderComprobantes)
+const notasCreditoAgg = await Order.aggregate([
+  { 
+    $match: { 
+      userId,
+      $or: [
+        { amount: { $lt: 0 } },                              // Monto negativo
+        { nroFormatted: { $regex: /^NC/i } }                 // Número empieza con NC
+      ]
+    }
+  },
+  {
+    $match: fechaDesde || fechaHasta ? {
+      fechaEmision: {
+        ...(fechaDesde && { $gte: fechaDesde }),
+        ...(fechaHasta && { $lte: fechaHasta })
+      }
+    } : {}
+  },
+  {
+    $group: {
+      _id: null,
+      montoTotal: { $sum: { $abs: '$amount' } }, // Valor absoluto (positivo)
+      cantidad: { $sum: 1 }
+    }
+  }
+]);
+
+const notasCredito = {
+  montoTotal: notasCreditoAgg[0]?.montoTotal || 0,
+  cantidad: notasCreditoAgg[0]?.cantidad || 0
+};
+
+// 📈 4. GRÁFICO - Ingresos por día...
     
     // 📈 4. GRÁFICO - Ingresos por día (incluye órdenes con CAE O status invoiced)
     let chartDias = [];
@@ -2871,6 +2914,7 @@ res.json({
   hoyMonto,
   hoyCount,
   pendientesCAE,
+  notasCredito,           // 👈 AGREGAR ESTA LÍNEA
   chartDias,
   chartVentas,
   ultimas: ultimasConConcepto,

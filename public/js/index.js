@@ -142,11 +142,12 @@ function renderComps(lista) {
   }
   
   cont.innerHTML = lista.map((c, i) => {
+    // 👇 DETECCIÓN: usa c.amount para detectar NC (porque tiene valor negativo)
     const esCancelada = c.status === 'cancelled';
-    const esNotaCredito = c.status === 'cancelled' || c.monto < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const esNotaCredito = c.status === 'cancelled' || c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'cae-ok';
     
-    // Botón Emitir CAE (deshabilitado para NC o ya emitidas)
+    // Botón Emitir CAE
     const btnEmitir = (emitido || esCancelada)
       ? `<button class="act-btn act-done" title="${esCancelada ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
           <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
@@ -161,7 +162,7 @@ function renderComps(lista) {
           </svg>
          </button>`;
     
-    // Botón Enviar Email (adaptado para NC)
+    // Botón Enviar Email
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
       ? (esCancelada ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
@@ -182,7 +183,7 @@ function renderComps(lista) {
           </svg>
          </button>`;
     
-    // Botón Cancelar (solo para facturas emitidas, no para NC ni canceladas)
+    // Botón Cancelar
     const btnCancelar = (emitido && !esCancelada && !esNotaCredito)
       ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -209,9 +210,9 @@ function renderComps(lista) {
       }
     })();
     
-    // Monto
+    // 👇 MONTO: usa c.monto (tiene el valor positivo) o c.amount si es necesario
     const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
-                   : (c.amount !== undefined && c.amount !== null) ? c.amount 
+                   : (c.amount !== undefined && c.amount !== null) ? Math.abs(c.amount) 
                    : 0;
     const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
     
@@ -244,7 +245,6 @@ function renderComps(lista) {
     </div>`;
   }).join('');
 }
-
 /* ── CARGA INICIAL ─────────────────────────────────── */
 function cargarDashboard(data){
   const d = data || MOCK;

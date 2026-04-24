@@ -1536,7 +1536,7 @@ function filtrarComprobantes() {
     return true;
   });
 
-  renderComprobantes(lista);
+  bantes(lista);
 }
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');
@@ -1546,39 +1546,33 @@ function renderComprobantes(lista) {
     return;
   }
 
-  tbody.innerHTML = lista.map((c, i) => {
-    // 👇 DETECCIÓN CORREGIDA
+  let html = '';
+  for (let i = 0; i < lista.length; i++) {
+    const c = lista[i];
+    
     const esCancelada = c.status === 'cancelled';
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
     
-    // Estado Chip
     const estadoChip = emitido
       ? `<span class="estado-chip ok">● Emitido</span>`
       : `<span class="estado-chip pend">◌ Pendiente</span>`;
     
-    // Origen Pill
     const origenPill = (() => {
       switch (c.platform) {
         case 'mercadolibre':
-          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#1a1a1a;background:#FFE600;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">ML</span>`;
+          return '<span style="font-size:9px;font-weight:700;background:#FFE600;color:#1a1a1a;padding:2px 7px;border-radius:4px;">ML</span>';
         case 'woocommerce':
-          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:white;background:#7F54B3;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">WOO</span>`;
-        case 'tiendanube':
-          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:white;background:#1EAAF1;padding:2px 7px;border-radius:4px;border:1px solid rgba(0,0,0,.1)">TN</span>`;
-        case 'manual':
-          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--yellow);background:rgba(255,179,0,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,179,0,.2)">MAN</span>`;
+          return '<span style="font-size:9px;font-weight:700;background:#7F54B3;color:white;padding:2px 7px;border-radius:4px;">WOO</span>';
         default:
-          return `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--text-2);background:var(--card-2);padding:2px 7px;border-radius:4px;border:1px solid var(--border)">${c.platform?.slice(0,3).toUpperCase() || 'EXT'}</span>`;
+          return '<span style="font-size:9px;font-weight:700;background:#444;padding:2px 7px;border-radius:4px;">EXT</span>';
       }
     })();
     
-    // Botón Anular (solo para manuales no emitidas)
     const btnAnular = c.origen === 'manual' && !emitido
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
-    // Email sent
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
       ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
@@ -1586,37 +1580,29 @@ function renderComprobantes(lista) {
     const emailDisabled = emailSent ? 'disabled' : '';
     const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
     
-    // Monto a mostrar (positivo para NC)
     const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     
-    // Texto del comprobante
-    const comprobanteTexto = esNotaCredito
-      ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}`
-      : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)} · Vto ${c.caeExpiry ? new Date(c.caeExpiry).toLocaleDateString() : '—'}` : c.fecha);
-    
-    return `
+    html += `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
-      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</tr>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
-      </td>
+       </td>
       <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
       <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${ars(montoMostrar)}</td>
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
-          <!-- Ver PDF / NC -->
           <button class="act-btn" title="${esNotaCredito ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
-          <!-- Emitir CAE -->
           ${!emitido && !esNotaCredito
             ? `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
@@ -1631,32 +1617,21 @@ function renderComprobantes(lista) {
                 </svg>
                </button>`
           }
-          <!-- Enviar Email -->
           <button class="act-btn ${emailSent ? 'act-btn-sent' : ''}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
             </svg>
           </button>
-          <!-- Cancelar -->
-          ${emitido && !esNotaCredito && !esCancelada
-            ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
-                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-                  <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                  <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
-                </svg>
-               </button>`
-            : ''
-          }
           ${btnAnular}
         </div>
-      <td>
-    </table>`;
-  }).join('');
-
+       </td>
+     </tr>`;
+  }
+  
+  tbody.innerHTML = html;
   renderTotalesComp(lista);
 }
-
 function renderTotalesComp(lista) {
   // Excluir órdenes anuladas/canceladas
   const activos = lista.filter(c => c.estado !== 'anulado' && c.status !== 'cancelled');

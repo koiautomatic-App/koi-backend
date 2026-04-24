@@ -2161,6 +2161,18 @@ app.patch('/api/orders/:id', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// Obtener una orden por ID
+app.get('/api/orders/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const order = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    res.json({ ok: true, order });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES

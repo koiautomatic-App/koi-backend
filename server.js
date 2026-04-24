@@ -62,8 +62,21 @@ app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: BASE, credentials: true }));
 app.use(cookieParser());
-app.use(express.static(path.join(__dirname, 'public')));
-app.use(session({
+// Servir archivos estáticos con control de caché
+app.use(express.static(path.join(__dirname, 'public'), {
+  setHeaders: (res, filePath) => {
+    // Para archivos JS, deshabilitar caché completamente
+    if (filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+    // Para CSS y otros, caché corta (opcional)
+    else if (filePath.endsWith('.css')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));app.use(session({
   secret:            process.env.SESSION_SECRET || 'koi-session-dev',
   resave:            false,
   saveUninitialized: false,

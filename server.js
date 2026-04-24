@@ -2131,6 +2131,37 @@ app.delete('/api/orders/:id', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: e.message });
   }
 });
+// 👇 AGREGAR EL ENDPOINT PATCH AQUÍ (después del DELETE)
+
+// Actualizar una orden (solo campos permitidos)
+app.patch('/api/orders/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const allowedUpdates = ['nroFormatted', 'emailSent', 'emailSentAt', 'concepto', 'amount', 'caeNumber', 'status'];
+    const updates = {};
+    
+    for (const key of allowedUpdates) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+    
+    const order = await Order.findOneAndUpdate(
+      { _id: id, userId: req.userId },
+      { $set: updates },
+      { new: true }
+    );
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    res.json({ ok: true, order });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════

@@ -196,9 +196,14 @@ const OrderSchema = new mongoose.Schema({
   puntoVenta:     { type: Number },
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
+  
+  // 👇 AGREGAR ESTA LÍNEA
+  nroFormatted:   { type: String, default: '' },  // "FC C 00003-00000027" o "NC C 00003-00000001"
+  
   // Estado de envío de email
   emailSent:      { type: Boolean, default: false },
   emailSentAt:    { type: Date },
+  
   // 👇 CAMPOS PARA MERCADOLIBRE
   customerZipCode: { type: String, default: '' },
   taxCondition:    { type: String, default: 'consumidor_final' },
@@ -208,6 +213,7 @@ const OrderSchema = new mongoose.Schema({
   shippingCost:    { type: Number, default: 0 },
   shouldIncludeShipping: { type: Boolean, default: false },
   shippingAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
+  
   // 👇 NUEVOS CAMPOS PARA ENRIQUECIMIENTO
   buyerId: { type: String, default: '' },
   shipmentId: { type: String, default: '' },
@@ -221,6 +227,7 @@ const OrderSchema = new mongoose.Schema({
   orderEnriched: { type: Boolean, default: false },
   createdAt:      { type: Date, default: Date.now },
 });
+
 OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });

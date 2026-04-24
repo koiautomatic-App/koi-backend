@@ -2117,6 +2117,20 @@ app.get('/api/orders', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error interno' }); 
   }
 });
+// Eliminar una orden (solo admin o para limpiar duplicados)
+app.delete('/api/orders/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const order = await Order.findOne({ _id: req.params.id, userId: req.userId });
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    await Order.findByIdAndDelete(req.params.id);
+    res.json({ ok: true, message: 'Orden eliminada' });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 // ════════════════════════════════════════════════════════════
 //  API — INTEGRACIONES
 // ════════════════════════════════════════════════════════════

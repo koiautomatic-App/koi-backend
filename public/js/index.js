@@ -151,6 +151,92 @@ function filtrarComprobantes() {
 
   renderComprobantes(lista);  // 👈 CORREGIDO
 }
+function renderComps(lista) {
+  document.getElementById('compBadge').textContent = lista.length;
+  const cont = document.getElementById('compList');
+  if (!lista.length) {
+    cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
+    return;
+  }
+  
+  cont.innerHTML = lista.map((c, i) => {
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const emitido = c.estado === 'cae-ok' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '');
+    const esCancelada = c.status === 'cancelled' || esNotaCredito;
+    
+    const btnEmitir = (emitido || esCancelada)
+      ? `<button class="act-btn act-done" title="${esCancelada ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+          </svg>
+         </button>`
+      : `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+            <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+            <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+          </svg>
+         </button>`;
+    
+    const emailSent = c.emailSent === true;
+    const emailTitle = emailSent 
+      ? (esCancelada ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
+      : (esCancelada ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
+    
+    const btnEmail = emailSent
+      ? `<button class="act-btn act-btn-sent" title="${emailTitle}" disabled>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9 9l2 2M5 9l-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+         </button>`
+      : `<button class="act-btn" title="${emailTitle}" onclick="enviarMail('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+         </button>`;
+    
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito)
+      ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`
+      : '';
+    
+    const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
+                   : (c.amount !== undefined && c.amount !== null) ? Math.abs(c.amount) 
+                   : 0;
+    const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
+    
+    return `
+    <div class="comp-row" style="animation-delay:${i*55}ms">
+      <div class="cae-dot ${c.estado || (emitido ? 'cae-ok' : 'cae-pend')}"></div>
+      <div class="comp-info">
+        <div class="comp-cliente">${c.customerName || c.cliente}</div>
+        <div class="comp-meta">
+          ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}
+          ${esCancelada ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'}` : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)}` : c.fecha || c.orderDate)}
+        </div>
+      </div>
+      <div class="comp-monto">${ars(montoMostrar)}</div>
+      <div class="comp-actions">
+        <button class="act-btn" title="${esCancelada ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </button>
+        ${btnEmitir}
+        ${btnEmail}
+        ${btnCancelar}
+      </div>
+    </div>`;
+  }).join('');
+}
 
 /* ── CARGA INICIAL ─────────────────────────────────── */
 function cargarDashboard(data){
@@ -1443,7 +1529,7 @@ function filtrarComprobantes() {
     return true;
   });
 
-  bantes(lista);
+  renderComprobantes(lista);
 }
 function renderComprobantes(lista) {
   const tbody = document.getElementById('manualesBody');

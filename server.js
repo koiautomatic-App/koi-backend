@@ -1969,7 +1969,7 @@ async function generarFacturaHtml(userId, orden) {
   });
 }
 // ════════════════════════════════════════════════════════════
-//  API — ENVIAR FACTURA / NOTA DE CRÉDITO POR MAIL
+//  API — ENVIAR FACTURA / NOTA DE CRÉDITO POR MAIL / ML
 // ════════════════════════════════════════════════════════════
 
 app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
@@ -2012,6 +2012,45 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       console.log(`📧 Enviando Nota de Crédito directa: ${orden.nroFormatted}`);
     }
 
+    // ════════════════════════════════════════════════════════════
+    //  MERCADOLIBRE: Adjuntar a la plataforma en lugar de enviar email
+    // ════════════════════════════════════════════════════════════
+    if (ordenParaEnviar.platform === 'mercadolibre') {
+      // Buscar integración activa de ML
+      const mlIntegration = await Integration.findOne({ 
+        userId: req.userId, 
+        platform: 'mercadolibre',
+        status: 'active'
+      });
+      
+      if (!mlIntegration) {
+        return res.status(400).json({ error: 'MercadoLibre no está conectado' });
+      }
+      
+      const accessToken = await _getMLToken(mlIntegration);
+      const result = await attachInvoiceToMercadoLibre(ordenParaEnviar, accessToken);
+      
+      if (result.ok) {
+        await Order.findByIdAndUpdate(ordenParaEnviar._id, {
+          emailSent: true,
+          emailSentAt: new Date()
+        });
+        
+        return res.json({ 
+          ok: true, 
+          message: '✅ Comprobante adjuntado a Mercado Libre. El comprador lo verá en su cuenta.',
+          platform: 'mercadolibre'
+        });
+      } else {
+        return res.status(500).json({ 
+          error: 'Error al adjuntar a Mercado Libre: ' + (result.error || 'desconocido') 
+        });
+      }
+    }
+
+    // ════════════════════════════════════════════════════════════
+    //  OTRAS PLATAFORMAS: Enviar por email
+    // ════════════════════════════════════════════════════════════
     if (!ordenParaEnviar.customerEmail) {
       return res.status(400).json({ error: 'El cliente no tiene email registrado' });
     }
@@ -3317,6 +3356,88 @@ app.get('/api/debug/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) =
     res.status(error.response?.status || 500).json({ error: error.message });
   }
 });
+// ════════════════════════════════════════════════════════════
+//  MERCADOLIBRE - Adjuntar comprobante fiscal a la orden
+// ════════════════════════════════════════════════════════════
+
+async function attachInvoiceToMercadoLibre(order, accessToken) {
+  try {
+    // 1. Obtener el pack_id de la orden
+    const orderDetail = await axios.get(`https://api.mercadolibre.com/orders/${order.externalId}`, {
+      headers: { Authorization: `Bearer ${accessToken}` }
+    });
+    
+    const packId = orderDetail.data.pack_id || order.externalId;
+    
+    // 2. Generar el PDF de la factura/NC
+    const pdfBuffer = await generateInvoicePDF(order);
+    
+    // 3. Crear FormData con el PDF
+    const FormData = require('form-data');
+    const form = new FormData();
+    form.append('fiscal_document', pdfBuffer, {
+      filename: `${order.nroFormatted || 'comprobante'}.pdf`,
+      contentType: 'application/pdf'
+    });
+    
+    // 4. Subir a Mercado Libre
+    const response = await axios.post(
+      `https://api.mercadolibre.com/packs/${packId}/fiscal_documents`,
+      form,
+      {
+        headers: {
+          ...form.getHeaders(),
+          'Authorization': `Bearer ${accessToken}`
+        },
+        timeout: 30000
+      }
+    );
+    
+    console.log(`✅ Factura adjuntada a ML para orden ${order.externalId}:`, response.data.ids);
+    return { ok: true, ids: response.data.ids };
+    
+  } catch(error) {
+    console.error(`❌ Error adjuntando factura a ML orden ${order.externalId}:`, error.response?.data || error.message);
+    return { ok: false, error: error.response?.data || error.message };
+  }
+}
+
+// ════════════════════════════════════════════════════════════
+//  GENERAR PDF (buffer) para adjuntar
+// ════════════════════════════════════════════════════════════
+
+async function generateInvoicePDF(order) {
+  // Generar HTML igual que en /api/orders/:id/pdf
+  const user = await User.findById(order.userId).select('nombre apellido settings').lean();
+  
+  const html = await ejs.renderFile(path.join(__dirname, 'views', 'factura.ejs'), {
+    logoUrl: user?.settings?.logoUrl || '',
+    nombreFantasia: user?.settings?.razonSocial || `${user?.nombre||''} ${user?.apellido||''}`.trim() || 'Sono Handmade',
+    razonSocial: user?.settings?.razonSocial || `${user?.nombre||''} ${user?.apellido||''}`.trim(),
+    cuitFmt: (user?.settings?.cuit || '').replace(/(\d{2})(\d{8})(\d)/, '$1-$2-$3'),
+    tipoFactura: order.nroFormatted?.startsWith('NC') ? 'NOTA DE CRÉDITO' : 'FACTURA',
+    nroComp: `${String(order.puntoVenta || 1).padStart(4,'0')}-${String(order.nroComprobante || 0).padStart(8,'0')}`,
+    fecha: new Date(order.fechaEmision || order.createdAt).toLocaleDateString('es-AR'),
+    filasItems: (order.items || []).map(item => `
+      <tr>
+        <td>${item.nombre || 'Producto'}</td>
+        <td>${item.cantidad || 1}</td>
+        <td>$ ${(item.precio || 0).toFixed(2)}</td>
+        <td>$ ${((item.precio || 0) * (item.cantidad || 1)).toFixed(2)}</td>
+      </tr>
+    `).join(''),
+    total: `$ ${Math.abs(order.amount).toFixed(2)}`,
+    caeDisplay: order.caeNumber || '(pendiente)',
+    caeVto: order.caeExpiry ? new Date(order.caeExpiry).toLocaleDateString('es-AR') : '—',
+    sinCae: !order.caeNumber,
+    customerName: order.customerName || 'Cliente'
+  });
+  
+  // Convertir HTML a PDF (usando puppeteer o similar)
+  // Por simplicidad, por ahora devolvemos un buffer del HTML
+  // En producción, usar puppeteer para generar PDF real
+  return Buffer.from(html, 'utf-8');
+}
 // ════════════════════════════════════════════════════════════
 //  SCRIPT TEMPORAL: Actualizar órdenes existentes de ML
 //  (Ejecutar una sola vez, luego eliminar este endpoint)

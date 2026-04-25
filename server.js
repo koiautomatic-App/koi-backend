@@ -2788,16 +2788,19 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 });
 
 // ════════════════════════════════════════════════════════════
-//  API — STATS DASHBOARD (CORREGIDO - usa misma lógica que comprobantes)
+//  API — STATS DASHBOARD (CORREGIDO)
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
-    // Validar que req.userId sea un ObjectId válido
-    if (!req.userId || !mongoose.Types.ObjectId.isValid(req.userId)) {
-      console.error('❌ userId inválido:', req.userId);
-      return res.status(400).json({ error: 'ID de usuario inválido' });
+    // Usar req.userId directamente (MongoDB acepta string)
+    const userId = req.userId;
+    
+    console.log('📊 [dashboard] userId recibido:', userId);
+    
+    if (!userId) {
+      console.error('❌ userId es undefined');
+      return res.status(401).json({ error: 'Usuario no autenticado' });
     }
-    const userId = new mongoose.Types.ObjectId(req.userId);
     
     // Parsear filtros de fecha
     let fechaDesde = null;

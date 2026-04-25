@@ -1383,7 +1383,7 @@ passport.deserializeUser(async (id, done) => {
 app.get('/auth/google', passport.authenticate('google', { scope: ['profile','email'] }));
 app.get('/auth/google/callback',
   passport.authenticate('google', { failureRedirect: '/login?error=google_failed' }),
-  (req, res) => { setTokenCookie(res, signToken(req.user.id)); res.redirect('/dashboard'); }
+  (req, res) => { setTokenCookie(res, signToken(req.user)); res.redirect('/dashboard'); }
 );
 
 app.post('/auth/register', async (req, res) => {
@@ -1393,7 +1393,7 @@ app.post('/auth/register', async (req, res) => {
     if (password.length < 8) return res.status(400).json({ error: 'Mínimo 8 caracteres.' });
     if (await User.findOne({ email: email.toLowerCase() })) return res.status(409).json({ error: 'Email ya registrado.' });
     const user = await User.create({ nombre, apellido, email, password });
-    setTokenCookie(res, signToken(user.id));
+    setTokenCookie(res, signToken(user));
     res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
   } catch(e) { res.status(500).json({ error: 'Error interno.' }); }
 });
@@ -1406,7 +1406,7 @@ app.post('/auth/login', async (req, res) => {
     if (!user?.password || !await user.checkPassword(password))
       return res.status(401).json({ error: 'Email o contraseña incorrectos.' });
     user.ultimoAcceso = new Date(); await user.save();
-    setTokenCookie(res, signToken(user.id));
+    setTokenCookie(res, signToken(user));
     res.json({ ok: true, user: { nombre: user.nombre, email: user.email } });
   } catch(e) { res.status(500).json({ error: 'Error interno.' }); }
 });
@@ -1416,7 +1416,6 @@ app.get('/auth/logout', (req, res) => {
   res.clearCookie('koi_token');
   res.redirect('/login');
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — USUARIO
 // ════════════════════════════════════════════════════════════
@@ -3033,9 +3032,8 @@ app.get('/dashboard', requireAuth, (req, res) => {
 // ════════════════════════════════════════════════════════════
 //  ADMIN
 // ════════════════════════════════════════════════════════════
-
-// Middleware para verificar si es administrador
-const requireAdmin = async (req, res, next) => {
+// Middleware para verificar si es administrador (admin fijo por email)
+const requireAdmin = (req, res, next) => {
   try {
     const token = req.cookies.koi_token;
     if (!token) {
@@ -3043,18 +3041,13 @@ const requireAdmin = async (req, res, next) => {
     }
     
     const decoded = jwt.verify(token, JWT_SECRET);
-    const userId = decoded.id;
+    const userEmail = decoded.email;
     
-    const user = await User.findById(userId).select('role email').lean();
-    
-    console.log('🔍 requireAdmin - Usuario encontrado:', user?.email);
-    console.log('🔍 requireAdmin - Rol:', user?.role);
-    
-    if (user && user.role === 'admin') {
-      req.userId = userId;
+    // Único admin: koi.automatic@gmail.com
+    if (userEmail === 'koi.automatic@gmail.com') {
+      req.userId = decoded.id;
       next();
     } else {
-      console.log('❌ Acceso denegado - rol no es admin:', user?.role);
       res.status(403).send('Acceso denegado: se requieren permisos de administrador');
     }
   } catch (error) {
@@ -3062,12 +3055,6 @@ const requireAdmin = async (req, res, next) => {
     res.status(403).send('Acceso denegado: error de verificación');
   }
 };
-
-// Ruta del panel de administración
-app.get('/admin', requireAuth, requireAdmin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
 // ════════════════════════════════════════════════════════════
 //  API ADMIN
 // ════════════════════════════════════════════════════════════

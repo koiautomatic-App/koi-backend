@@ -1330,22 +1330,49 @@ function startBackgroundSync(integration) {
 // ════════════════════════════════════════════════════════════
 //  AUTH HELPERS
 // ════════════════════════════════════════════════════════════
-const signToken = (id) => jwt.sign({ id }, JWT_SECRET, { expiresIn: '7d' });
+const signToken = (user) => jwt.sign({ 
+  id: user._id, 
+  email: user.email 
+}, JWT_SECRET, { expiresIn: '7d' });
+
 const setTokenCookie = (res, token) => res.cookie('koi_token', token, {
   httpOnly: true, secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax', maxAge: 7*24*60*60*1000,
 });
+
 const requireAuth = (req, res, next) => {
-  try { req.userId = jwt.verify(req.cookies.koi_token, JWT_SECRET).id; next(); }
-  catch { res.clearCookie('koi_token'); res.redirect('/login'); }
+  try { 
+    const decoded = jwt.verify(req.cookies.koi_token, JWT_SECRET);
+    req.userId = decoded.id;
+    next(); 
+  }
+  catch { 
+    res.clearCookie('koi_token'); 
+    res.redirect('/login'); 
+  }
 };
+
 const requireAuthAPI = (req, res, next) => {
-  const token = req.cookies.koi_token || (req.headers.authorization||'').replace('Bearer ','');
-  try { req.userId = jwt.verify(token, JWT_SECRET).id; next(); }
-  catch { res.status(401).json({ error: 'No autenticado' }); }
+  const token = req.cookies.koi_token || (req.headers.authorization || '').replace('Bearer ', '');
+  
+  if (!token) {
+    return res.status(401).json({ error: 'No autenticado: token faltante' });
+  }
+  
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET);
+    
+    if (!decoded.id) {
+      return res.status(401).json({ error: 'Token inválido: id no encontrado' });
+    }
+    
+    req.userId = decoded.id;
+    next();
+  } catch (err) {
+    console.error('❌ requireAuthAPI error:', err.message);
+    res.status(401).json({ error: 'No autenticado: ' + err.message });
+  }
 };
-
-
 
 // ════════════════════════════════════════════════════════════
 //  PASSPORT GOOGLE

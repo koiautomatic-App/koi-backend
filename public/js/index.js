@@ -313,7 +313,36 @@ const api = {
 function adaptarStats(raw) {
   if (!raw) return null;
 
-  // ... resto del código existente ...
+  // Período formateado
+  const ahora = new Date();
+  const mesNom = ahora.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+  
+  const desde = raw.periodo?.desde ? new Date(raw.periodo.desde) : null;
+  const hasta = raw.periodo?.hasta ? new Date(raw.periodo.hasta) : null;
+  const fmtP = d => d?.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const periodoLabel = (desde && hasta) ? `${fmtP(desde)} → ${fmtP(hasta)}` : mesNom;
+
+  // Comprobantes para la bandeja
+  const comprobantes = (raw.ultimas || []).map(o => ({
+    _id:         o._id,
+    id:          o.nroFormatted || o.externalId || o._id,
+    externalId:  o.externalId,
+    cliente:     o.customerName  || 'Sin nombre',
+    email:       o.customerEmail || '',
+    tipo:        o.nroFormatted  || o.platform || 'Venta',
+    concepto:    o.concepto || '',
+    fecha:       (o.orderDate||o.createdAt) ? new Date(o.orderDate||o.createdAt).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—',
+    monto:       o.amount || 0,
+    estado:      o.status === 'invoiced'        ? 'cae-ok'
+               : o.status === 'error_afip'      ? 'cae-err'
+               : o.status === 'error_data'      ? 'cae-err'
+               : 'cae-pend',
+    cae:         o.caeNumber || null,
+    caeVto:      o.caeExpiry ? new Date(o.caeExpiry).toLocaleDateString('es-AR') : null,
+    origen:      o.platform === 'manual' ? 'manual' : 'woo',
+    platform:    o.platform,
+    emailSent:   o.emailSent || false,
+  }));
 
   return {
     serverOnline:    true,
@@ -334,7 +363,7 @@ function adaptarStats(raw) {
     chartDias:       raw.chartDias      || [],
     chartVentas:     raw.chartVentas    || [],
     comprobantes,
-    notasCredito:    raw.notasCredito   || { montoTotal: 0, cantidad: 0 }  // 👈 AGREGAR ESTA LÍNEA
+    notasCredito:    raw.notasCredito   || { montoTotal: 0, cantidad: 0 }
   };
 }
 // gasRun() — firma idéntica al original

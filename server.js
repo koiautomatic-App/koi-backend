@@ -1979,55 +1979,45 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       return res.status(404).json({ error: 'Orden no encontrada' });
     }
 
-    // ⭐ Si la orden está cancelada, buscar la Nota de Crédito asociada
     let ordenParaEnviar = orden;
     let esNotaCredito = false;
     
-    if (orden.status === 'cancelled') {
-      console.log('🔍 DEBUG - Buscando NC para orden:', {
+    // Si la orden está cancelada Y NO es una NC, buscar la NC asociada
+    if (orden.status === 'cancelled' && !orden.nroFormatted?.startsWith('NC')) {
+      console.log('🔍 Buscando NC asociada a la factura cancelada:', {
         _id: orden._id,
-        externalId: orden.externalId,
-        nroFormatted: orden.nroFormatted,
-        status: orden.status
+        externalId: orden.externalId
       });
       
-      // Buscar NC por nroFormatted que empiece con NC
       const nc = await Order.findOne({ 
         userId: req.userId,
         $or: [
           { nroFormatted: { $regex: /^NC/i } },
           { concepto: { $regex: `#${orden.externalId}` } },
-          { externalId: { $regex: `${orden.externalId}` } }
+          { externalId: orden.externalId }
         ],
-        amount: { $lt: 0 },
-        _id: { $ne: orden._id }
+        amount: { $lt: 0 }
       });
-      
-      console.log('🔍 DEBUG - NC encontrada:', nc ? {
-        _id: nc._id,
-        externalId: nc.externalId,
-        nroFormatted: nc.nroFormatted,
-        amount: nc.amount
-      } : 'NO ENCONTRADA');
       
       if (nc) {
         ordenParaEnviar = nc;
         esNotaCredito = true;
-        console.log(`📧 Enviando Nota de Crédito → ${nc.nroFormatted}`);
+        console.log(`📧 Enviando Nota de Crédito: ${nc.nroFormatted}`);
       } else {
-        return res.status(404).json({ error: 'No se encontró la Nota de Crédito asociada' });
+        console.log('❌ No se encontró NC asociada');
       }
+    } else if (orden.nroFormatted?.startsWith('NC')) {
+      // Si la orden actual YA es una NC
+      esNotaCredito = true;
+      console.log(`📧 Enviando Nota de Crédito directa: ${orden.nroFormatted}`);
     }
 
     if (!ordenParaEnviar.customerEmail) {
       return res.status(400).json({ error: 'El cliente no tiene email registrado' });
     }
 
-    // Obtener el usuario para el replyTo y nombre de empresa
     const user = await User.findById(req.userId).select('email nombre apellido settings').lean();
-    
     const replyToEmail = user?.email || 'koi.automatic@gmail.com';
-    
     const nombreFantasiaEmail = user?.settings?.razonSocial
       || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
       || 'Sono Handmade';
@@ -2035,7 +2025,7 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     const facturaHtml = await generarFacturaHtml(req.userId, ordenParaEnviar);
     
     const subject = esNotaCredito
-      ? `🧾 Nota de Crédito de ${nombreFantasiaEmail} - Pedido #${orden.externalId}`
+      ? `🧾 Nota de Crédito de ${nombreFantasiaEmail} - Pedido #${orden.externalId || ordenParaEnviar.externalId}`
       : `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`;
     
     const { data, error } = await resend.emails.send({
@@ -2056,8 +2046,6 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     });
 
     console.log(`📧 ${esNotaCredito ? 'Nota de Crédito' : 'Factura'} enviada a ${ordenParaEnviar.customerEmail}`);
-    console.log(`   Responder a: ${replyToEmail}`);
-    console.log(`   Message ID: ${data.id}`);
 
     res.json({ 
       ok: true, 

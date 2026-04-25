@@ -2792,18 +2792,13 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
-app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
-  try {
-    // 👇 AGREGAR ESTE LOG
-    console.log('📊 [dashboard] req.userId recibido:', req.userId, 'tipo:', typeof req.userId);
-    
     // Validar que req.userId sea un ObjectId válido
     if (!req.userId || !mongoose.Types.ObjectId.isValid(req.userId)) {
       console.error('❌ userId inválido:', req.userId);
       return res.status(400).json({ error: 'ID de usuario inválido' });
     }
     const userId = new mongoose.Types.ObjectId(req.userId);
-    // ... resto del código    
+    
     // Parsear filtros de fecha
     let fechaDesde = null;
     let fechaHasta = null;
@@ -2817,7 +2812,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       fechaHasta.setHours(23, 59, 59, 999);
     }
     
-    // 📊 1. TOTAL FACTURADO (incluye órdenes con CAE O status invoiced)
+    // 📊 1. TOTAL FACTURADO
     const matchFacturado = {
       userId,
       $or: [
@@ -2839,7 +2834,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const totalFacturado = totalResult[0]?.total || 0;
     const totalFacturas = totalResult[0]?.count || 0;
     
-    // 📅 2. EMITIDO HOY (incluye órdenes con CAE O status invoiced)
+    // 📅 2. EMITIDO HOY
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
     const hoyFin = new Date();
@@ -2862,7 +2857,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     const hoyMonto = hoyResult[0]?.total || 0;
     const hoyCount = hoyResult[0]?.count || 0;
     
-    // ⏳ 3. PENDIENTES CAE (órdenes SIN CAE Y SIN status invoiced)
+    // ⏳ 3. PENDIENTES CAE
     const pendientesCAE = await Order.countDocuments({
       userId,
       $and: [
@@ -2871,14 +2866,14 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       ]
     });
     
-    // 🧾 4. NOTAS DE CRÉDITO (misma lógica que en renderComprobantes)
+    // 🧾 4. NOTAS DE CRÉDITO
     const notasCreditoAgg = await Order.aggregate([
       { 
         $match: { 
           userId,
           $or: [
-            { amount: { $lt: 0 } },                              // Monto negativo
-            { nroFormatted: { $regex: /^NC/i } }                 // Número empieza con NC
+            { amount: { $lt: 0 } },
+            { nroFormatted: { $regex: /^NC/i } }
           ]
         }
       },
@@ -2893,7 +2888,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       {
         $group: {
           _id: null,
-          montoTotal: { $sum: { $abs: '$amount' } }, // Valor absoluto (positivo)
+          montoTotal: { $sum: { $abs: '$amount' } },
           cantidad: { $sum: 1 }
         }
       }
@@ -2904,7 +2899,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
-    // 📈 5. GRÁFICO - Ingresos por día (incluye órdenes con CAE O status invoiced)
+    // 📈 5. GRÁFICO
     let chartDias = [];
     let chartVentas = [];
     
@@ -2958,20 +2953,18 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       return ventasMap.get(key) || 0;
     });
     
-    // 🆕 6. ÚLTIMAS 50 VENTAS (TODAS las órdenes, con o sin CAE)
+    // 🆕 6. ÚLTIMAS 50 VENTAS
     const ultimas = await Order.find({ userId })
       .sort({ createdAt: -1, orderDate: -1 })
       .limit(50)
       .select('customerName amount createdAt orderDate fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt externalId')
       .lean();
     
-    // Agregar concepto formateado para mostrar
     const ultimasConConcepto = ultimas.map(v => ({
       ...v,
       conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
     }));
     
-    // 📤 RESPONDER
     res.json({
       ok: true,
       totalFacturado,
@@ -2979,7 +2972,7 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
       hoyMonto,
       hoyCount,
       pendientesCAE,
-      notasCredito,  // 👈 AGREGADO
+      notasCredito,
       chartDias,
       chartVentas,
       ultimas: ultimasConConcepto,

@@ -3061,16 +3061,11 @@ app.get('/dashboard', requireAuth, (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
 
-// Ruta del panel de administración
-app.get('/admin', requireAuth, requireAdmin, (req, res) => {
-  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
-});
-
 // ════════════════════════════════════════════════════════════
 //  ADMIN
 // ════════════════════════════════════════════════════════════
 // Middleware para verificar si es administrador (admin fijo por email)
-const requireAdmin = (req, res, next) => {
+const requireAdmin = (req, res, next) => {  // 👈 CORREGIDO
   try {
     const token = req.cookies.koi_token;
     if (!token) {
@@ -3184,6 +3179,11 @@ app.get('/api/admin/integrations', requireAuth, requireAdmin, async (req, res) =
     } catch (error) {
         res.status(500).json({ ok: false, error: error.message });
     }
+});
+
+// Ruta del panel de administración
+app.get('/admin', requireAuth, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
 });
 
 // ════════════════════════════════════════════════════════════

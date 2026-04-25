@@ -1984,14 +1984,22 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     let esNotaCredito = false;
     
     if (orden.status === 'cancelled') {
+      // Buscar la NC por externalId igual, nroFormatted que empiece con NC, o por monto negativo
       const nc = await Order.findOne({ 
         userId: req.userId,
-        externalId: { $regex: `^${orden.externalId}-NC` }
+        $or: [
+          { externalId: orden.externalId },                    // Mismo externalId
+          { nroFormatted: { $regex: /^NC/i } },               // Número formateado empieza con NC
+          { concepto: { $regex: `original #${orden.externalId}` } }  // Referencia en concepto
+        ],
+        amount: { $lt: 0 },        // Monto negativo (característica de NC)
+        _id: { $ne: orden._id }    // Que no sea la misma orden
       });
+      
       if (nc) {
         ordenParaEnviar = nc;
         esNotaCredito = true;
-        console.log(`📧 Enviando Nota de Crédito para orden cancelada ${orden.externalId}`);
+        console.log(`📧 Enviando Nota de Crédito para orden cancelada ${orden.externalId} → ${nc.nroFormatted}`);
       } else {
         return res.status(404).json({ error: 'No se encontró la Nota de Crédito asociada' });
       }
@@ -2054,7 +2062,6 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: 'Error al enviar el email: ' + e.message });
   }
 });
-
 // ════════════════════════════════════════════════════════════
 //  API — ORDERS
 // ════════════════════════════════════════════════════════════

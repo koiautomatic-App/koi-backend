@@ -1466,3 +1466,43 @@
   color: var(--green);
   transform: none;
 }
+/* KOI Logo - mismo estilo que landing */
+.koi-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.koi-logo-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #1a1a24, #111118);
+  border: 0.5px solid rgba(249,115,22,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 900;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #F97316;
+}
+
+.koi-logo-name {
+  font-weight: 800;
+  font-size: 16px;
+  color: #F9FAFB;
+  letter-spacing: -0.3px;
+}
+
+.koi-logo-name span {
+  color: #F97316;
+}
+
+.koi-logo-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: #6B7280;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}

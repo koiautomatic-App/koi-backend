@@ -2787,15 +2787,23 @@ app.post('/webhook/shopify/:secret', async (req, res) => {
   await handleWebhook('shopify', req.params.secret, () => normalize.shopify(req.body));
 });
 
-
-
 // ════════════════════════════════════════════════════════════
 //  API — STATS DASHBOARD (CORREGIDO - usa misma lógica que comprobantes)
 // ════════════════════════════════════════════════════════════
 app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
   try {
-    const userId = new mongoose.Types.ObjectId(req.userId);
+app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
+  try {
+    // 👇 AGREGAR ESTE LOG
+    console.log('📊 [dashboard] req.userId recibido:', req.userId, 'tipo:', typeof req.userId);
     
+    // Validar que req.userId sea un ObjectId válido
+    if (!req.userId || !mongoose.Types.ObjectId.isValid(req.userId)) {
+      console.error('❌ userId inválido:', req.userId);
+      return res.status(400).json({ error: 'ID de usuario inválido' });
+    }
+    const userId = new mongoose.Types.ObjectId(req.userId);
+    // ... resto del código    
     // Parsear filtros de fecha
     let fechaDesde = null;
     let fechaHasta = null;

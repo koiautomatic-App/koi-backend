@@ -1987,40 +1987,33 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       console.log('🔍 DEBUG - Buscando NC para orden:', {
         _id: orden._id,
         externalId: orden.externalId,
+        nroFormatted: orden.nroFormatted,
         status: orden.status
       });
       
-      // Buscar TODAS las órdenes con el mismo externalId
-      const todasLasOrdenes = await Order.find({ 
-        userId: req.userId,
-        externalId: orden.externalId
-      });
-      
-      console.log('🔍 DEBUG - Órdenes encontradas con mismo externalId:', todasLasOrdenes.map(o => ({
-        _id: o._id,
-        amount: o.amount,
-        nroFormatted: o.nroFormatted,
-        status: o.status
-      })));
-      
-      // Buscar NC (cualquier orden con mismo externalId pero diferente _id)
+      // Buscar NC por nroFormatted que empiece con NC
       const nc = await Order.findOne({ 
         userId: req.userId,
-        externalId: orden.externalId,
+        $or: [
+          { nroFormatted: { $regex: /^NC/i } },
+          { concepto: { $regex: `#${orden.externalId}` } },
+          { externalId: { $regex: `${orden.externalId}` } }
+        ],
+        amount: { $lt: 0 },
         _id: { $ne: orden._id }
       });
       
-      console.log('🔍 DEBUG - Resultado búsqueda NC (sin filtro amount):', nc ? {
+      console.log('🔍 DEBUG - NC encontrada:', nc ? {
         _id: nc._id,
         externalId: nc.externalId,
         nroFormatted: nc.nroFormatted,
         amount: nc.amount
       } : 'NO ENCONTRADA');
       
-      if (nc && nc.amount < 0) {  // Verificar que sea monto negativo después de encontrar
+      if (nc) {
         ordenParaEnviar = nc;
         esNotaCredito = true;
-        console.log(`📧 Enviando Nota de Crédito para orden cancelada ${orden.externalId} → ${nc.nroFormatted}`);
+        console.log(`📧 Enviando Nota de Crédito → ${nc.nroFormatted}`);
       } else {
         return res.status(404).json({ error: 'No se encontró la Nota de Crédito asociada' });
       }
@@ -2033,23 +2026,18 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     // Obtener el usuario para el replyTo y nombre de empresa
     const user = await User.findById(req.userId).select('email nombre apellido settings').lean();
     
-    // El replyTo es el email del usuario (el que configuró en su cuenta)
     const replyToEmail = user?.email || 'koi.automatic@gmail.com';
     
-    // Obtener el nombre de la empresa para el remitente y asunto
     const nombreFantasiaEmail = user?.settings?.razonSocial
       || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
       || 'Sono Handmade';
     
-    // Generar el HTML del comprobante (factura o NC)
     const facturaHtml = await generarFacturaHtml(req.userId, ordenParaEnviar);
     
-    // Determinar el asunto según el tipo de comprobante
     const subject = esNotaCredito
       ? `🧾 Nota de Crédito de ${nombreFantasiaEmail} - Pedido #${orden.externalId}`
       : `✅ Tu factura de ${nombreFantasiaEmail} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`;
     
-    // Enviar el email con Resend
     const { data, error } = await resend.emails.send({
       from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
       reply_to: replyToEmail,
@@ -2062,7 +2050,6 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
       throw new Error(error.message);
     }
 
-    // Actualizar estado del email en el comprobante enviado
     await Order.findByIdAndUpdate(ordenParaEnviar._id, {
       emailSent: true,
       emailSentAt: new Date()

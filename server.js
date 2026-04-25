@@ -1984,17 +1984,26 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
     let esNotaCredito = false;
     
     if (orden.status === 'cancelled') {
-      // Buscar la NC por externalId igual, nroFormatted que empiece con NC, o por monto negativo
+      console.log('🔍 DEBUG - Buscando NC para orden:', {
+        _id: orden._id,
+        externalId: orden.externalId,
+        status: orden.status
+      });
+      
+      // Buscar la NC por externalId igual + monto negativo
       const nc = await Order.findOne({ 
         userId: req.userId,
-        $or: [
-          { externalId: orden.externalId },                    // Mismo externalId
-          { nroFormatted: { $regex: /^NC/i } },               // Número formateado empieza con NC
-          { concepto: { $regex: `original #${orden.externalId}` } }  // Referencia en concepto
-        ],
-        amount: { $lt: 0 },        // Monto negativo (característica de NC)
-        _id: { $ne: orden._id }    // Que no sea la misma orden
+        externalId: orden.externalId,  // Mismo externalId
+        amount: { $lt: 0 },             // Monto negativo (característica de NC)
+        _id: { $ne: orden._id }         // Que no sea la misma orden
       });
+      
+      console.log('🔍 DEBUG - Resultado búsqueda:', nc ? {
+        _id: nc._id,
+        externalId: nc.externalId,
+        nroFormatted: nc.nroFormatted,
+        amount: nc.amount
+      } : 'NO ENCONTRADA');
       
       if (nc) {
         ordenParaEnviar = nc;

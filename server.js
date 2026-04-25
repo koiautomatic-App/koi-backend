@@ -1990,22 +1990,34 @@ app.post('/api/orders/:id/mail', requireAuthAPI, async (req, res) => {
         status: orden.status
       });
       
-      // Buscar la NC por externalId igual + monto negativo
-      const nc = await Order.findOne({ 
+      // Buscar TODAS las órdenes con el mismo externalId
+      const todasLasOrdenes = await Order.find({ 
         userId: req.userId,
-        externalId: orden.externalId,  // Mismo externalId
-        amount: { $lt: 0 },             // Monto negativo (característica de NC)
-        _id: { $ne: orden._id }         // Que no sea la misma orden
+        externalId: orden.externalId
       });
       
-      console.log('🔍 DEBUG - Resultado búsqueda:', nc ? {
+      console.log('🔍 DEBUG - Órdenes encontradas con mismo externalId:', todasLasOrdenes.map(o => ({
+        _id: o._id,
+        amount: o.amount,
+        nroFormatted: o.nroFormatted,
+        status: o.status
+      })));
+      
+      // Buscar NC (cualquier orden con mismo externalId pero diferente _id)
+      const nc = await Order.findOne({ 
+        userId: req.userId,
+        externalId: orden.externalId,
+        _id: { $ne: orden._id }
+      });
+      
+      console.log('🔍 DEBUG - Resultado búsqueda NC (sin filtro amount):', nc ? {
         _id: nc._id,
         externalId: nc.externalId,
         nroFormatted: nc.nroFormatted,
         amount: nc.amount
       } : 'NO ENCONTRADA');
       
-      if (nc) {
+      if (nc && nc.amount < 0) {  // Verificar que sea monto negativo después de encontrar
         ordenParaEnviar = nc;
         esNotaCredito = true;
         console.log(`📧 Enviando Nota de Crédito para orden cancelada ${orden.externalId} → ${nc.nroFormatted}`);

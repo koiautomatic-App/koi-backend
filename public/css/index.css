@@ -1449,3 +1449,20 @@
     grid-template-columns: 1fr 1fr;
   }
 }
+/* Botón de email después de enviado - solo colores */
+.act-btn.act-btn-sent,
+.act-btn:disabled {
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.3);
+  color: var(--green);
+  cursor: default;
+  opacity: 1;
+}
+
+.act-btn.act-btn-sent:hover,
+.act-btn:disabled:hover {
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.3);
+  color: var(--green);
+  transform: none;
+}

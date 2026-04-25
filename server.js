@@ -3060,6 +3060,12 @@ app.get('/dashboard', requireAuth, (req, res) => {
   res.setHeader('Expires', '0');
   res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
 });
+
+// Ruta del panel de administración
+app.get('/admin', requireAuth, requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
+
 // ════════════════════════════════════════════════════════════
 //  ADMIN
 // ════════════════════════════════════════════════════════════

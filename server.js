@@ -1167,11 +1167,46 @@ async function emitirCAE(orderId, userOverride = null) {
 // ── Envío de factura por mail ─────────────────────────────────
 async function enviarFacturaMail(orderId) {
   const orden = await Order.findById(orderId).lean();
-  if (!orden?.customerEmail) return;
-  // TODO: integrar nodemailer
-  console.log(`📧 Factura lista para enviar: ${orden.customerEmail} | CAE ${orden.caeNumber} | ${orden.nroFormatted}`);
+  if (!orden?.customerEmail) {
+    console.log(`❌ No se puede enviar email: orden ${orderId} sin email`);
+    return;
+  }
+  
+  try {
+    const user = await User.findById(orden.userId).select('settings nombre apellido email').lean();
+    const facturaHtml = await generarFacturaHtml(orden.userId, orden);
+    
+    const nombreFantasia = user?.settings?.razonSocial
+      || `${user?.nombre || ''} ${user?.apellido || ''}`.trim()
+      || 'Sono Handmade';
+    
+    const replyToEmail = user?.email || 'koi.automatic@gmail.com';
+    
+    const subject = `✅ Tu factura de ${nombreFantasia} - Compra #${orden.externalId || orden._id.slice(-6)} | Enviado vía KOI`;
+    
+    const { data, error } = await resend.emails.send({
+      from: `"KOI-FACTURA · Sistema de Facturación Electrónica" <hola@koi-factura.lat>`,
+      reply_to: replyToEmail,
+      to: orden.customerEmail,
+      subject: subject,
+      html: facturaHtml
+    });
+    
+    if (error) throw new Error(error.message);
+    
+    await Order.findByIdAndUpdate(orderId, { 
+      emailSent: true, 
+      emailSentAt: new Date() 
+    });
+    
+    console.log(`📧 Factura enviada automáticamente a ${orden.customerEmail} | CAE ${orden.caeNumber}`);
+    console.log(`   Message ID: ${data.id}`);
+    
+  } catch(e) {
+    console.error(`❌ Error enviando factura ${orderId}:`, e.message);
+    // No marcamos emailSent como true porque falló
+  }
 }
-
 // ════════════════════════════════════════════════════════════
 //  BULK SYNC ENGINE — Histórico completo al conectar
 // ════════════════════════════════════════════════════════════

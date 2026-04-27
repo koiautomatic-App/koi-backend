@@ -20,17 +20,42 @@ const MOCK = {
 };
 
 /* ── HELPERS ───────────────────────────────────────── */
-const ars = n => {
-  const num = Number(n);
-  if (isNaN(num) || num === null || num === undefined) return '$0';
-  return new Intl.NumberFormat('es-AR', {
-    style: 'currency',
-    currency: 'ARS',
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0
-  }).format(num);
+// Formateador de moneda que soporta ARS, USD, EUR
+const formatCurrency = (amount, currency = 'ARS') => {
+  const num = Number(amount);
+  if (isNaN(num) || num === null || num === undefined) {
+    return currency === 'USD' ? 'U$S 0' : '$0';
+  }
+  
+  const formatters = {
+    'ARS': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }),
+    'USD': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }),
+    'EUR': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  };
+  
+  const formatter = formatters[currency] || formatters['ARS'];
+  return formatter.format(num);
 };
 
+// Mantener ars para compatibilidad (solo ARS)
+const ars = (n) => formatCurrency(n, 'ARS');
+
+// Versión corta para gráficos (solo ARS, mantiene compatibilidad)
 const arsShort = n => {
   const num = Number(n);
   if (isNaN(num)) return '$0';
@@ -231,7 +256,7 @@ function renderComps(lista) {
           ${esCancelada ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'}` : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)}` : c.fecha || c.orderDate)}
         </div>
       </div>
-      <div class="comp-monto">${ars(montoMostrar)}</div>
+      <div class="comp-monto">${formatCurrency(montoMostrar, c.currency || 'ARS')}</div>
       <div class="comp-actions">
         <button class="act-btn" title="${esCancelada ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1594,7 +1619,7 @@ function renderComprobantes(lista) {
         </td>
       <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
-      <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${ars(montoMostrar)}</td>
+      <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">

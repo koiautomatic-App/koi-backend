@@ -980,8 +980,33 @@ async function solicitarCAE(orden, userSettings, token, sign) {
   const ultimo  = await getUltimoComprobante(cuit, ptoVta, tipo, token, sign);
   const nroCbte = ultimo + 1;
 
-  const ahora  = new Date();
-  const fecha  = `${ahora.getFullYear()}${String(ahora.getMonth()+1).padStart(2,'0')}${String(ahora.getDate()).padStart(2,'0')}`;
+  // ── LÓGICA DE FECHA SEGÚN REQUERIMIENTO ──
+  let fechaParaAFIP;
+
+  if (orden.orderDate) {
+    const fechaOperacion = new Date(orden.orderDate);
+    const hoy = new Date();
+    const diffDays = Math.ceil((hoy - fechaOperacion) / (1000 * 60 * 60 * 24));
+    const esMismoMes = (fechaOperacion.getMonth() === hoy.getMonth()) && 
+                       (fechaOperacion.getFullYear() === hoy.getFullYear());
+    
+    // CASO 1: Diferencia ≤ 5 días → usar fecha REAL de la orden
+    if (diffDays <= 5) {
+      fechaParaAFIP = fechaOperacion;
+      console.log(`📅 [OK] Orden reciente (${diffDays} días). Usando fecha REAL: ${fechaParaAFIP.toLocaleDateString()}`);
+    } 
+    // CASO 2 y 3: Diferencia > 5 días → usar fecha ACTUAL
+    else {
+      fechaParaAFIP = hoy;
+      console.log(`📅 [OK] Orden antigua (${diffDays} días). Usando fecha ACTUAL: ${fechaParaAFIP.toLocaleDateString()}`);
+    }
+  } else {
+    // Sin fecha de orden → usar fecha actual
+    fechaParaAFIP = new Date();
+    console.log(`📅 [OK] Orden sin fecha. Usando fecha ACTUAL: ${fechaParaAFIP.toLocaleDateString()}`);
+  }
+
+  const fecha = `${fechaParaAFIP.getFullYear()}${String(fechaParaAFIP.getMonth()+1).padStart(2,'0')}${String(fechaParaAFIP.getDate()).padStart(2,'0')}`;
 
   const docClean  = (orden.customerDoc || '99999999').replace(/\D/g, '');
   const tipoDoc   = docClean === '99999999' ? 99 : docClean.length === 11 ? 80 : 96;
@@ -1108,11 +1133,11 @@ async function solicitarCAE(orden, userSettings, token, sign) {
     ? new Date(`${caeVto.slice(0,4)}-${caeVto.slice(4,6)}-${caeVto.slice(6,8)}`)
     : null;
 
-  return { cae, caeExpiry, nroCbte, tipo, ptoVta, importe, impNeto, impIVA };
+  // 👇 CAMBIO: agregar fechaUsada al return
+  return { cae, caeExpiry, nroCbte, tipo, ptoVta, importe, impNeto, impIVA, fechaUsada: fechaParaAFIP };
 }
-
 // ── FUNCIÓN PRINCIPAL: emitirCAE ─────────────────────────────
-async function emitirCAE(orderId, userOverride = null) {
+async function emitirCAE(orderId, userOverride = null, fechaForzada = null) {
   const orden = await Order.findById(orderId);
   if (!orden)                        throw new Error('Orden no encontrada');
   if (orden.status === 'invoiced')   throw new Error('Esta orden ya tiene CAE emitido');
@@ -1126,12 +1151,17 @@ async function emitirCAE(orderId, userOverride = null) {
   try {
     const cuit         = user.settings.cuit.replace(/\D/g, '');
     const { token, sign } = await getAfipToken(cuit);
-    const result       = await solicitarCAE(orden, user.settings, token, sign);
+    
+    // 👇 Pasar fechaForzada a solicitarCAE
+    const result       = await solicitarCAE(orden, user.settings, token, sign, fechaForzada);
 
     // Armar número de comprobante formateado
     const ptoVtaStr = String(result.ptoVta).padStart(5, '0');
     const nroCbteStr = String(result.nroCbte).padStart(8, '0');
     const tipoLabel  = result.tipo === 11 ? 'C' : result.tipo === 1 ? 'A' : 'B';
+
+    // 👇 Usar la fecha que se usó en el CAE (viene de result o calcular)
+    const fechaEmisionUsada = result.fechaUsada || new Date();
 
     await Order.findByIdAndUpdate(orderId, {
       status:          'invoiced',
@@ -1141,13 +1171,13 @@ async function emitirCAE(orderId, userOverride = null) {
       puntoVenta:      result.ptoVta,
       nroComprobante:  result.nroCbte,
       nroFormatted:    `FC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr}`,
-      fechaEmision:    new Date(),
+      fechaEmision:    fechaEmisionUsada,
       impNeto:         result.impNeto,
       impIVA:          result.impIVA,
       errorLog:        '',
     });
 
-    console.log(`✅ CAE emitido: ${result.cae} | FC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr} | $${result.importe} | Usuario ${orden.userId}`);
+    console.log(`✅ CAE emitido: ${result.cae} | FC ${tipoLabel} ${ptoVtaStr}-${nroCbteStr} | $${result.importe} | Usuario ${orden.userId} | Fecha: ${fechaEmisionUsada.toLocaleDateString()}`);
 
     // Envío automático si el usuario lo tiene activado
     if (user.settings?.envioAuto && orden.customerEmail) {

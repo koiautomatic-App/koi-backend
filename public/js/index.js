@@ -2190,3 +2190,95 @@ async function cancelarFactura(orderId) {
         }, 100);
     };
 })();
+// ==================== EMITIR LOTE ====================
+
+function abrirModalLote() {
+  const hoy = new Date();
+  const hace30Dias = new Date();
+  hace30Dias.setDate(hoy.getDate() - 30);
+  
+  const desdeInput = document.getElementById('loteFechaDesde');
+  const hastaInput = document.getElementById('loteFechaHasta');
+  
+  if (desdeInput) desdeInput.value = hace30Dias.toISOString().split('T')[0];
+  if (hastaInput) hastaInput.value = hoy.toISOString().split('T')[0];
+  
+  const errorDiv = document.getElementById('loteError');
+  if (errorDiv) errorDiv.style.display = 'none';
+  
+  const overlay = document.getElementById('modalLoteOverlay');
+  const modal = document.getElementById('modalLote');
+  
+  if (overlay) overlay.style.display = 'block';
+  if (modal) modal.style.display = 'block';
+}
+
+function cerrarModalLote() {
+  const overlay = document.getElementById('modalLoteOverlay');
+  const modal = document.getElementById('modalLote');
+  
+  if (overlay) overlay.style.display = 'none';
+  if (modal) modal.style.display = 'none';
+}
+
+async function confirmarEmitirLote() {
+  const desde = document.getElementById('loteFechaDesde')?.value;
+  const hasta = document.getElementById('loteFechaHasta')?.value;
+  const errorDiv = document.getElementById('loteError');
+  
+  if (!desde || !hasta) {
+    if (errorDiv) {
+      errorDiv.innerText = 'Completá ambas fechas';
+      errorDiv.style.display = 'block';
+    }
+    return;
+  }
+  
+  if (new Date(desde) > new Date(hasta)) {
+    if (errorDiv) {
+      errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
+      errorDiv.style.display = 'block';
+    }
+    return;
+  }
+  
+  const btn = document.getElementById('btnConfirmarLote');
+  const originalText = btn?.innerHTML;
+  if (btn) {
+    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+    btn.disabled = true;
+  }
+  
+  if (errorDiv) errorDiv.style.display = 'none';
+  
+  try {
+    const response = await fetch('/api/emitir-lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ desde, hasta })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`✅ ${result.emitidos} comprobantes emitidos en lote`);
+      cerrarModalLote();
+      location.reload();
+    } else {
+      if (errorDiv) {
+        errorDiv.innerText = result.error || 'Error al emitir el lote';
+        errorDiv.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    if (errorDiv) {
+      errorDiv.innerText = 'Error de conexión: ' + err.message;
+      errorDiv.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+}

@@ -358,7 +358,7 @@ function adaptarStats(raw) {
     concepto:    o.concepto || '',
     fecha:       (o.orderDate||o.createdAt) ? new Date(o.orderDate||o.createdAt).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—',
     monto:       o.amount || 0,
-    currency:    o.currency || 'ARS',  // 👈 AGREGADO
+    currency:    o.currency || 'ARS',
     estado:      o.status === 'invoiced'        ? 'cae-ok'
                : o.status === 'error_afip'      ? 'cae-err'
                : o.status === 'error_data'      ? 'cae-err'

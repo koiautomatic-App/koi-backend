@@ -2210,7 +2210,11 @@ function abrirModalLote() {
   const modal = document.getElementById('modalLote');
   
   if (overlay) overlay.style.display = 'block';
-  if (modal) modal.style.display = 'block';
+  if (modal) {
+    modal.style.display = 'block';
+    modal.style.opacity = '1';        // 👈 FORZAR OPACIDAD
+    modal.style.pointerEvents = 'auto'; // 👈 FORZAR EVENTOS
+  }
 }
 
 function cerrarModalLote() {

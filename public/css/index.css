@@ -1532,3 +1532,122 @@
 .btn-emitir-lote .material-icons {
   font-size: 16px;
 }
+/* MODAL EMITIR LOTE - VERSIÓN CORREGIDA */
+#modalLoteOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+}
+
+#modalLoteOverlay[style*="display: block"],
+#modalLoteOverlay[style*="display:block"] {
+  display: block !important;
+}
+
+#modalLote {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--card, #1a1a2e);
+  border-radius: 24px;
+  width: 90%;
+  max-width: 480px;
+  z-index: 10000;
+  display: none;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote[style*="display: block"],
+#modalLote[style*="display:block"] {
+  display: block !important;
+}
+
+#modalLote .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-1, white);
+}
+
+#modalLote .modal-body {
+  padding: 24px;
+}
+
+#modalLote .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .cfg-field {
+  margin-bottom: 16px;
+}
+
+#modalLote .cfg-field:last-child {
+  margin-bottom: 0;
+}
+
+#modalLote .cfg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3, #888);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#modalLote .cfg-input {
+  width: 100%;
+  background: var(--card-2, #17172a);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--text-1, white);
+  font-size: 13px;
+}
+
+#modalLote .btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 40px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2, #aaa);
+  cursor: pointer;
+}
+
+#modalLote .btn-registrar {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+}

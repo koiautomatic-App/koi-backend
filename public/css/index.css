@@ -1506,3 +1506,29 @@
   letter-spacing: 1.4px;
   text-transform: uppercase;
 }
+/* Botón Emitir Lote */
+.btn-emitir-lote {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(232, 98, 42, 0.2);
+}
+
+.btn-emitir-lote:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(232, 98, 42, 0.3);
+  background: linear-gradient(135deg, #d4511f 0%, #e89518 100%);
+}
+
+.btn-emitir-lote .material-icons {
+  font-size: 16px;
+}

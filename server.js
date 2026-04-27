@@ -2956,37 +2956,31 @@ app.get('/api/stats/dashboard', requireAuthAPI, async (req, res) => {
     });
     
     // 🆕 6. ÚLTIMAS 50 VENTAS
-    const ultimas = await Order.find({ userId })
-      .sort({ createdAt: -1, orderDate: -1 })
-      .limit(50)
-      .select('customerName amount createdAt orderDate fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt externalId')
-      .lean();
-    
-    const ultimasConConcepto = ultimas.map(v => ({
-      ...v,
-      conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
-    }));
-    
-    res.json({
-      ok: true,
-      totalFacturado,
-      totalFacturas,
-      hoyMonto,
-      hoyCount,
-      pendientesCAE,
-      notasCredito,
-      chartDias,
-      chartVentas,
-      ultimas: ultimasConConcepto,
-      periodo: {
-        desde: fechaDesde,
-        hasta: fechaHasta
-      }
-    });
-    
-  } catch(e) {
-    console.error('Dashboard stats error:', e);
-    res.status(500).json({ error: e.message });
+const ultimas = await Order.find({ userId })
+  .sort({ createdAt: -1, orderDate: -1 })
+  .limit(50)
+  .select('customerName amount currency createdAt orderDate fechaEmision caeNumber nroFormatted customerEmail concepto items status emailSent emailSentAt externalId')
+  .lean();
+
+const ultimasConConcepto = ultimas.map(v => ({
+  ...v,
+  conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
+}));
+
+res.json({
+  ok: true,
+  totalFacturado,
+  totalFacturas,
+  hoyMonto,
+  hoyCount,
+  pendientesCAE,
+  notasCredito,
+  chartDias,
+  chartVentas,
+  ultimas: ultimasConConcepto,
+  periodo: {
+    desde: fechaDesde,
+    hasta: fechaHasta
   }
 });
 // ════════════════════════════════════════════════════════════

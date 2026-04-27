@@ -204,7 +204,7 @@ function renderComps(lista) {
             <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
           </svg>
          </button>`
-      : `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
+      : `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
           <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
             <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
             <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
@@ -271,7 +271,6 @@ function renderComps(lista) {
     </div>`;
   }).join('');
 }
-
 /* ── CARGA INICIAL ─────────────────────────────────── */
 function cargarDashboard(data){
   const d = data || MOCK;
@@ -1615,6 +1614,7 @@ function renderComprobantes(lista) {
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
@@ -1632,7 +1632,7 @@ function renderComprobantes(lista) {
             </svg>
           </button>
           ${!emitido && !esNotaCredito
-            ? `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id||c.id}')">
+            ? `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
                   <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
@@ -1830,30 +1830,130 @@ function verPDF(orderId){
 async function emitir(idOrden) {
   // idOrden es el _id de MongoDB de la orden
   const btn = document.querySelector(`[data-emitir="${idOrden}"]`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-icons" style="font-size:13px;animation:spin .6s linear infinite">sync</span>'; }
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) { 
+    btn.disabled = true; 
+    btn.innerHTML = '<span class="material-icons" style="font-size:13px;animation:spin .6s linear infinite">sync</span>'; 
+  }
 
   toast('Solicitando CAE a AFIP…', 'info');
+  
   try {
-    const res = await api.post(`/api/orders/${idOrden}/emitir`, {});
-    if (res.ok) {
-      toast(`✅ CAE emitido: ${res.cae}`, 'success');
-      // Refrescar dashboard con el período actual
-      _recargarDashConPeriodo();
+    const res = await fetch(`/api/orders/${idOrden}/emitir`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+
+    // Caso 1: Requiere confirmación (409 Conflict)
+    if (res.status === 409 && data.requiereConfirmacion) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+      
+      const confirmar = confirm(data.mensaje);
+      if (confirmar) {
+        toast('Procesando emisión forzada…', 'info');
+        
+        const res2 = await fetch(`/api/orders/${idOrden}/emitir-forzar`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data2 = await res2.json();
+        
+        if (data2.ok) {
+          toast(`✅ CAE emitido: ${data2.cae}`, 'success');
+          _recargarDashConPeriodo();
+          if (typeof cargarTodosComprobantes === 'function') {
+            cargarTodosComprobantes(paginaActual, busquedaActual);
+          }
+        } else {
+          toast('❌ Error: ' + data2.error, 'error');
+        }
+      }
+      return;
     }
+
+    // Caso 2: Emisión exitosa (usando api.post)
+    if (data.ok) {
+      toast(`✅ CAE emitido: ${data.cae}`, 'success');
+      _recargarDashConPeriodo();
+      if (typeof cargarTodosComprobantes === 'function') {
+        cargarTodosComprobantes(paginaActual, busquedaActual);
+      }
+    } else {
+      toast('❌ Error: ' + data.error, 'error');
+    }
+    
   } catch(e) {
+    console.error('Error en emitir:', e);
     toast('Error AFIP: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; }
+    if (btn) { 
+      btn.disabled = false; 
+      btn.innerHTML = originalHtml;
+    }
   }
 }
 
 async function emitirLote() {
   if (!confirm('¿Emitir CAE para TODAS las órdenes pendientes?')) return;
-  toast('Emitiendo en lote… esto puede tardar unos segundos', 'info');
+  
+  toast('Verificando órdenes pendientes…', 'info');
+  
   try {
-    const res = await api.post('/api/orders/emitir-lote', {});
-    toast(`✅ ${res.message}`, 'success');
-    setTimeout(_recargarDashConPeriodo, 3000);
+    const res = await fetch('/api/orders/emitir-lote', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    
+    // Caso 1: Requiere confirmación (409 Conflict)
+    if (res.status === 409 && data.requiereConfirmacion) {
+      const confirmar = confirm(data.mensaje);
+      if (confirmar) {
+        toast('Emitiendo lote forzado… Esto puede tardar unos segundos', 'info');
+        
+        const res2 = await fetch('/api/orders/emitir-lote-forzar', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data2 = await res2.json();
+        
+        if (data2.ok) {
+          toast(`✅ ${data2.message || 'Lote emitido correctamente'}`, 'success');
+          setTimeout(_recargarDashConPeriodo, 3000);
+          if (typeof cargarTodosComprobantes === 'function') {
+            setTimeout(() => cargarTodosComprobantes(1, ''), 3000);
+          }
+        } else {
+          toast('❌ Error: ' + data2.error, 'error');
+        }
+      }
+      return;
+    }
+    
+    // Caso 2: Emisión directa
+    if (data.ok) {
+      toast(`✅ ${data.message || 'Lote emitido correctamente'}`, 'success');
+      setTimeout(_recargarDashConPeriodo, 3000);
+      if (typeof cargarTodosComprobantes === 'function') {
+        setTimeout(() => cargarTodosComprobantes(1, ''), 3000);
+      }
+    } else {
+      toast('❌ Error: ' + data.error, 'error');
+    }
+    
   } catch(e) {
+    console.error('Error en emitirLote:', e);
     toast('Error: ' + e.message, 'error');
   }
 }

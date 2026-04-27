@@ -612,6 +612,7 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
           fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
           tipo: 'Factura C',
           monto: o.amount || 0,
+          currency: o.currency || 'ARS',  // 👈 AGREGADO
           estado: o.status === 'invoiced' ? 'emitido' : 'pendiente',
           origen: o.platform === 'manual' ? 'manual' : 'woo',
           platform: o.platform,

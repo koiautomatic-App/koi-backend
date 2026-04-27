@@ -251,19 +251,25 @@
 
     </div><!-- /content dashboard -->
 
-    <!-- ── VISTA COMPROBANTES ──────────────────────── -->
-    <div class="content" id="vista-comprobantes" style="display:none">
+<!-- ── VISTA COMPROBANTES ──────────────────────── -->
+<div class="content" id="vista-comprobantes" style="display:none">
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
-        <div>
-          <p class="sec-label" style="margin:0">Centro de Operaciones</p>
-          <h2 style="font-size:18px;font-weight:700;color:var(--text-1);margin:4px 0 0">Todos los Comprobantes</h2>
-        </div>
-        <button class="btn-nueva-emision" onclick="abrirNuevaEmision()">
-          <span class="material-icons" style="font-size:16px!important">add</span>
-          Nueva Emisión
-        </button>
-      </div>
+  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+    <div>
+      <p class="sec-label" style="margin:0">Centro de Operaciones</p>
+      <h2 style="font-size:18px;font-weight:700;color:var(--text-1);margin:4px 0 0">Todos los Comprobantes</h2>
+    </div>
+    <div style="display:flex;gap:12px">
+      <button class="btn-nueva-emision" onclick="abrirNuevaEmision()">
+        <span class="material-icons" style="font-size:16px!important">add</span>
+        Nueva Emisión
+      </button>
+      <button class="btn-emitir-lote" onclick="abrirModalLote()">
+        <span class="material-icons" style="font-size:16px!important">inventory</span>
+        Emitir Lote
+      </button>
+    </div>
+  </div>
 
       <!-- BUSCADOR + CALENDARIO -->
       <div class="comp-search-bar">
@@ -1273,5 +1279,41 @@
 <div id="toasts"></div>
 
 <script src="js/index.js"></script>
+<!-- ── MODAL EMITIR LOTE ──────────────────────────── -->
+<div class="modal-overlay" id="modalLoteOverlay" onclick="cerrarModalLote()"></div>
+<div class="modal-box" id="modalLote">
+  <div class="modal-header">
+    <div class="modal-title">
+      <span class="material-icons" style="color:var(--orange-2)">inventory</span>
+      Emitir Lote
+    </div>
+    <button class="cfg-close" onclick="cerrarModalLote()">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+  <div class="modal-body">
+    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">
+      Seleccioná el período para emitir en lote los comprobantes pendientes.
+    </p>
+    <div class="modal-grid" style="grid-template-columns:1fr 1fr">
+      <div class="cfg-field">
+        <label class="cfg-label">Desde *</label>
+        <input id="loteFechaDesde" class="cfg-input" type="date"/>
+      </div>
+      <div class="cfg-field">
+        <label class="cfg-label">Hasta *</label>
+        <input id="loteFechaHasta" class="cfg-input" type="date"/>
+      </div>
+    </div>
+    <div id="loteError" style="display:none;color:var(--red);font-size:12px;margin-top:12px;padding:10px;background:rgba(255,61,87,.08);border-radius:var(--r-sm)"></div>
+  </div>
+  <div class="modal-footer">
+    <button class="btn-cancel" onclick="cerrarModalLote()">Cancelar</button>
+    <button class="btn-registrar" id="btnConfirmarLote" onclick="confirmarEmitirLote()">
+      <span class="material-icons" style="font-size:15px!important">check_circle</span>
+      Emitir Lote
+    </button>
+  </div>
+</div>
 </body>
 </html>

@@ -1697,6 +1697,79 @@ app.post('/api/emitir-lote', requireAuthAPI, async (req, res) => {
     }
   }
 });
+// Preview de emisión por lote (muestra detalle antes de emitir)
+app.post('/api/orders/preview-lote', requireAuthAPI, async (req, res) => {
+  try {
+    const { desde, hasta } = req.body;
+    const user = await User.findById(req.userId).select('settings').lean();
+    
+    if (!user?.settings?.cuit) {
+      return res.status(400).json({ error: 'Configurá tu CUIT primero' });
+    }
+
+    // Construir filtro base
+    let filtro = { userId: req.userId, status: 'pending_invoice' };
+    
+    // Agregar filtro por fechas si se proporcionan
+    if (desde && hasta) {
+      const fechaDesde = new Date(desde);
+      const fechaHasta = new Date(hasta);
+      fechaHasta.setHours(23, 59, 59, 999);
+      
+      filtro.createdAt = {
+        $gte: fechaDesde,
+        $lte: fechaHasta
+      };
+    }
+
+    const pendientes = await Order.find(filtro)
+      .select('externalId customerName amount currency createdAt')
+      .sort({ createdAt: -1 })
+      .lean();
+    
+    const total = pendientes.length;
+    const montoTotal = pendientes.reduce((sum, o) => sum + o.amount, 0);
+    
+    // Detalle para mostrar en el modal
+    const detalle = pendientes.map(o => ({
+      externalId: o.externalId,
+      customerName: o.customerName || 'Cliente sin nombre',
+      amount: o.amount,
+      currency: o.currency || 'ARS',
+      fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—'
+    }));
+    
+    // Verificar si el período es anterior al mes actual
+    let esMesAnterior = false;
+    if (desde) {
+      const fechaInicio = new Date(desde);
+      const hoy = new Date();
+      esMesAnterior = fechaInicio.getMonth() < hoy.getMonth() || 
+                      fechaInicio.getFullYear() < hoy.getFullYear();
+    }
+    
+    // Calcular días del rango
+    let diffDays = 0;
+    if (desde && hasta) {
+      const fechaInicio = new Date(desde);
+      const fechaFin = new Date(hasta);
+      diffDays = Math.ceil((fechaFin - fechaInicio) / (1000 * 60 * 60 * 24));
+    }
+    
+    res.json({ 
+      success: true,
+      total, 
+      montoTotal, 
+      detalle,
+      esMesAnterior,
+      diffDays
+    });
+    
+  } catch(e) {
+    console.error('Preview lote error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // Cancelar factura y emitir Nota de Crédito
 app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {

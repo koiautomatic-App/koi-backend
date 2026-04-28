@@ -570,6 +570,13 @@ let paginaActual = 1;
 let totalPaginas = 1;
 let busquedaActual = '';
 
+// 👇 AGREGAR ESTAS VARIABLES GLOBALES DE PERÍODO 👇
+let _rangoDesde = null;
+let _rangoHasta = null;
+let _dashDesde = null;
+let _dashHasta = null;
+
+
 function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
   busquedaActual = search;
@@ -2205,106 +2212,290 @@ async function cancelarFactura(orderId) {
         }, 100);
     };
 })();
-// ==================== EMITIR LOTE ====================
+// ==================== EMITIR LOTE (FLUJO DE DOS PASOS) ====================
 
-function abrirModalLote() {
-  // No setear fechas por defecto - dejar vacío
-  const desdeInput = document.getElementById('loteFechaDesde');
-  const hastaInput = document.getElementById('loteFechaHasta');
-  
-  if (desdeInput) desdeInput.value = '';
-  if (hastaInput) hastaInput.value = '';
-  
-  const errorDiv = document.getElementById('loteError');
-  if (errorDiv) errorDiv.style.display = 'none';
-  
-  const overlay = document.getElementById('modalLoteOverlay');
-  const modal = document.getElementById('modalLote');
-  
-  if (overlay) overlay.style.display = 'block';
-  if (modal) {
-    modal.style.display = 'block';
-    modal.style.opacity = '1';
-    modal.style.pointerEvents = 'auto';
-  }
-}
-
-function cerrarModalLote() {
-  const overlay = document.getElementById('modalLoteOverlay');
-  const modal = document.getElementById('modalLote');
-  
-  if (overlay) overlay.style.display = 'none';
-  if (modal) modal.style.display = 'none';
-}
-
-async function confirmarEmitirLote() {
-  const desde = document.getElementById('loteFechaDesde')?.value;
-  const hasta = document.getElementById('loteFechaHasta')?.value;
-  const errorDiv = document.getElementById('loteError');
-  
-  if (!desde || !hasta) {
-    if (errorDiv) {
-      errorDiv.innerText = 'Completá ambas fechas';
-      errorDiv.style.display = 'block';
-    }
-    return;
-  }
-  
-  if (new Date(desde) > new Date(hasta)) {
-    if (errorDiv) {
-      errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
-      errorDiv.style.display = 'block';
-    }
-    return;
-  }
-  
-  const btn = document.getElementById('btnConfirmarLote');
-  const originalText = btn?.innerHTML;
-  if (btn) {
-    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
-    btn.disabled = true;
-  }
-  
-  if (errorDiv) errorDiv.style.display = 'none';
-  
-  try {
-    const response = await fetch('/api/emitir-lote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',  // 👈 ESTA ES LA LÍNEA QUE FALTABA
-      body: JSON.stringify({ desde, hasta })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      alert(`✅ ${result.emitidos} comprobantes emitidos en lote`);
-      cerrarModalLote();
-      location.reload();
-    } else {
-      if (errorDiv) {
-        errorDiv.innerText = result.error || 'Error al emitir el lote';
-        errorDiv.style.display = 'block';
-      }
-    }
-  } catch (err) {
-    if (errorDiv) {
-      errorDiv.innerText = 'Error de conexión: ' + err.message;
-      errorDiv.style.display = 'block';
-    }
-  } finally {
-    if (btn) {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
-  }
-}
-// ==================== PREVIEW Y SEGURIDAD PARA EMITIR LOTE ====================
+let _pasoActualLote = 1;      // 1: selección, 2: confirmación
+let _lotePrevio = null;       // guardar datos del preview para el paso 2
 
 // Inicializar límites configurables (valores por defecto)
 window._limitesConfig = window._limitesConfig || { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
 
-// Previsualizar antes de emitir (con fecha de orden y límites configurables)
+// ========== FUNCIONES DE VISUALIZACIÓN DE PASOS ==========
+
+function mostrarPasoSeleccionLote() {
+    const pasoSeleccion = document.getElementById('pasoSeleccionLote');
+    const pasoConfirmacion = document.getElementById('pasoConfirmacionLote');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    const btnVolver = document.getElementById('btnVolverLote');
+    const btnEmitir = document.getElementById('btnEmitirLoteConfirmado');
+    
+    if (pasoSeleccion) pasoSeleccion.style.display = 'block';
+    if (pasoConfirmacion) pasoConfirmacion.style.display = 'none';
+    if (btnSiguiente) btnSiguiente.style.display = 'flex';
+    if (btnVolver) btnVolver.style.display = 'none';
+    if (btnEmitir) btnEmitir.style.display = 'none';
+}
+
+function mostrarPasoConfirmacionLote() {
+    const pasoSeleccion = document.getElementById('pasoSeleccionLote');
+    const pasoConfirmacion = document.getElementById('pasoConfirmacionLote');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    const btnVolver = document.getElementById('btnVolverLote');
+    const btnEmitir = document.getElementById('btnEmitirLoteConfirmado');
+    
+    if (pasoSeleccion) pasoSeleccion.style.display = 'none';
+    if (pasoConfirmacion) pasoConfirmacion.style.display = 'block';
+    if (btnSiguiente) btnSiguiente.style.display = 'none';
+    if (btnVolver) btnVolver.style.display = 'flex';
+    if (btnEmitir) btnEmitir.style.display = 'flex';
+    
+    // Cargar resumen en el paso 2
+    cargarResumenConfirmacionLote();
+}
+
+// ========== ABRIR Y CERRAR MODAL ==========
+
+function abrirModalLote() {
+    _pasoActualLote = 1;
+    _lotePrevio = null;
+    
+    // Limpiar campos
+    const desdeInput = document.getElementById('loteFechaDesde');
+    const hastaInput = document.getElementById('loteFechaHasta');
+    
+    if (desdeInput) desdeInput.value = '';
+    if (hastaInput) hastaInput.value = '';
+    
+    const errorDiv = document.getElementById('loteError');
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    // Limpiar previews
+    const previewDiv = document.getElementById('lotePreview');
+    const seguridadDiv = document.getElementById('loteSeguridad');
+    if (previewDiv) previewDiv.innerHTML = '';
+    if (seguridadDiv) seguridadDiv.innerHTML = '';
+    
+    // Mostrar paso 1
+    mostrarPasoSeleccionLote();
+    
+    // Abrir modal
+    const overlay = document.getElementById('modalLoteOverlay');
+    const modal = document.getElementById('modalLote');
+    
+    if (overlay) overlay.style.display = 'block';
+    if (modal) {
+        modal.style.display = 'block';
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+    }
+    
+    // Conectar event listeners para preview automático
+    if (desdeInput) {
+        desdeInput.removeEventListener('change', previewEmitirLote);
+        desdeInput.addEventListener('change', previewEmitirLote);
+    }
+    if (hastaInput) {
+        hastaInput.removeEventListener('change', previewEmitirLote);
+        hastaInput.addEventListener('change', previewEmitirLote);
+    }
+}
+
+function cerrarModalLote() {
+    const overlay = document.getElementById('modalLoteOverlay');
+    const modal = document.getElementById('modalLote');
+    
+    if (overlay) overlay.style.display = 'none';
+    if (modal) modal.style.display = 'none';
+    
+    // Resetear estado
+    _pasoActualLote = 1;
+    _lotePrevio = null;
+}
+
+// ========== NAVEGACIÓN ENTRE PASOS ==========
+
+function siguientePasoLote() {
+    // Validar paso 1
+    const desde = document.getElementById('loteFechaDesde').value;
+    const hasta = document.getElementById('loteFechaHasta').value;
+    const errorDiv = document.getElementById('loteError');
+    
+    if (!desde || !hasta) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Completá ambas fechas';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (new Date(desde) > new Date(hasta)) {
+        if (errorDiv) {
+            errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Si no hay preview aún, generarlo
+    if (!_lotePrevio) {
+        toast('Generando previsualización...', 'info');
+        previewEmitirLote().then(() => {
+            if (_lotePrevio && _lotePrevio.total > 0) {
+                _pasoActualLote = 2;
+                mostrarPasoConfirmacionLote();
+            } else if (_lotePrevio && _lotePrevio.total === 0) {
+                if (errorDiv) {
+                    errorDiv.innerText = 'No hay órdenes pendientes en este período';
+                    errorDiv.style.display = 'block';
+                }
+            }
+        });
+        return;
+    }
+    
+    if (_lotePrevio.total === 0) {
+        if (errorDiv) {
+            errorDiv.innerText = 'No hay órdenes pendientes en este período';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    _pasoActualLote = 2;
+    mostrarPasoConfirmacionLote();
+}
+
+function volverPasoSeleccionLote() {
+    _pasoActualLote = 1;
+    mostrarPasoSeleccionLote();
+}
+
+// ========== RESUMEN DE CONFIRMACIÓN ==========
+
+async function cargarResumenConfirmacionLote() {
+    const confirmacionDiv = document.getElementById('loteConfirmacionResumen');
+    if (!confirmacionDiv) return;
+    
+    if (!_lotePrevio) {
+        confirmacionDiv.innerHTML = '<div style="padding: 20px; text-align: center;">Cargando resumen...</div>';
+        return;
+    }
+    
+    const desde = document.getElementById('loteFechaDesde')?.value || '';
+    const hasta = document.getElementById('loteFechaHasta')?.value || '';
+    
+    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
+    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
+    
+    let advertencias = '';
+    if (maxFacturas && _lotePrevio.total > maxFacturas) {
+        advertencias += `<div style="color: var(--yellow); margin-top: 8px;">⚠️ Supera el límite de ${maxFacturas} facturas</div>`;
+    }
+    if (maxMonto && _lotePrevio.montoTotal > maxMonto) {
+        advertencias += `<div style="color: var(--yellow); margin-top: 8px;">⚠️ Supera el límite de ${formatCurrency(maxMonto)}</div>`;
+    }
+    
+    confirmacionDiv.innerHTML = `
+        <div style="background: var(--card-2); border-radius: 12px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Período:</span>
+                <span style="font-weight: 600;">${desde} → ${hasta}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Facturas a emitir:</span>
+                <span style="font-weight: 700; font-size: 18px;">${_lotePrevio.total}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Monto total:</span>
+                <span style="font-weight: 700; font-size: 18px; color: var(--green);">${formatCurrency(_lotePrevio.montoTotal)}</span>
+            </div>
+            ${advertencias}
+            <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: var(--text-3);">
+                📋 Esta acción emitirá CAE para TODAS las órdenes pendientes en el período seleccionado.
+            </div>
+        </div>
+    `;
+}
+
+// ========== EMISIÓN CONFIRMADA ==========
+
+async function emitirLoteConfirmado() {
+    const desde = document.getElementById('loteFechaDesde')?.value;
+    const hasta = document.getElementById('loteFechaHasta')?.value;
+    const errorDiv = document.getElementById('loteError');
+    
+    // Validaciones de seguridad
+    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
+    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
+    
+    let mensajeConfirmacion = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n📄 Facturas: ${_lotePrevio?.total || 0}\n💰 Monto total: ${formatCurrency(_lotePrevio?.montoTotal || 0)}\n\n`;
+    let requiereConfirmacionExtra = false;
+    
+    if (maxFacturas && _lotePrevio?.total > maxFacturas) {
+        mensajeConfirmacion += `⚠️ Vas a emitir ${_lotePrevio.total} facturas (máximo configurado: ${maxFacturas}).\n`;
+        requiereConfirmacionExtra = true;
+    }
+    if (maxMonto && _lotePrevio?.montoTotal > maxMonto) {
+        mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(_lotePrevio.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).\n`;
+        requiereConfirmacionExtra = true;
+    }
+    
+    mensajeConfirmacion += `\n¿Continuar?`;
+    
+    if (!confirm(mensajeConfirmacion)) return;
+    
+    if (requiereConfirmacionExtra) {
+        const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
+        if (!confirmExtra) return;
+    }
+    
+    // Emitir lote
+    const btn = document.getElementById('btnEmitirLoteConfirmado');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+        btn.disabled = true;
+    }
+    
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/emitir-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ desde, hasta })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            alert(`✅ ${result.emitidos} comprobantes emitidos en lote`);
+            cerrarModalLote();
+            location.reload();
+        } else {
+            if (errorDiv) {
+                errorDiv.innerText = result.error || 'Error al emitir el lote';
+                errorDiv.style.display = 'block';
+            }
+            volverPasoSeleccionLote();
+        }
+    } catch (err) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Error de conexión: ' + err.message;
+            errorDiv.style.display = 'block';
+        }
+        volverPasoSeleccionLote();
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+}
+
+// ========== PREVIEW (MODIFICADO PARA GUARDAR EN _lotePrevio) ==========
+
 async function previewEmitirLote() {
     const desde = document.getElementById('loteFechaDesde').value;
     const hasta = document.getElementById('loteFechaHasta').value;
@@ -2314,13 +2505,14 @@ async function previewEmitirLote() {
     if (!desde || !hasta) {
         if (previewDiv) previewDiv.innerHTML = '';
         if (seguridadDiv) seguridadDiv.innerHTML = '';
+        _lotePrevio = null;
         return;
     }
     
     // Cargar límites configurables
-    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
-    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
-    const maxDias = window._limitesConfig?.maxDias || 90;
+    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : Infinity;
+    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : Infinity;
+    const maxDias = window._limitesConfig?.activarDias !== false ? (window._limitesConfig?.maxDias || 90) : Infinity;
     
     // Validar rango máximo de días
     const fechaDesde = new Date(desde);
@@ -2337,6 +2529,14 @@ async function previewEmitirLote() {
         });
         const data = await res.json();
         
+        // Guardar preview para el paso 2
+        _lotePrevio = {
+            total: data.total,
+            montoTotal: data.montoTotal,
+            desde,
+            hasta
+        };
+        
         // Mostrar preview de órdenes
         if (previewDiv) {
             if (data.total === 0) {
@@ -2344,14 +2544,11 @@ async function previewEmitirLote() {
                     <div style="background: rgba(255,61,87,0.1); padding: 16px; border-radius: 12px; margin-top: 16px; border: 1px solid rgba(255,61,87,0.2);">
                         <div style="color: #ff3d57; font-weight: 700;">❌ No hay órdenes pendientes en este período</div>
                         <div style="font-size: 12px; margin-top: 8px;">📅 Período: ${desde} → ${hasta}</div>
-                        <div>Probá con un rango más amplio o verificá que las órdenes estén pendientes.</div>
                     </div>
                 `;
             } else {
-                // Construir tabla de órdenes CON FECHA
                 let filas = '';
                 data.detalle.slice(0, 10).forEach((o, idx) => {
-                    // Formatear fecha para mostrar
                     const fechaOrden = o.fecha || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—');
                     const externalId = o.externalId || o.id || `orden-${idx}`;
                     
@@ -2362,7 +2559,7 @@ async function previewEmitirLote() {
                                 <span style="color: var(--text-3); min-width: 85px; font-size: 11px;">📅 ${fechaOrden}</span>
                                 <span style="word-break: break-word;">${o.customerName.length > 25 ? o.customerName.slice(0, 25) + '…' : o.customerName}</span>
                             </div>
-                            <div style="font-family: var(--font-num); font-weight: 600; white-space: nowrap;">${formatCurrency(o.amount, o.currency)}</div>
+                            <div style="font-family: var(--font-num); font-weight: 600;">${formatCurrency(o.amount, o.currency)}</div>
                         </div>
                     `;
                 });
@@ -2389,210 +2586,54 @@ async function previewEmitirLote() {
             }
         }
         
-        // ============================================================
-        // 🛡️ SECCIÓN DE SEGURIDAD Y ADVERTENCIAS (con "máximo configurado")
-        // ============================================================
+        // Sección de seguridad y advertencias
         let alertas = [];
-        let requiereConfirmacionExtra = false;
         
-        // 1. Verificar límite de cantidad (más de maxFacturas)
         if (data.total > maxFacturas) {
-            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo configurado: ${maxFacturas}).`);
-            requiereConfirmacionExtra = true;
+            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo configurado: ${maxFacturas === Infinity ? 'sin límite' : maxFacturas}).`);
         }
-        
-        // 2. Verificar límite de monto (más de maxMonto)
         if (data.montoTotal > maxMonto) {
-            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).`);
-            requiereConfirmacionExtra = true;
+            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo configurado: ${maxMonto === Infinity ? 'sin límite' : formatCurrency(maxMonto)}).`);
         }
-        
-        // 3. Verificar rango de días (más de maxDias)
         if (rangoExcedido) {
-            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo configurado: ${maxDias} días).`);
-            requiereConfirmacionExtra = true;
+            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo configurado: ${maxDias === Infinity ? 'sin límite' : maxDias} días).`);
         }
-        
-        // 4. Verificar si es período anterior al mes actual
         if (data.esMesAnterior) {
             alertas.push(`⚠️ El período seleccionado es anterior al mes actual. Verificá que sea correcto.`);
         }
         
-        // Mostrar bloque de seguridad
         if (seguridadDiv) {
             if (alertas.length > 0) {
                 seguridadDiv.innerHTML = `
                     <div style="background: rgba(255,179,0,0.1); border: 1px solid rgba(255,179,0,0.3); border-radius: 12px; padding: 14px; margin-top: 12px;">
                         <div style="font-weight: 700; margin-bottom: 8px; color: var(--yellow);">🛡️ ADVERTENCIAS DE SEGURIDAD</div>
                         ${alertas.map(a => `<div style="font-size: 12px; margin: 4px 0;">${a}</div>`).join('')}
-                        ${requiereConfirmacionExtra ? '<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,179,0,0.2); font-weight: 600;">⚠️ Se requerirá confirmación adicional para continuar.</div>' : ''}
                     </div>
                 `;
             } else {
                 seguridadDiv.innerHTML = `
                     <div style="background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); border-radius: 12px; padding: 10px; margin-top: 12px;">
-                        <div style="font-size: 12px; color: var(--green);">✅ Todo en orden. Podés emitir el lote.</div>
+                        <div style="font-size: 12px; color: var(--green);">✅ Todo en orden. Podés continuar.</div>
                     </div>
                 `;
             }
         }
         
-        // Guardar datos para la confirmación final
-        window._lotePreview = {
-            total: data.total,
-            montoTotal: data.montoTotal,
-            requiereConfirmacionExtra,
-            desde,
-            hasta
-        };
+        // Habilitar/deshabilitar botón siguiente
+        const btnSiguiente = document.getElementById('btnSiguienteLote');
+        if (btnSiguiente) btnSiguiente.disabled = (data.total === 0);
         
-        // Habilitar/deshabilitar botón según si hay órdenes
-        const btn = document.getElementById('btnConfirmarLote');
-        if (btn) btn.disabled = (data.total === 0);
+        return data;
         
     } catch(e) {
         console.error('Error en preview:', e);
         if (previewDiv) {
             previewDiv.innerHTML = '<div style="color: var(--red); padding: 12px;">❌ Error al cargar previsualización</div>';
         }
+        _lotePrevio = null;
+        return null;
     }
 }
-
-// Reemplazar la función abrirModalLote para incluir event listeners
-window.abrirModalLote = function() {
-  // No setear fechas por defecto - dejar vacío
-  const desdeInput = document.getElementById('loteFechaDesde');
-  const hastaInput = document.getElementById('loteFechaHasta');
-  
-  if (desdeInput) desdeInput.value = '';
-  if (hastaInput) hastaInput.value = '';
-  
-  const errorDiv = document.getElementById('loteError');
-  if (errorDiv) errorDiv.style.display = 'none';
-  
-  const overlay = document.getElementById('modalLoteOverlay');
-  const modal = document.getElementById('modalLote');
-  
-  if (overlay) overlay.style.display = 'block';
-  if (modal) {
-    modal.style.display = 'block';
-    modal.style.opacity = '1';
-    modal.style.pointerEvents = 'auto';
-  }
-  
-  // Agregar event listeners para preview
-  if (desdeInput) {
-    desdeInput.removeEventListener('change', previewEmitirLote);
-    desdeInput.addEventListener('change', previewEmitirLote);
-    if (desdeInput.value && hastaInput?.value) {
-      previewEmitirLote();
-    }
-  }
-  if (hastaInput) {
-    hastaInput.removeEventListener('change', previewEmitirLote);
-    hastaInput.addEventListener('change', previewEmitirLote);
-    if (desdeInput?.value && hastaInput.value) {
-      previewEmitirLote();
-    }
-  }
-};
-
-// Reemplazar la función confirmarEmitirLote para incluir validaciones de seguridad
-window.confirmarEmitirLote = async function() {
-  const desde = document.getElementById('loteFechaDesde')?.value;
-  const hasta = document.getElementById('loteFechaHasta')?.value;
-  const errorDiv = document.getElementById('loteError');
-  
-  if (!desde || !hasta) {
-    if (errorDiv) {
-      errorDiv.innerText = 'Completá ambas fechas';
-      errorDiv.style.display = 'block';
-    }
-    return;
-  }
-  
-  if (new Date(desde) > new Date(hasta)) {
-    if (errorDiv) {
-      errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
-      errorDiv.style.display = 'block';
-    }
-    return;
-  }
-  
-  // ============================================================
-  // 🛡️ VALIDACIONES DE SEGURIDAD ANTES DE EMITIR
-  // ============================================================
-  const preview = window._lotePreview;
-  const maxFacturas = window._limitesConfig?.maxFacturas || 20;
-  const maxMonto = window._limitesConfig?.maxMonto || 1000000;
-  
-  let mensajeConfirmacion = '';
-  let requiereConfirmacionExtra = false;
-  
-  if (preview) {
-    if (preview.total > maxFacturas) {
-      mensajeConfirmacion += `⚠️ Vas a emitir ${preview.total} facturas (máximo configurado: ${maxFacturas}).\n`;
-      requiereConfirmacionExtra = true;
-    }
-    if (preview.montoTotal > maxMonto) {
-      mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(preview.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).\n`;
-      requiereConfirmacionExtra = true;
-    }
-  }
-  
-  // Confirmación estándar
-  const confirmMessage = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n${preview ? `📄 Facturas: ${preview.total}\n💰 Monto total: ${formatCurrency(preview.montoTotal)}\n` : ''}\n${mensajeConfirmacion}\n¿Continuar?`;
-  
-  if (!confirm(confirmMessage)) return;
-  
-  // Si requiere confirmación extra (supera límites), pedir una segunda confirmación
-  if (requiereConfirmacionExtra) {
-    const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\n${mensajeConfirmacion}\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
-    if (!confirmExtra) return;
-  }
-  
-  // Continuar con la emisión
-  const btn = document.getElementById('btnConfirmarLote');
-  const originalText = btn?.innerHTML;
-  if (btn) {
-    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
-    btn.disabled = true;
-  }
-  
-  if (errorDiv) errorDiv.style.display = 'none';
-  
-  try {
-    const response = await fetch('/api/emitir-lote', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ desde, hasta })
-    });
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      alert(`✅ ${result.emitidos} comprobantes emitidos en lote`);
-      cerrarModalLote();
-      location.reload();
-    } else {
-      if (errorDiv) {
-        errorDiv.innerText = result.error || 'Error al emitir el lote';
-        errorDiv.style.display = 'block';
-      }
-    }
-  } catch (err) {
-    if (errorDiv) {
-      errorDiv.innerText = 'Error de conexión: ' + err.message;
-      errorDiv.style.display = 'block';
-    }
-  } finally {
-    if (btn) {
-      btn.innerHTML = originalText;
-      btn.disabled = false;
-    }
-  }
-};
 // ==================== LÍMITES CONFIGURABLES ====================
 
 // Cargar límites desde localStorage
@@ -2603,22 +2644,57 @@ function cargarLimitesLote() {
             const limites = JSON.parse(guardados);
             window._limitesConfig = limites;
             
-            // Actualizar inputs si existen (cuando estás en la vista de configuración)
             const inputFacturas = document.getElementById('cfgMaxFacturas');
             const inputMonto = document.getElementById('cfgMaxMonto');
             const inputDias = document.getElementById('cfgMaxDias');
+            const switchFacturas = document.getElementById('switchLimiteFacturas');
+            const switchMonto = document.getElementById('switchLimiteMonto');
+            const switchDias = document.getElementById('switchLimiteDias');
             
-            if (inputFacturas) inputFacturas.value = limites.maxFacturas || 20;
-            if (inputMonto) inputMonto.value = limites.maxMonto || 1000000;
-            if (inputDias) inputDias.value = limites.maxDias || 90;
+            if (inputFacturas) inputFacturas.value = limites.maxFacturas ?? 20;
+            if (inputMonto) inputMonto.value = limites.maxMonto ?? 1000000;
+            if (inputDias) inputDias.value = limites.maxDias ?? 90;
             
-            console.log('✅ Límites cargados:', window._limitesConfig);
+            if (switchFacturas) {
+                switchFacturas.checked = limites.activarFacturas !== false;
+                toggleLimiteFacturas(switchFacturas.checked);
+            }
+            if (switchMonto) {
+                switchMonto.checked = limites.activarMonto !== false;
+                toggleLimiteMonto(switchMonto.checked);
+            }
+            if (switchDias) {
+                switchDias.checked = limites.activarDias !== false;
+                toggleLimiteDias(switchDias.checked);
+            }
         } else {
-            window._limitesConfig = { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+            window._limitesConfig = { 
+                maxFacturas: 20, 
+                maxMonto: 1000000, 
+                maxDias: 90,
+                activarFacturas: true,
+                activarMonto: true,
+                activarDias: true
+            };
+            if (document.getElementById('switchLimiteFacturas')) {
+                document.getElementById('switchLimiteFacturas').checked = true;
+                document.getElementById('switchLimiteMonto').checked = true;
+                document.getElementById('switchLimiteDias').checked = true;
+                toggleLimiteFacturas(true);
+                toggleLimiteMonto(true);
+                toggleLimiteDias(true);
+            }
         }
     } catch(e) {
         console.warn('Error cargando límites:', e);
-        window._limitesConfig = { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+        window._limitesConfig = { 
+            maxFacturas: 20, 
+            maxMonto: 1000000, 
+            maxDias: 90,
+            activarFacturas: true,
+            activarMonto: true,
+            activarDias: true
+        };
     }
 }
 
@@ -2628,26 +2704,34 @@ function guardarLimitesLote() {
     const maxMonto = parseFloat(document.getElementById('cfgMaxMonto')?.value) || 1000000;
     const maxDias = parseInt(document.getElementById('cfgMaxDias')?.value) || 90;
     
-    // Validaciones
-    if (maxFacturas < 1 || maxFacturas > 500) {
+    const activarFacturas = document.getElementById('switchLimiteFacturas')?.checked ?? true;
+    const activarMonto = document.getElementById('switchLimiteMonto')?.checked ?? true;
+    const activarDias = document.getElementById('switchLimiteDias')?.checked ?? true;
+    
+    if (activarFacturas && (maxFacturas < 1 || maxFacturas > 500)) {
         toast('El máximo de facturas debe estar entre 1 y 500', 'error');
         return;
     }
-    if (maxMonto < 0) {
+    if (activarMonto && maxMonto < 0) {
         toast('El monto máximo no puede ser negativo', 'error');
         return;
     }
-    if (maxDias < 1 || maxDias > 365) {
+    if (activarDias && (maxDias < 1 || maxDias > 365)) {
         toast('Los días máximos deben estar entre 1 y 365', 'error');
         return;
     }
     
-    window._limitesConfig = { maxFacturas, maxMonto, maxDias };
+    window._limitesConfig = { 
+        maxFacturas, 
+        maxMonto, 
+        maxDias,
+        activarFacturas,
+        activarMonto,
+        activarDias
+    };
     
-    // Guardar en localStorage
     localStorage.setItem('koi_limites_lote', JSON.stringify(window._limitesConfig));
     
-    // Mostrar mensaje de éxito
     const statusDiv = document.getElementById('cfgLimitesStatus');
     if (statusDiv) {
         statusDiv.style.display = 'block';
@@ -2655,8 +2739,32 @@ function guardarLimitesLote() {
     }
     
     toast('✅ Límites guardados correctamente', 'success');
-    console.log('✅ Límites actualizados:', window._limitesConfig);
+}
+// ==================== TOGGLE DE LÍMITES ====================
+
+function toggleLimiteFacturas(activado) {
+    const campo = document.getElementById('campoMaxFacturas');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxFacturas');
+        if (input) input.disabled = !activado;
+    }
 }
 
-// Inicializar límites al cargar la página
-cargarLimitesLote();
+function toggleLimiteMonto(activado) {
+    const campo = document.getElementById('campoMaxMonto');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxMonto');
+        if (input) input.disabled = !activado;
+    }
+}
+
+function toggleLimiteDias(activado) {
+    const campo = document.getElementById('campoMaxDias');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxDias');
+        if (input) input.disabled = !activado;
+    }
+}

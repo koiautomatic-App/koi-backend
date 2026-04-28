@@ -2299,3 +2299,283 @@ async function confirmarEmitirLote() {
     }
   }
 }
+// ==================== PREVIEW Y SEGURIDAD PARA EMITIR LOTE ====================
+
+// Previsualizar antes de emitir
+async function previewEmitirLote() {
+    const desde = document.getElementById('loteFechaDesde').value;
+    const hasta = document.getElementById('loteFechaHasta').value;
+    const previewDiv = document.getElementById('lotePreview');
+    const seguridadDiv = document.getElementById('loteSeguridad');
+    
+    if (!desde || !hasta) {
+        if (previewDiv) previewDiv.innerHTML = '';
+        if (seguridadDiv) seguridadDiv.innerHTML = '';
+        return;
+    }
+    
+    // Validar rango máximo de días
+    const fechaDesde = new Date(desde);
+    const fechaHasta = new Date(hasta);
+    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const rangoExcedido = diffDays > 90;
+    
+    try {
+        const res = await fetch('/api/orders/preview-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ desde, hasta })
+        });
+        const data = await res.json();
+        
+        // Mostrar preview de órdenes
+        if (previewDiv) {
+            if (data.total === 0) {
+                previewDiv.innerHTML = `
+                    <div style="background: rgba(255,61,87,0.1); padding: 16px; border-radius: 12px; margin-top: 16px; border: 1px solid rgba(255,61,87,0.2);">
+                        <div style="color: #ff3d57; font-weight: 700;">❌ No hay órdenes pendientes en este período</div>
+                        <div style="font-size: 12px; margin-top: 8px;">📅 Período: ${desde} → ${hasta}</div>
+                        <div>Probá con un rango más amplio o verificá que las órdenes estén pendientes.</div>
+                    </div>
+                `;
+            } else {
+                // Construir tabla de órdenes
+                let filas = '';
+                data.detalle.slice(0, 10).forEach(o => {
+                    filas += `
+                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; gap: 16px;">
+                                <span style="color: var(--text-3); min-width: 80px;">#${o.externalId}</span>
+                                <span>${o.customerName.length > 30 ? o.customerName.slice(0, 30) + '…' : o.customerName}</span>
+                            </div>
+                            <div style="font-family: var(--font-num); font-weight: 600;">${formatCurrency(o.amount, o.currency)}</div>
+                        </div>
+                    `;
+                });
+                
+                const masOrdenes = data.total > 10 ? `<div style="padding: 8px 0; text-align: center; color: var(--text-3); font-size: 12px;">... y ${data.total - 10} órdenes más</div>` : '';
+                
+                previewDiv.innerHTML = `
+                    <div style="background: var(--card-2); border-radius: 12px; margin-top: 16px; overflow: hidden;">
+                        <div style="padding: 12px; background: rgba(0,230,118,0.08); border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                                <div>
+                                    <span style="font-weight: 700;">📋 ÓRDENES A EMITIR</span>
+                                    <span style="background: var(--green); color: #080810; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-left: 8px;">${data.total}</span>
+                                </div>
+                                <div style="font-family: var(--font-num); font-weight: 700; font-size: 16px;">${formatCurrency(data.montoTotal)}</div>
+                            </div>
+                        </div>
+                        <div style="max-height: 250px; overflow-y: auto; padding: 0 12px;">
+                            ${filas}
+                            ${masOrdenes}
+                        </div>
+                    </div>
+                `;
+            }
+        }
+        
+        // ============================================================
+        // 🛡️ SECCIÓN DE SEGURIDAD Y ADVERTENCIAS
+        // ============================================================
+        let alertas = [];
+        let requiereConfirmacionExtra = false;
+        
+        // 1. Verificar límite de cantidad (más de 20 facturas)
+        if (data.total > 20) {
+            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo sugerido: 20).`);
+            requiereConfirmacionExtra = true;
+        }
+        
+        // 2. Verificar límite de monto (más de $1.000.000)
+        if (data.montoTotal > 1000000) {
+            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo sugerido: $1.000.000).`);
+            requiereConfirmacionExtra = true;
+        }
+        
+        // 3. Verificar rango de días (más de 90 días)
+        if (rangoExcedido) {
+            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo sugerido: 90 días).`);
+            requiereConfirmacionExtra = true;
+        }
+        
+        // 4. Verificar si es período anterior al mes actual
+        if (data.esMesAnterior) {
+            alertas.push(`⚠️ El período seleccionado es anterior al mes actual. Verificá que sea correcto.`);
+        }
+        
+        // Mostrar bloque de seguridad
+        if (seguridadDiv) {
+            if (alertas.length > 0) {
+                seguridadDiv.innerHTML = `
+                    <div style="background: rgba(255,179,0,0.1); border: 1px solid rgba(255,179,0,0.3); border-radius: 12px; padding: 14px; margin-top: 12px;">
+                        <div style="font-weight: 700; margin-bottom: 8px; color: var(--yellow);">🛡️ ADVERTENCIAS DE SEGURIDAD</div>
+                        ${alertas.map(a => `<div style="font-size: 12px; margin: 4px 0;">${a}</div>`).join('')}
+                        ${requiereConfirmacionExtra ? '<div style="margin-top: 10px; padding-top: 8px; border-top: 1px solid rgba(255,179,0,0.2); font-weight: 600;">⚠️ Se requerirá confirmación adicional para continuar.</div>' : ''}
+                    </div>
+                `;
+            } else {
+                seguridadDiv.innerHTML = `
+                    <div style="background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); border-radius: 12px; padding: 10px; margin-top: 12px;">
+                        <div style="font-size: 12px; color: var(--green);">✅ Todo en orden. Podés emitir el lote.</div>
+                    </div>
+                `;
+            }
+        }
+        
+        // Guardar datos para la confirmación final
+        window._lotePreview = {
+            total: data.total,
+            montoTotal: data.montoTotal,
+            requiereConfirmacionExtra,
+            desde,
+            hasta
+        };
+        
+        // Habilitar/deshabilitar botón según si hay órdenes
+        const btn = document.getElementById('btnConfirmarLote');
+        if (btn) btn.disabled = (data.total === 0);
+        
+    } catch(e) {
+        console.error('Error en preview:', e);
+        if (previewDiv) {
+            previewDiv.innerHTML = '<div style="color: var(--red); padding: 12px;">❌ Error al cargar previsualización</div>';
+        }
+    }
+}
+
+// Reemplazar la función abrirModalLote para incluir event listeners
+// Si ya existe, reemplazala por esta versión
+window.abrirModalLote = function() {
+  // No setear fechas por defecto - dejar vacío
+  const desdeInput = document.getElementById('loteFechaDesde');
+  const hastaInput = document.getElementById('loteFechaHasta');
+  
+  if (desdeInput) desdeInput.value = '';
+  if (hastaInput) hastaInput.value = '';
+  
+  const errorDiv = document.getElementById('loteError');
+  if (errorDiv) errorDiv.style.display = 'none';
+  
+  const overlay = document.getElementById('modalLoteOverlay');
+  const modal = document.getElementById('modalLote');
+  
+  if (overlay) overlay.style.display = 'block';
+  if (modal) {
+    modal.style.display = 'block';
+    modal.style.opacity = '1';
+    modal.style.pointerEvents = 'auto';
+  }
+  
+  // Agregar event listeners para preview
+  if (desdeInput) {
+    desdeInput.removeEventListener('change', previewEmitirLote);
+    desdeInput.addEventListener('change', previewEmitirLote);
+    // También ejecutar preview si ya hay valores
+    if (desdeInput.value && hastaInput?.value) {
+      previewEmitirLote();
+    }
+  }
+  if (hastaInput) {
+    hastaInput.removeEventListener('change', previewEmitirLote);
+    hastaInput.addEventListener('change', previewEmitirLote);
+    if (desdeInput?.value && hastaInput.value) {
+      previewEmitirLote();
+    }
+  }
+};
+
+// Reemplazar la función confirmarEmitirLote para incluir validaciones de seguridad
+window.confirmarEmitirLote = async function() {
+  const desde = document.getElementById('loteFechaDesde')?.value;
+  const hasta = document.getElementById('loteFechaHasta')?.value;
+  const errorDiv = document.getElementById('loteError');
+  
+  if (!desde || !hasta) {
+    if (errorDiv) {
+      errorDiv.innerText = 'Completá ambas fechas';
+      errorDiv.style.display = 'block';
+    }
+    return;
+  }
+  
+  if (new Date(desde) > new Date(hasta)) {
+    if (errorDiv) {
+      errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
+      errorDiv.style.display = 'block';
+    }
+    return;
+  }
+  
+  // ============================================================
+  // 🛡️ VALIDACIONES DE SEGURIDAD ANTES DE EMITIR
+  // ============================================================
+  const preview = window._lotePreview;
+  let mensajeConfirmacion = '';
+  let requiereConfirmacionExtra = false;
+  
+  if (preview) {
+    if (preview.total > 20) {
+      mensajeConfirmacion += `⚠️ Vas a emitir ${preview.total} facturas (máximo sugerido: 20).\n`;
+      requiereConfirmacionExtra = true;
+    }
+    if (preview.montoTotal > 1000000) {
+      mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(preview.montoTotal)} (máximo sugerido: $1.000.000).\n`;
+      requiereConfirmacionExtra = true;
+    }
+  }
+  
+  // Confirmación estándar
+  const confirmMessage = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n${preview ? `📄 Facturas: ${preview.total}\n💰 Monto total: ${formatCurrency(preview.montoTotal)}\n` : ''}\n${mensajeConfirmacion}\n¿Continuar?`;
+  
+  if (!confirm(confirmMessage)) return;
+  
+  // Si requiere confirmación extra (supera límites), pedir una segunda confirmación
+  if (requiereConfirmacionExtra) {
+    const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\n${mensajeConfirmacion}\n\nEsta operación excede los límites recomendados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
+    if (!confirmExtra) return;
+  }
+  
+  // Continuar con la emisión
+  const btn = document.getElementById('btnConfirmarLote');
+  const originalText = btn?.innerHTML;
+  if (btn) {
+    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+    btn.disabled = true;
+  }
+  
+  if (errorDiv) errorDiv.style.display = 'none';
+  
+  try {
+    const response = await fetch('/api/emitir-lote', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ desde, hasta })
+    });
+    
+    const result = await response.json();
+    
+    if (result.success) {
+      alert(`✅ ${result.emitidos} comprobantes emitidos en lote`);
+      cerrarModalLote();
+      location.reload();
+    } else {
+      if (errorDiv) {
+        errorDiv.innerText = result.error || 'Error al emitir el lote';
+        errorDiv.style.display = 'block';
+      }
+    }
+  } catch (err) {
+    if (errorDiv) {
+      errorDiv.innerText = 'Error de conexión: ' + err.message;
+      errorDiv.style.display = 'block';
+    }
+  } finally {
+    if (btn) {
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }
+  }
+};

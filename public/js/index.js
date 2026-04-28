@@ -2884,88 +2884,137 @@ async function emitirLoteConfirmado() {
     const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
     const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
     
-    let mensajeConfirmacion = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n📄 Facturas: ${_lotePrevio?.total || 0}\n💰 Monto total: ${formatCurrency(_lotePrevio?.montoTotal || 0)}\n\n`;
     let requiereConfirmacionExtra = false;
+    let advertenciasHtml = '';
     
     if (maxFacturas && _lotePrevio?.total > maxFacturas) {
-        mensajeConfirmacion += `⚠️ Vas a emitir ${_lotePrevio.total} facturas (máximo configurado: ${maxFacturas}).\n`;
+        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-icons" style="font-size: 14px;">warning</span> 
+            Vas a emitir ${_lotePrevio.total} facturas (máximo: ${maxFacturas})
+        </div>`;
         requiereConfirmacionExtra = true;
     }
     if (maxMonto && _lotePrevio?.montoTotal > maxMonto) {
-        mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(_lotePrevio.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).\n`;
+        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
+            <span class="material-icons" style="font-size: 14px;">warning</span> 
+            Monto total excede el límite de ${formatCurrency(maxMonto)}
+        </div>`;
         requiereConfirmacionExtra = true;
     }
     
-    // 👇 INDICAR MODO PRUEBA EN LA CONFIRMACIÓN
-    if (_modoPruebaLote) {
-        mensajeConfirmacion = `🧪 MODO PRUEBA - SIMULACIÓN 🧪\n\n${mensajeConfirmacion}\n⚠️ NO se emitirán facturas reales contra AFIP.`;
+    // Obtener modal interno
+    const confirmModal = document.getElementById('confirmacionLoteInterna');
+    const titulo = document.getElementById('confirmacionLoteTitulo');
+    const mensajeEl = document.getElementById('confirmacionLoteMensaje');
+    const detalleEl = document.getElementById('confirmacionLoteDetalle');
+    const btnAceptar = document.getElementById('confirmacionLoteAceptar');
+    const btnCancelar = document.getElementById('confirmacionLoteCancelar');
+    
+    // Si no existe el modal, mostrar error y salir (sin fallback)
+    if (!confirmModal) {
+        console.error('❌ No se encuentra el modal interno');
+        toast('Error: No se puede mostrar la confirmación', 'error');
+        return;
     }
     
-    mensajeConfirmacion += `\n¿Continuar?`;
+    // Construir mensaje según modo prueba
+    const esModoPrueba = window._modoPruebaLote === true;
+    const modoTexto = esModoPrueba ? '🧪 MODO PRUEBA - SIMULACIÓN 🧪' : (requiereConfirmacionExtra ? '⚠️ Advertencia de seguridad' : 'Confirmar emisión por lote');
+    const modoColor = esModoPrueba ? 'var(--green)' : (requiereConfirmacionExtra ? 'var(--yellow)' : 'var(--text-1)');
     
-    if (!confirm(mensajeConfirmacion)) return;
+    titulo.textContent = modoTexto;
+    titulo.style.color = modoColor;
+    mensajeEl.textContent = esModoPrueba 
+        ? `⚠️ NO se emitirán facturas reales contra AFIP`
+        : `¿Emitir ${_lotePrevio?.total || 0} facturas en lote?`;
     
-    if (requiereConfirmacionExtra) {
-        const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
-        if (!confirmExtra) return;
-    }
+    detalleEl.innerHTML = `
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="color: var(--text-3);">Período:</span>
+            <span style="font-weight: 600;">${desde} → ${hasta}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
+            <span style="color: var(--text-3);">Facturas a emitir:</span>
+            <span style="font-weight: 700; font-size: 16px;">${_lotePrevio?.total || 0}</span>
+        </div>
+        <div style="display: flex; justify-content: space-between;">
+            <span style="color: var(--text-3);">Monto total:</span>
+            <span style="font-weight: 700; font-size: 16px; color: var(--green);">${formatCurrency(_lotePrevio?.montoTotal || 0)}</span>
+        </div>
+        ${advertenciasHtml}
+        ${esModoPrueba ? '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--green); font-size: 12px; display: flex; align-items: center; gap: 6px;"><span class="material-icons" style="font-size: 14px;">science</span> Modo prueba activado - No se emitirán facturas reales</div>' : ''}
+    `;
     
-    // Emitir lote (real o simulado)
-    const btn = document.getElementById('btnEmitirLoteConfirmado');
-    const originalText = btn?.innerHTML;
-    if (btn) {
-        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
-        btn.disabled = true;
-    }
+    // Mostrar modal
+    confirmModal.style.display = 'flex';
     
-    if (errorDiv) errorDiv.style.display = 'none';
-    
-    try {
-        let result;
+    // Función para ejecutar la emisión
+    const ejecutarEmision = async () => {
+        confirmModal.style.display = 'none';
         
-        if (_modoPruebaLote) {
-            // 👉 MODO PRUEBA: simular sin llamar al backend
-            result = await emitirLotePrueba(desde, hasta);
-            toast(result.mensaje, 'info');
-        } else {
-            // 👉 MODO REAL: llamar al backend
-            const response = await fetch('/api/emitir-lote', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ desde, hasta })
-            });
-            result = await response.json();
+        const btn = document.getElementById('btnEmitirLoteConfirmado');
+        const originalText = btn?.innerHTML;
+        if (btn) {
+            btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+            btn.disabled = true;
         }
         
-        if (result.success) {
-            const msg = _modoPruebaLote 
-                ? `🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`
-                : `✅ ${result.emitidos} comprobantes emitidos en lote`;
-            alert(msg);
-            cerrarModalLote();
-            if (!_modoPruebaLote) location.reload();
-        } else {
+        if (errorDiv) errorDiv.style.display = 'none';
+        
+        try {
+            let result;
+            if (window._modoPruebaLote === true) {
+                // Simular emisión
+                await new Promise(resolve => setTimeout(resolve, 1500));
+                result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
+                toast(`🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`, 'info');
+                cerrarModalLote();
+            } else {
+                const response = await fetch('/api/emitir-lote', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ desde, hasta })
+                });
+                result = await response.json();
+                if (result.success) {
+                    toast(`✅ ${result.emitidos} comprobantes emitidos en lote`, 'success');
+                    cerrarModalLote();
+                    location.reload();
+                } else {
+                    throw new Error(result.error || 'Error al emitir el lote');
+                }
+            }
+        } catch (err) {
             if (errorDiv) {
-                errorDiv.innerText = result.error || 'Error al emitir el lote';
+                errorDiv.innerText = err.message;
                 errorDiv.style.display = 'block';
             }
             volverPasoSeleccionLote();
+        } finally {
+            if (btn) {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
         }
-    } catch (err) {
-        if (errorDiv) {
-            errorDiv.innerText = 'Error de conexión: ' + err.message;
-            errorDiv.style.display = 'block';
-        }
-        volverPasoSeleccionLote();
-    } finally {
-        if (btn) {
-            btn.innerHTML = originalText;
-            btn.disabled = false;
-        }
-    }
+    };
+    
+    // Configurar botones (remover listeners anteriores)
+    const nuevaEjecutar = () => ejecutarEmision();
+    const nuevaCancelar = () => {
+        confirmModal.style.display = 'none';
+    };
+    
+    // Remover event listeners antiguos y agregar nuevos
+    btnAceptar.replaceWith(btnAceptar.cloneNode(true));
+    btnCancelar.replaceWith(btnCancelar.cloneNode(true));
+    
+    const nuevoBtnAceptar = document.getElementById('confirmacionLoteAceptar');
+    const nuevoBtnCancelar = document.getElementById('confirmacionLoteCancelar');
+    
+    nuevoBtnAceptar.addEventListener('click', nuevaEjecutar, { once: true });
+    nuevoBtnCancelar.addEventListener('click', nuevaCancelar, { once: true });
 }
-
 // Función para alternar entre modo prueba y modo real (opcional)
 function toggleModoPruebaLote() {
     _modoPruebaLote = !_modoPruebaLote;

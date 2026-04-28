@@ -1357,42 +1357,60 @@
 <div id="toasts"></div>
 
 <script src="js/index.js"></script>
-<!-- ── MODAL EMITIR LOTE ──────────────────────────── -->
+<!-- ── MODAL EMITIR LOTE (FLUJO DE DOS PASOS) ── -->
 <div class="modal-overlay" id="modalLoteOverlay" onclick="cerrarModalLote()"></div>
-<div class="modal-box" id="modalLote">
-  <div class="modal-header">
-    <div class="modal-title">
-      <span class="material-icons" style="color:var(--orange-2)">inventory</span>
-      Emitir Lote
+<div class="modal-box" id="modalLote" style="display: none;">
+    <div class="modal-header">
+        <div class="modal-title">
+            <span class="material-icons" style="color:var(--orange-2)">inventory</span>
+            Emisión por Lote
+        </div>
+        <button class="cfg-close" onclick="cerrarModalLote()">
+            <span class="material-icons">close</span>
+        </button>
     </div>
-    <button class="cfg-close" onclick="cerrarModalLote()">
-      <span class="material-icons">close</span>
-    </button>
-  </div>
-  <div class="modal-body">
-    <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">
-      Seleccioná el período para emitir en lote los comprobantes pendientes.
-    </p>
-    <div class="modal-grid" style="grid-template-columns:1fr 1fr">
-      <div class="cfg-field">
-        <label class="cfg-label">Desde *</label>
-        <input id="loteFechaDesde" class="cfg-input" type="date"/>
-      </div>
-      <div class="cfg-field">
-        <label class="cfg-label">Hasta *</label>
-        <input id="loteFechaHasta" class="cfg-input" type="date"/>
-      </div>
+    
+    <!-- ========== PASO 1: SELECCIÓN DE FECHAS ========== -->
+    <div id="pasoSeleccionLote" class="modal-body">
+        <p style="font-size:13px;color:var(--text-2);margin-bottom:16px">
+            Seleccioná el período para emitir en lote los comprobantes pendientes.
+        </p>
+        <div class="modal-grid" style="grid-template-columns:1fr 1fr">
+            <div class="cfg-field">
+                <label class="cfg-label">Fecha Desde *</label>
+                <input id="loteFechaDesde" class="cfg-input" type="date">
+            </div>
+            <div class="cfg-field">
+                <label class="cfg-label">Fecha Hasta *</label>
+                <input id="loteFechaHasta" class="cfg-input" type="date">
+            </div>
+        </div>
+        
+        <!-- Preview y advertencias se muestran acá -->
+        <div id="lotePreview"></div>
+        <div id="loteSeguridad"></div>
+        <div id="loteError" style="display:none;color:var(--red);font-size:12px;margin-top:12px;padding:10px;background:rgba(255,61,87,.08);border-radius:var(--r-sm)"></div>
     </div>
-    <div id="loteError" style="display:none;color:var(--red);font-size:12px;margin-top:12px;padding:10px;background:rgba(255,61,87,.08);border-radius:var(--r-sm)"></div>
-    <!-- 👇 NUEVOS DIVS PARA PREVIEW Y SEGURIDAD -->
-    <div id="lotePreview"></div>
-    <div id="loteSeguridad"></div>
-  </div>
-  <div class="modal-footer">
-    <button class="btn-cancel" onclick="cerrarModalLote()">Cancelar</button>
-    <button class="btn-registrar" id="btnConfirmarLote" onclick="confirmarEmitirLote()">
-      <span class="material-icons" style="font-size:15px!important">check_circle</span>
-      Emitir Lote
-    </button>
-  </div>
+    
+    <!-- ========== PASO 2: CONFIRMACIÓN ========== -->
+    <div id="pasoConfirmacionLote" class="modal-body" style="display: none;">
+        <div id="loteConfirmacionResumen"></div>
+    </div>
+    
+    <!-- ========== FOOTER CON TRES BOTONES ========== -->
+    <div class="modal-footer">
+        <button class="btn-cancel" onclick="cerrarModalLote()">Cancelar</button>
+        <button id="btnSiguienteLote" class="btn-registrar" style="display: flex;" onclick="siguientePasoLote()">
+            <span class="material-icons" style="font-size:15px!important">arrow_forward</span>
+            Siguiente
+        </button>
+        <button id="btnVolverLote" class="btn-cancel" style="display: none;" onclick="volverPasoSeleccionLote()">
+            <span class="material-icons" style="font-size:15px!important">arrow_back</span>
+            Volver
+        </button>
+        <button id="btnEmitirLoteConfirmado" class="btn-registrar" style="display: none;" onclick="emitirLoteConfirmado()">
+            <span class="material-icons" style="font-size:15px!important">check_circle</span>
+            Emitir Lote
+        </button>
+    </div>
 </div>

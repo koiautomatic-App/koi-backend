@@ -2593,3 +2593,70 @@ window.confirmarEmitirLote = async function() {
     }
   }
 };
+// ==================== LÍMITES CONFIGURABLES ====================
+
+// Cargar límites desde localStorage
+function cargarLimitesLote() {
+    try {
+        const guardados = localStorage.getItem('koi_limites_lote');
+        if (guardados) {
+            const limites = JSON.parse(guardados);
+            window._limitesConfig = limites;
+            
+            // Actualizar inputs si existen (cuando estás en la vista de configuración)
+            const inputFacturas = document.getElementById('cfgMaxFacturas');
+            const inputMonto = document.getElementById('cfgMaxMonto');
+            const inputDias = document.getElementById('cfgMaxDias');
+            
+            if (inputFacturas) inputFacturas.value = limites.maxFacturas || 20;
+            if (inputMonto) inputMonto.value = limites.maxMonto || 1000000;
+            if (inputDias) inputDias.value = limites.maxDias || 90;
+            
+            console.log('✅ Límites cargados:', window._limitesConfig);
+        } else {
+            window._limitesConfig = { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+        }
+    } catch(e) {
+        console.warn('Error cargando límites:', e);
+        window._limitesConfig = { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+    }
+}
+
+// Guardar límites
+function guardarLimitesLote() {
+    const maxFacturas = parseInt(document.getElementById('cfgMaxFacturas')?.value) || 20;
+    const maxMonto = parseFloat(document.getElementById('cfgMaxMonto')?.value) || 1000000;
+    const maxDias = parseInt(document.getElementById('cfgMaxDias')?.value) || 90;
+    
+    // Validaciones
+    if (maxFacturas < 1 || maxFacturas > 500) {
+        toast('El máximo de facturas debe estar entre 1 y 500', 'error');
+        return;
+    }
+    if (maxMonto < 0) {
+        toast('El monto máximo no puede ser negativo', 'error');
+        return;
+    }
+    if (maxDias < 1 || maxDias > 365) {
+        toast('Los días máximos deben estar entre 1 y 365', 'error');
+        return;
+    }
+    
+    window._limitesConfig = { maxFacturas, maxMonto, maxDias };
+    
+    // Guardar en localStorage
+    localStorage.setItem('koi_limites_lote', JSON.stringify(window._limitesConfig));
+    
+    // Mostrar mensaje de éxito
+    const statusDiv = document.getElementById('cfgLimitesStatus');
+    if (statusDiv) {
+        statusDiv.style.display = 'block';
+        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+    }
+    
+    toast('✅ Límites guardados correctamente', 'success');
+    console.log('✅ Límites actualizados:', window._limitesConfig);
+}
+
+// Inicializar límites al cargar la página
+cargarLimitesLote();

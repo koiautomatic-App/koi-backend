@@ -588,7 +588,7 @@
         </div>
       </div>
 
-      <!-- ═══════════════════════════════════════════════════════════ -->
+           <!-- ═══════════════════════════════════════════════════════════ -->
       <!-- LÍMITES PARA EMITIR LOTE -->
       <!-- ═══════════════════════════════════════════════════════════ -->
       <div class="cfg-vista-card" style="margin-top:14px">
@@ -600,28 +600,58 @@
           <span>Límites para Emisión en Lote</span>
         </div>
         <div class="cfg-sec-desc">
-          Configurá los límites máximos para la emisión por lote. Si se superan, se pedirá confirmación adicional.
+          Configurá los límites máximos para la emisión por lote. Podés activar cada límite individualmente.
         </div>
         
         <div class="cfg-fields">
-          <div class="cfg-field">
-            <label class="cfg-label">Máximo de facturas por lote</label>
+          <!-- Límite de facturas -->
+          <div class="cfg-switch-row" style="margin-top: 8px;">
+            <div>
+              <div class="cfg-switch-title">Máximo de facturas por lote</div>
+              <div class="cfg-switch-sub">Si se supera, pedirá confirmación adicional</div>
+            </div>
+            <label class="neg-toggle">
+              <input type="checkbox" id="switchLimiteFacturas" checked onchange="toggleLimiteFacturas(this.checked)">
+              <span class="neg-toggle-track"></span>
+            </label>
+          </div>
+          <div class="cfg-field" id="campoMaxFacturas" style="margin-top: 0;">
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
               <input id="cfgMaxFacturas" class="cfg-input" type="number" min="1" max="500" value="20" style="width: 120px;">
               <span class="cfg-hint">facturas (1-500)</span>
             </div>
           </div>
           
-          <div class="cfg-field">
-            <label class="cfg-label">Monto máximo por lote</label>
+          <!-- Límite de monto -->
+          <div class="cfg-switch-row" style="margin-top: 8px;">
+            <div>
+              <div class="cfg-switch-title">Monto máximo por lote</div>
+              <div class="cfg-switch-sub">Si se supera, pedirá confirmación adicional</div>
+            </div>
+            <label class="neg-toggle">
+              <input type="checkbox" id="switchLimiteMonto" checked onchange="toggleLimiteMonto(this.checked)">
+              <span class="neg-toggle-track"></span>
+            </label>
+          </div>
+          <div class="cfg-field" id="campoMaxMonto" style="margin-top: 0;">
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
               <input id="cfgMaxMonto" class="cfg-input" type="number" min="0" step="10000" value="1000000" style="width: 180px;">
               <span class="cfg-hint">pesos argentinos</span>
             </div>
           </div>
           
-          <div class="cfg-field">
-            <label class="cfg-label">Días máximos en el período</label>
+          <!-- Límite de días -->
+          <div class="cfg-switch-row" style="margin-top: 8px;">
+            <div>
+              <div class="cfg-switch-title">Días máximos en el período</div>
+              <div class="cfg-switch-sub">Si se supera, pedirá confirmación adicional</div>
+            </div>
+            <label class="neg-toggle">
+              <input type="checkbox" id="switchLimiteDias" checked onchange="toggleLimiteDias(this.checked)">
+              <span class="neg-toggle-track"></span>
+            </label>
+          </div>
+          <div class="cfg-field" id="campoMaxDias" style="margin-top: 0;">
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
               <input id="cfgMaxDias" class="cfg-input" type="number" min="1" max="365" value="90" style="width: 120px;">
               <span class="cfg-hint">días corridos (1-365)</span>
@@ -636,7 +666,6 @@
           <span class="cfg-badge-ok"><span class="material-icons">check_circle</span> Límites guardados</span>
         </div>
       </div>
-
     </div><!-- /vista-config -->
 
     <!-- ── VISTA MI NEGOCIO ─────────────────────────────── -->

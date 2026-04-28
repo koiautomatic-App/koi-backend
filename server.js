@@ -1609,9 +1609,9 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
     for (const orden of pendientes) {
       try {
         const resultado = await emitirCAE(orden._id, user);
-        if (resultado?.ok || resultado?.success) {
+        if (resultado?.cae) {
           emitidosExitosos++;
-          console.log(`✅ [${orden._id}] Emitido correctamente`);
+          console.log(`✅ [${orden._id}] Emitido correctamente - CAE: ${resultado.cae}`);
         } else {
           console.error(`❌ [${orden._id}] Error en emisión:`, resultado?.error || 'Error desconocido');
         }
@@ -1631,16 +1631,61 @@ app.post('/api/orders/emitir-lote', requireAuthAPI, async (req, res) => {
     }
   }
 });
+
+// ALIAS SIMPLE PARA COMPATIBILIDAD CON EL FRONTEND
 app.post('/api/emitir-lote', requireAuthAPI, async (req, res) => {
-  req.url = '/api/orders/emitir-lote';
-  const handler = app._router.stack.find(layer => 
-    layer.route && layer.route.path === '/api/orders/emitir-lote'
-  )?.route?.stack[0]?.handle;
-  
-  if (handler) {
-    return handler(req, res);
-  } else {
-    return res.status(404).json({ success: false, error: 'Endpoint no encontrado' });
+  try {
+    console.log('🔄 /api/emitir-lote llamado - userId:', req.userId);
+    
+    const { desde, hasta } = req.body;
+    const user = await User.findById(req.userId).select('settings').lean();
+    
+    if (!user?.settings?.cuit) {
+      return res.status(400).json({ success: false, error: 'Configurá tu CUIT primero' });
+    }
+
+    // Construir filtro base
+    let filtro = { userId: req.userId, status: 'pending_invoice' };
+    
+    if (desde && hasta) {
+      const fechaDesde = new Date(desde);
+      const fechaHasta = new Date(hasta);
+      fechaHasta.setHours(23, 59, 59, 999);
+      filtro.createdAt = { $gte: fechaDesde, $lte: fechaHasta };
+      console.log(`🔍 [Alias] Buscando pendientes desde ${desde} hasta ${hasta}`);
+    }
+
+    const pendientes = await Order.find(filtro).limit(50);
+    
+    if (!pendientes.length) {
+      return res.json({ 
+        success: true, 
+        emitidos: 0, 
+        message: 'No hay órdenes pendientes en el período seleccionado' 
+      });
+    }
+
+    // Responder inmediatamente al frontend
+    res.json({ 
+      success: true, 
+      emitidos: pendientes.length, 
+      message: `Emitiendo ${pendientes.length} comprobantes en background`,
+      total: pendientes.length
+    });
+
+    // Emitir en background
+    for (const orden of pendientes) {
+      await emitirCAE(orden._id, user).catch(e => console.error(`[Alias] Lote error [${orden._id}]:`, e.message));
+      await new Promise(r => setTimeout(r, 500));
+    }
+    
+    console.log(`✅ [Alias] Lote completado: ${pendientes.length} órdenes para usuario ${req.userId}`);
+    
+  } catch(e) {
+    console.error('❌ [Alias] Lote error:', e.message);
+    if (!res.headersSent) {
+      res.status(500).json({ success: false, error: e.message });
+    }
   }
 });
 

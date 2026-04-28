@@ -2768,3 +2768,137 @@ function toggleLimiteDias(activado) {
         if (input) input.disabled = !activado;
     }
 }
+// ==================== MODO PRUEBA - SIN EMITIR FACTURAS REALES ====================
+
+let _modoPruebaLote = true;  // true = simulación, false = emisión real
+
+// Función de prueba que simula la emisión
+async function emitirLotePrueba(desde, hasta) {
+    console.log('🧪 MODO PRUEBA - Simulando emisión de lote');
+    console.log(`📅 Período: ${desde} → ${hasta}`);
+    
+    // Simular demora de red
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    
+    // Generar resultados simulados
+    const facturasSimuladas = Math.floor(Math.random() * 15) + 5; // 5 a 20 facturas
+    const montoSimulado = facturasSimuladas * (Math.floor(Math.random() * 50000) + 10000);
+    
+    return {
+        success: true,
+        emitidos: facturasSimuladas,
+        montoTotal: montoSimulado,
+        modo: 'prueba',
+        mensaje: `🔬 SIMULACIÓN: Se habrían emitido ${facturasSimuladas} comprobantes por ${formatCurrency(montoSimulado)}`
+    };
+}
+
+// Modificar emitirLoteConfirmado para usar modo prueba
+async function emitirLoteConfirmado() {
+    const desde = document.getElementById('loteFechaDesde')?.value;
+    const hasta = document.getElementById('loteFechaHasta')?.value;
+    const errorDiv = document.getElementById('loteError');
+    
+    if (!desde || !hasta) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Completá ambas fechas';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Validaciones de seguridad
+    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
+    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
+    
+    let mensajeConfirmacion = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n📄 Facturas: ${_lotePrevio?.total || 0}\n💰 Monto total: ${formatCurrency(_lotePrevio?.montoTotal || 0)}\n\n`;
+    let requiereConfirmacionExtra = false;
+    
+    if (maxFacturas && _lotePrevio?.total > maxFacturas) {
+        mensajeConfirmacion += `⚠️ Vas a emitir ${_lotePrevio.total} facturas (máximo configurado: ${maxFacturas}).\n`;
+        requiereConfirmacionExtra = true;
+    }
+    if (maxMonto && _lotePrevio?.montoTotal > maxMonto) {
+        mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(_lotePrevio.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).\n`;
+        requiereConfirmacionExtra = true;
+    }
+    
+    // 👇 INDICAR MODO PRUEBA EN LA CONFIRMACIÓN
+    if (_modoPruebaLote) {
+        mensajeConfirmacion = `🧪 MODO PRUEBA - SIMULACIÓN 🧪\n\n${mensajeConfirmacion}\n⚠️ NO se emitirán facturas reales contra AFIP.`;
+    }
+    
+    mensajeConfirmacion += `\n¿Continuar?`;
+    
+    if (!confirm(mensajeConfirmacion)) return;
+    
+    if (requiereConfirmacionExtra) {
+        const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
+        if (!confirmExtra) return;
+    }
+    
+    // Emitir lote (real o simulado)
+    const btn = document.getElementById('btnEmitirLoteConfirmado');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+        btn.disabled = true;
+    }
+    
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    try {
+        let result;
+        
+        if (_modoPruebaLote) {
+            // 👉 MODO PRUEBA: simular sin llamar al backend
+            result = await emitirLotePrueba(desde, hasta);
+            toast(result.mensaje, 'info');
+        } else {
+            // 👉 MODO REAL: llamar al backend
+            const response = await fetch('/api/emitir-lote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ desde, hasta })
+            });
+            result = await response.json();
+        }
+        
+        if (result.success) {
+            const msg = _modoPruebaLote 
+                ? `🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`
+                : `✅ ${result.emitidos} comprobantes emitidos en lote`;
+            alert(msg);
+            cerrarModalLote();
+            if (!_modoPruebaLote) location.reload();
+        } else {
+            if (errorDiv) {
+                errorDiv.innerText = result.error || 'Error al emitir el lote';
+                errorDiv.style.display = 'block';
+            }
+            volverPasoSeleccionLote();
+        }
+    } catch (err) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Error de conexión: ' + err.message;
+            errorDiv.style.display = 'block';
+        }
+        volverPasoSeleccionLote();
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+}
+
+// Función para alternar entre modo prueba y modo real (opcional)
+function toggleModoPruebaLote() {
+    _modoPruebaLote = !_modoPruebaLote;
+    const mensaje = _modoPruebaLote 
+        ? '🧪 Modo PRUEBA activado - NO se emitirán facturas reales'
+        : '🔴 Modo REAL activado - Se emitirán facturas contra AFIP';
+    toast(mensaje, _modoPruebaLote ? 'info' : 'warn');
+    console.log(`Modo lote: ${_modoPruebaLote ? 'PRUEBA' : 'REAL'}`);
+}

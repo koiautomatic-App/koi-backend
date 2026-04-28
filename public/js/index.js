@@ -2259,6 +2259,7 @@ async function confirmarEmitirLote() {
     const response = await fetch('/api/emitir-lote', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',  // 👈 ESTA ES LA LÍNEA QUE FALTABA
       body: JSON.stringify({ desde, hasta })
     });
     

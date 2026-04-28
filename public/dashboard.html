@@ -588,6 +588,55 @@
         </div>
       </div>
 
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <!-- LÍMITES PARA EMITIR LOTE -->
+      <!-- ═══════════════════════════════════════════════════════════ -->
+      <div class="cfg-vista-card" style="margin-top:14px">
+        <div class="cfg-vista-header">
+          <svg width="18" height="18" viewBox="0 0 18 18" fill="none">
+            <rect x="2.5" y="2.5" width="13" height="13" rx="2" stroke="var(--orange-2)" stroke-width="1.4"/>
+            <path d="M6 9h6M9 6v6" stroke="var(--orange-2)" stroke-width="1.5" stroke-linecap="round"/>
+          </svg>
+          <span>Límites para Emisión en Lote</span>
+        </div>
+        <div class="cfg-sec-desc">
+          Configurá los límites máximos para la emisión por lote. Si se superan, se pedirá confirmación adicional.
+        </div>
+        
+        <div class="cfg-fields">
+          <div class="cfg-field">
+            <label class="cfg-label">Máximo de facturas por lote</label>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <input id="cfgMaxFacturas" class="cfg-input" type="number" min="1" max="500" value="20" style="width: 120px;">
+              <span class="cfg-hint">facturas (1-500)</span>
+            </div>
+          </div>
+          
+          <div class="cfg-field">
+            <label class="cfg-label">Monto máximo por lote</label>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <input id="cfgMaxMonto" class="cfg-input" type="number" min="0" step="10000" value="1000000" style="width: 180px;">
+              <span class="cfg-hint">pesos argentinos</span>
+            </div>
+          </div>
+          
+          <div class="cfg-field">
+            <label class="cfg-label">Días máximos en el período</label>
+            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+              <input id="cfgMaxDias" class="cfg-input" type="number" min="1" max="365" value="90" style="width: 120px;">
+              <span class="cfg-hint">días corridos (1-365)</span>
+            </div>
+          </div>
+        </div>
+        
+        <button class="btn-cfg-save" onclick="guardarLimitesLote()" style="margin-top: 16px;">
+          <span class="material-icons">save</span> Guardar Límites
+        </button>
+        <div id="cfgLimitesStatus" style="display:none;margin-top:10px">
+          <span class="cfg-badge-ok"><span class="material-icons">check_circle</span> Límites guardados</span>
+        </div>
+      </div>
+
     </div><!-- /vista-config -->
 
     <!-- ── VISTA MI NEGOCIO ─────────────────────────────── -->

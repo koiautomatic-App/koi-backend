@@ -2193,15 +2193,12 @@ async function cancelarFactura(orderId) {
 // ==================== EMITIR LOTE ====================
 
 function abrirModalLote() {
-  const hoy = new Date();
-  const hace30Dias = new Date();
-  hace30Dias.setDate(hoy.getDate() - 30);
-  
+  // No setear fechas por defecto - dejar vacío
   const desdeInput = document.getElementById('loteFechaDesde');
   const hastaInput = document.getElementById('loteFechaHasta');
   
-  if (desdeInput) desdeInput.value = hace30Dias.toISOString().split('T')[0];
-  if (hastaInput) hastaInput.value = hoy.toISOString().split('T')[0];
+  if (desdeInput) desdeInput.value = '';
+  if (hastaInput) hastaInput.value = '';
   
   const errorDiv = document.getElementById('loteError');
   if (errorDiv) errorDiv.style.display = 'none';
@@ -2212,8 +2209,8 @@ function abrirModalLote() {
   if (overlay) overlay.style.display = 'block';
   if (modal) {
     modal.style.display = 'block';
-    modal.style.opacity = '1';        // 👈 FORZAR OPACIDAD
-    modal.style.pointerEvents = 'auto'; // 👈 FORZAR EVENTOS
+    modal.style.opacity = '1';
+    modal.style.pointerEvents = 'auto';
   }
 }
 

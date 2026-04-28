@@ -1689,7 +1689,7 @@ app.post('/api/emitir-lote', requireAuthAPI, async (req, res) => {
   }
 });
 
-// Cancelar factura y emitir Nota de Crédito (MISMA ORDEN)
+// Cancelar factura y emitir Nota de Crédito
 app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
   try {
     const orderId = req.params.id;
@@ -1797,26 +1797,58 @@ app.post('/api/orders/:id/cancelar', requireAuthAPI, async (req, res) => {
     const caeVto = detResp.getElementsByTagName('CAEFchVto')[0]?.textContent;
     const caeExpiry = caeVto ? new Date(`${caeVto.slice(0,4)}-${caeVto.slice(4,6)}-${caeVto.slice(6,8)}`) : null;
     
-    // ⭐ ACTUALIZAR LA MISMA ORDEN en lugar de crear una nueva
-    await Order.findByIdAndUpdate(orderId, {
-      status: 'cancelled',
+    // ============================================================
+    // ✅ 1. Crear NUEVA Nota de Crédito (documento independiente)
+    // ============================================================
+    const nuevaNC = new Order({
+      userId: orden.userId,
+      integrationId: orden.integrationId,
+      platform: orden.platform,
+      externalId: `${orden.externalId}-NC`,
+      customerName: orden.customerName,
+      customerEmail: orden.customerEmail,
+      customerDoc: orden.customerDoc,
       amount: -Math.abs(orden.amount),
+      currency: orden.currency,
+      concepto: `Nota de Crédito - Factura original #${orden.externalId}`,
+      items: orden.items,
+      orderDate: orden.orderDate,
+      status: 'cancelled',
       caeNumber: cae,
       caeExpiry: caeExpiry,
       tipoComprobante: tipoNC,
       nroComprobante: nroCbte,
+      puntoVenta: ptoVta,
       nroFormatted: `NC ${tipoLabel} ${ptoVtaStrNC}-${nroCbteStrNC}`,
       fechaEmision: new Date(),
-      concepto: `Nota de Crédito - Factura original #${orden.externalId}`,
-      errorLog: `Cancelada - Nota de Crédito emitida`,
-      emailSent: false
+      errorLog: `Nota de Crédito emitida - Factura original #${orden.externalId}`,
+      emailSent: false,
+      facturaOriginalId: orden._id,
+      facturaOriginalNro: orden.nroFormatted
     });
     
-    console.log(`✅ Nota de Crédito emitida para orden ${orden.externalId}: NC ${tipoLabel} ${ptoVtaStrNC}-${nroCbteStrNC}`);
+    await nuevaNC.save();
+    
+    // ============================================================
+    // ✅ 2. ACTUALIZAR la factura original (marcar como anulada)
+    // ============================================================
+    await Order.findByIdAndUpdate(orderId, {
+      status: 'cancelled_by_nc',
+      nroFormatted: `${orden.nroFormatted} (ANULADA)`,
+      nroFormattedOriginal: orden.nroFormatted,
+      caeNumberOriginal: orden.caeNumber,
+      ncAsociadaId: nuevaNC._id,
+      ncAsociadaNro: nuevaNC.nroFormatted,
+      errorLog: `Factura anulada - Nota de Crédito asociada: ${nuevaNC.nroFormatted}`,
+      canceledAt: new Date()
+    });
+    
+    console.log(`✅ Factura original ${orden.nroFormatted} marcada como anulada`);
+    console.log(`✅ Nota de Crédito creada: ${nuevaNC.nroFormatted}`);
     
     res.json({
       ok: true,
-      nroNC: `NC ${tipoLabel} ${ptoVtaStrNC}-${nroCbteStrNC}`,
+      nroNC: nuevaNC.nroFormatted,
       cae: cae,
       message: 'Nota de Crédito emitida correctamente'
     });

@@ -199,7 +199,7 @@ const OrderSchema = new mongoose.Schema({
   status: {
     type:    String,
     default: 'pending_invoice',
-    enum:    ['pending_invoice','invoiced','error_data','error_afip','skipped'],
+    enum:    ['pending_invoice','invoiced','error_data','error_afip','skipped','cancelled','cancelled_by_nc'],
   },
   // Datos de la factura emitida
   caeNumber:      { type: String },
@@ -210,7 +210,7 @@ const OrderSchema = new mongoose.Schema({
   fechaEmision:   { type: Date },
   errorLog:       { type: String },
   
-  // 👇 AGREGAR ESTA LÍNEA
+  // 👇 Número formateado para mostrar
   nroFormatted:   { type: String, default: '' },  // "FC C 00003-00000027" o "NC C 00003-00000001"
   
   // Estado de envío de email
@@ -227,7 +227,7 @@ const OrderSchema = new mongoose.Schema({
   shouldIncludeShipping: { type: Boolean, default: false },
   shippingAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
   
-  // 👇 NUEVOS CAMPOS PARA ENRIQUECIMIENTO
+  // 👇 CAMPOS PARA ENRIQUECIMIENTO
   buyerId: { type: String, default: '' },
   shipmentId: { type: String, default: '' },
   buyerFirstName: { type: String, default: '' },
@@ -238,6 +238,14 @@ const OrderSchema = new mongoose.Schema({
   shippingStatus: { type: String, default: '' },
   shippingDestinationAddress: { type: mongoose.Schema.Types.Mixed, default: {} },
   orderEnriched: { type: Boolean, default: false },
+  
+  // 👇 NUEVOS CAMPOS PARA RELACIÓN FACTURA ↔ NC
+  facturaOriginalId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
+  facturaOriginalNro: { type: String, default: '' },
+  ncAsociadaId: { type: mongoose.Schema.Types.ObjectId, ref: 'Order', default: null },
+  ncAsociadaNro: { type: String, default: '' },
+  canceledAt: { type: Date, default: null },
+  
   createdAt:      { type: Date, default: Date.now },
 });
 
@@ -245,6 +253,7 @@ OrderSchema.index({ userId: 1, platform: 1, externalId: 1 }, { unique: true });
 OrderSchema.index({ userId: 1, status: 1, createdAt: -1 });
 OrderSchema.index({ userId: 1, createdAt: -1 });
 const Order = mongoose.model('Order', OrderSchema);
+
 // ════════════════════════════════════════════════════════════
 //  NORMALIZER
 // ════════════════════════════════════════════════════════════

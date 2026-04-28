@@ -1568,12 +1568,19 @@ function renderComprobantes(lista) {
     const c = lista[i];
     
     const esCancelada = c.status === 'cancelled';
+    const esAnulada = c.status === 'cancelled_by_nc';  // 👈 NUEVO: factura original anulada
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
     
-    const estadoChip = emitido
-      ? `<span class="estado-chip ok">● Emitido</span>`
-      : `<span class="estado-chip pend">◌ Pendiente</span>`;
+    // 👇 ESTADO CHIP MEJORADO
+    let estadoChip = '';
+    if (esAnulada) {
+      estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
+    } else if (emitido) {
+      estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
+    } else {
+      estadoChip = `<span class="estado-chip pend">◌ Pendiente</span>`;
+    }
     
     const origenPill = (() => {
       switch (c.platform) {
@@ -1586,12 +1593,12 @@ function renderComprobantes(lista) {
       }
     })();
     
-    const btnAnular = c.origen === 'manual' && !emitido
+    const btnAnular = c.origen === 'manual' && !emitido && !esAnulada
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
-    // 👇 BOTÓN CANCELAR (para facturas emitidas)
-    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && c.origen !== 'manual')
+    // 👇 BOTÓN CANCELAR: NO mostrar si ya está anulada o es NC
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && !esAnulada && c.origen !== 'manual')
       ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c.orderId || c._id || c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -1599,6 +1606,11 @@ function renderComprobantes(lista) {
           </svg>
          </button>`
       : '';
+    
+    // 👇 TÍTULO DEL BOTÓN PDF
+    const tituloPDF = (esNotaCredito || esCancelada) 
+      ? 'Ver Nota de Crédito' 
+      : (esAnulada ? 'Ver Factura Anulada' : 'Ver PDF');
     
     const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
@@ -1610,6 +1622,9 @@ function renderComprobantes(lista) {
     const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     
+    // 👇 ID para el PDF
+    const pdfId = c._id || c.id;
+    
     html += `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
@@ -1618,20 +1633,20 @@ function renderComprobantes(lista) {
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
-        </td>
+      </td>
       <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
       <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
-          <button class="act-btn" title="${esNotaCredito ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
+          <button class="act-btn" title="${tituloPDF}" onclick="verPDF('${pdfId}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
-          ${!emitido && !esNotaCredito
+          ${!emitido && !esNotaCredito && !esAnulada
             ? `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
@@ -1654,8 +1669,8 @@ function renderComprobantes(lista) {
           ${btnCancelar}
           ${btnAnular}
         </div>
-        </td>
-      </tr>`;
+      </td>
+    </tr>`;
   }
   
   tbody.innerHTML = html;

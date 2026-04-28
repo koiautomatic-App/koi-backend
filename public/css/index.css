@@ -1845,3 +1845,15 @@
   color: white;
   cursor: pointer;
 }
+/* Estado Anulada para facturas */
+.estado-chip.anulado {
+  background: rgba(255, 61, 87, 0.12);
+  color: #ff3d57;
+  border: 1px solid rgba(255, 61, 87, 0.25);
+  box-shadow: 0 0 4px rgba(255, 61, 87, 0.2);
+}
+
+.estado-chip.anulado::before {
+  content: "⚠️ ";
+  font-size: 10px;
+}

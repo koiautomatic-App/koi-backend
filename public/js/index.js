@@ -2301,7 +2301,10 @@ async function confirmarEmitirLote() {
 }
 // ==================== PREVIEW Y SEGURIDAD PARA EMITIR LOTE ====================
 
-// Previsualizar antes de emitir
+// Inicializar límites configurables (valores por defecto)
+window._limitesConfig = window._limitesConfig || { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+
+// Previsualizar antes de emitir (con fecha de orden y límites configurables)
 async function previewEmitirLote() {
     const desde = document.getElementById('loteFechaDesde').value;
     const hasta = document.getElementById('loteFechaHasta').value;
@@ -2314,11 +2317,16 @@ async function previewEmitirLote() {
         return;
     }
     
+    // Cargar límites configurables
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    const maxDias = window._limitesConfig?.maxDias || 90;
+    
     // Validar rango máximo de días
     const fechaDesde = new Date(desde);
     const fechaHasta = new Date(hasta);
     const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
-    const rangoExcedido = diffDays > 90;
+    const rangoExcedido = diffDays > maxDias;
     
     try {
         const res = await fetch('/api/orders/preview-lote', {
@@ -2340,26 +2348,31 @@ async function previewEmitirLote() {
                     </div>
                 `;
             } else {
-                // Construir tabla de órdenes
+                // Construir tabla de órdenes CON FECHA
                 let filas = '';
-                data.detalle.slice(0, 10).forEach(o => {
+                data.detalle.slice(0, 10).forEach((o, idx) => {
+                    // Formatear fecha para mostrar
+                    const fechaOrden = o.fecha || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—');
+                    const externalId = o.externalId || o.id || `orden-${idx}`;
+                    
                     filas += `
-                        <div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <div style="display: flex; gap: 16px;">
-                                <span style="color: var(--text-3); min-width: 80px;">#${o.externalId}</span>
-                                <span>${o.customerName.length > 30 ? o.customerName.slice(0, 30) + '…' : o.customerName}</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap; gap: 8px;">
+                            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                                <span style="color: var(--text-3); min-width: 70px; font-family: var(--font-num);">#${externalId}</span>
+                                <span style="color: var(--text-3); min-width: 85px; font-size: 11px;">📅 ${fechaOrden}</span>
+                                <span style="word-break: break-word;">${o.customerName.length > 25 ? o.customerName.slice(0, 25) + '…' : o.customerName}</span>
                             </div>
-                            <div style="font-family: var(--font-num); font-weight: 600;">${formatCurrency(o.amount, o.currency)}</div>
+                            <div style="font-family: var(--font-num); font-weight: 600; white-space: nowrap;">${formatCurrency(o.amount, o.currency)}</div>
                         </div>
                     `;
                 });
                 
-                const masOrdenes = data.total > 10 ? `<div style="padding: 8px 0; text-align: center; color: var(--text-3); font-size: 12px;">... y ${data.total - 10} órdenes más</div>` : '';
+                const masOrdenes = data.total > 10 ? `<div style="padding: 10px 0; text-align: center; color: var(--text-3); font-size: 12px;">... y ${data.total - 10} órdenes más</div>` : '';
                 
                 previewDiv.innerHTML = `
                     <div style="background: var(--card-2); border-radius: 12px; margin-top: 16px; overflow: hidden;">
                         <div style="padding: 12px; background: rgba(0,230,118,0.08); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
                                 <div>
                                     <span style="font-weight: 700;">📋 ÓRDENES A EMITIR</span>
                                     <span style="background: var(--green); color: #080810; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-left: 8px;">${data.total}</span>
@@ -2377,26 +2390,26 @@ async function previewEmitirLote() {
         }
         
         // ============================================================
-        // 🛡️ SECCIÓN DE SEGURIDAD Y ADVERTENCIAS
+        // 🛡️ SECCIÓN DE SEGURIDAD Y ADVERTENCIAS (con "máximo configurado")
         // ============================================================
         let alertas = [];
         let requiereConfirmacionExtra = false;
         
-        // 1. Verificar límite de cantidad (más de 20 facturas)
-        if (data.total > 20) {
-            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo sugerido: 20).`);
+        // 1. Verificar límite de cantidad (más de maxFacturas)
+        if (data.total > maxFacturas) {
+            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo configurado: ${maxFacturas}).`);
             requiereConfirmacionExtra = true;
         }
         
-        // 2. Verificar límite de monto (más de $1.000.000)
-        if (data.montoTotal > 1000000) {
-            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo sugerido: $1.000.000).`);
+        // 2. Verificar límite de monto (más de maxMonto)
+        if (data.montoTotal > maxMonto) {
+            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).`);
             requiereConfirmacionExtra = true;
         }
         
-        // 3. Verificar rango de días (más de 90 días)
+        // 3. Verificar rango de días (más de maxDias)
         if (rangoExcedido) {
-            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo sugerido: 90 días).`);
+            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo configurado: ${maxDias} días).`);
             requiereConfirmacionExtra = true;
         }
         
@@ -2446,7 +2459,6 @@ async function previewEmitirLote() {
 }
 
 // Reemplazar la función abrirModalLote para incluir event listeners
-// Si ya existe, reemplazala por esta versión
 window.abrirModalLote = function() {
   // No setear fechas por defecto - dejar vacío
   const desdeInput = document.getElementById('loteFechaDesde');
@@ -2472,7 +2484,6 @@ window.abrirModalLote = function() {
   if (desdeInput) {
     desdeInput.removeEventListener('change', previewEmitirLote);
     desdeInput.addEventListener('change', previewEmitirLote);
-    // También ejecutar preview si ya hay valores
     if (desdeInput.value && hastaInput?.value) {
       previewEmitirLote();
     }
@@ -2512,16 +2523,19 @@ window.confirmarEmitirLote = async function() {
   // 🛡️ VALIDACIONES DE SEGURIDAD ANTES DE EMITIR
   // ============================================================
   const preview = window._lotePreview;
+  const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+  const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+  
   let mensajeConfirmacion = '';
   let requiereConfirmacionExtra = false;
   
   if (preview) {
-    if (preview.total > 20) {
-      mensajeConfirmacion += `⚠️ Vas a emitir ${preview.total} facturas (máximo sugerido: 20).\n`;
+    if (preview.total > maxFacturas) {
+      mensajeConfirmacion += `⚠️ Vas a emitir ${preview.total} facturas (máximo configurado: ${maxFacturas}).\n`;
       requiereConfirmacionExtra = true;
     }
-    if (preview.montoTotal > 1000000) {
-      mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(preview.montoTotal)} (máximo sugerido: $1.000.000).\n`;
+    if (preview.montoTotal > maxMonto) {
+      mensajeConfirmacion += `⚠️ El monto total es ${formatCurrency(preview.montoTotal)} (máximo configurado: ${formatCurrency(maxMonto)}).\n`;
       requiereConfirmacionExtra = true;
     }
   }
@@ -2533,7 +2547,7 @@ window.confirmarEmitirLote = async function() {
   
   // Si requiere confirmación extra (supera límites), pedir una segunda confirmación
   if (requiereConfirmacionExtra) {
-    const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\n${mensajeConfirmacion}\n\nEsta operación excede los límites recomendados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
+    const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\n${mensajeConfirmacion}\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
     if (!confirmExtra) return;
   }
   

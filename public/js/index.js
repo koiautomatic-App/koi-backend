@@ -2323,8 +2323,9 @@ function siguientePasoLote() {
     console.log('👉 siguientePasoLote ejecutándose');
     console.log('   desde:', desde);
     console.log('   hasta:', hasta);
+    console.log('   _lotePrevio existe?', !!_lotePrevio);
     
-    // Limpiar error anterior y habilitar botón
+    // Limpiar error anterior y habilitar botón temporalmente
     if (errorDiv) {
         errorDiv.style.display = 'none';
         errorDiv.innerHTML = '';
@@ -2351,15 +2352,20 @@ function siguientePasoLote() {
         return;
     }
     
-    // Si no hay preview aún, generarlo
+    // IMPORTANTE: Esperar a que previewEmitirLote termine
     if (!_lotePrevio) {
+        console.log('   ⏳ Generando preview por primera vez...');
         toast('Generando previsualización...', 'info');
         previewEmitirLote().then(() => {
+            console.log('   ✅ Preview completado, _lotePrevio:', _lotePrevio);
             verificarLimitesYContinuar(desde, hasta, errorDiv);
+        }).catch(err => {
+            console.error('   ❌ Error en preview:', err);
         });
         return;
     }
     
+    console.log('   ✅ _lotePrevio ya existe, verificando límites directamente');
     verificarLimitesYContinuar(desde, hasta, errorDiv);
 }
 function verificarLimitesYContinuar(desde, hasta, errorDiv) {

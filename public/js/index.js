@@ -2315,10 +2315,64 @@ function cerrarModalLote() {
 // ========== NAVEGACIÓN ENTRE PASOS ==========
 
 function siguientePasoLote() {
-    // Validar paso 1
     const desde = document.getElementById('loteFechaDesde').value;
     const hasta = document.getElementById('loteFechaHasta').value;
     const errorDiv = document.getElementById('loteError');
+    
+    // Limpiar error anterior
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    
+    if (!desde || !hasta) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Completá ambas fechas';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (new Date(desde) > new Date(hasta)) {
+        if (errorDiv) {
+            errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Si no hay preview, generarlo y luego verificar
+    if (!_lotePrevio) {
+        toast('Generando previsualización...', 'info');
+        previewEmitirLote().then(() => {
+            // Verificar límites después del preview
+            verificarLimitesYContinuar(desde, hasta, errorDiv);
+        });
+        return;
+    }
+    
+    // Si ya hay preview, verificar directamente
+    verificarLimitesYContinuar(desde, hasta, errorDiv);
+}
+
+// ========== NAVEGACIÓN ENTRE PASOS ==========
+
+function siguientePasoLote() {
+    const desde = document.getElementById('loteFechaDesde').value;
+    const hasta = document.getElementById('loteFechaHasta').value;
+    const errorDiv = document.getElementById('loteError');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
+    // Limpiar error anterior y habilitar botón
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    if (btnSiguiente) {
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
+    }
     
     if (!desde || !hasta) {
         if (errorDiv) {
@@ -2348,8 +2402,9 @@ function siguientePasoLote() {
     verificarLimitesYContinuar(desde, hasta, errorDiv);
 }
 
-// Nueva función para verificar límites antes de continuar
 function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
     // Obtener límites activos
     const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
     const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
@@ -2359,31 +2414,54 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
     let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     
+    console.log('🔍 Verificando límites:', { 
+        excedeFacturas, 
+        excedeMonto, 
+        total: _lotePrevio?.total, 
+        monto: _lotePrevio?.montoTotal,
+        maxFacturas,
+        maxMonto
+    });
+    
     if (excedeFacturas || excedeMonto) {
-        // Construir mensaje de error
-        let mensajeError = '⚠️ No se puede continuar con la emisión por lote.\n\n';
-        mensajeError += 'Los siguientes límites están superados:\n';
+        // 🔴 DESHABILITAR BOTÓN SIGUIENTE
+        if (btnSiguiente) {
+            btnSiguiente.disabled = true;
+            btnSiguiente.style.opacity = '0.5';
+            btnSiguiente.style.cursor = 'not-allowed';
+        }
+        
+        // Construir mensaje de error HTML
+        let mensajeError = '⚠️ <strong>No se puede continuar con la emisión por lote.</strong><br><br>';
+        mensajeError += 'Los siguientes límites están superados:<br>';
         if (excedeFacturas) {
-            mensajeError += `• Facturas: ${_lotePrevio.total} (máximo: ${maxFacturas})\n`;
+            mensajeError += `• <strong>Facturas:</strong> ${_lotePrevio.total} (máximo: ${maxFacturas})<br>`;
         }
         if (excedeMonto) {
-            mensajeError += `• Monto total: ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})\n`;
+            mensajeError += `• <strong>Monto total:</strong> ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})<br>`;
         }
-        mensajeError += '\n📋 Para continuar, debes aumentar los límites en:\n';
-        mensajeError += '   Configuración → Límites para Emisión en Lote';
+        mensajeError += '<br>📋 <strong>Para continuar, debes aumentar los límites en:</strong><br>';
+        mensajeError += '&nbsp;&nbsp;&nbsp;→ <strong>Configuración</strong> → <strong>Límites para Emisión en Lote</strong>';
         
         if (errorDiv) {
-            errorDiv.innerHTML = mensajeError.replace(/\n/g, '<br>');
+            errorDiv.innerHTML = mensajeError;
             errorDiv.style.display = 'block';
             errorDiv.style.background = 'rgba(255,61,87,0.1)';
             errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
             errorDiv.style.padding = '16px';
             errorDiv.style.borderRadius = '12px';
+            errorDiv.style.color = 'var(--text-1)';
         }
         
-        // Mostrar toast también
         toast('⚠️ Superaste los límites configurados. Aumentalos en Configuración.', 'error');
-        return;
+        return; // 🔴 SALIDA - NO CONTINUAR
+    }
+    
+    // ✅ HABILITAR BOTÓN SIGUIENTE (no hay error)
+    if (btnSiguiente) {
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
     }
     
     // Si pasa las validaciones, continuar al paso 2

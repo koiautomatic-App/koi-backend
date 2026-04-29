@@ -2340,19 +2340,53 @@ function siguientePasoLote() {
     if (!_lotePrevio) {
         toast('Generando previsualización...', 'info');
         previewEmitirLote().then(() => {
-            if (_lotePrevio && _lotePrevio.total > 0) {
-                _pasoActualLote = 2;
-                mostrarPasoConfirmacionLote();
-            } else if (_lotePrevio && _lotePrevio.total === 0) {
-                if (errorDiv) {
-                    errorDiv.innerText = 'No hay órdenes pendientes en este período';
-                    errorDiv.style.display = 'block';
-                }
-            }
+            verificarLimitesYContinuar(desde, hasta, errorDiv);
         });
         return;
     }
     
+    verificarLimitesYContinuar(desde, hasta, errorDiv);
+}
+
+// Nueva función para verificar límites antes de continuar
+function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    // Obtener límites activos
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    
+    let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
+    
+    if (excedeFacturas || excedeMonto) {
+        // Construir mensaje de error
+        let mensajeError = '⚠️ No se puede continuar con la emisión por lote.\n\n';
+        mensajeError += 'Los siguientes límites están superados:\n';
+        if (excedeFacturas) {
+            mensajeError += `• Facturas: ${_lotePrevio.total} (máximo: ${maxFacturas})\n`;
+        }
+        if (excedeMonto) {
+            mensajeError += `• Monto total: ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})\n`;
+        }
+        mensajeError += '\n📋 Para continuar, debes aumentar los límites en:\n';
+        mensajeError += '   Configuración → Límites para Emisión en Lote';
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeError.replace(/\n/g, '<br>');
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '16px';
+            errorDiv.style.borderRadius = '12px';
+        }
+        
+        // Mostrar toast también
+        toast('⚠️ Superaste los límites configurados. Aumentalos en Configuración.', 'error');
+        return;
+    }
+    
+    // Si pasa las validaciones, continuar al paso 2
     if (_lotePrevio.total === 0) {
         if (errorDiv) {
             errorDiv.innerText = 'No hay órdenes pendientes en este período';
@@ -2364,7 +2398,6 @@ function siguientePasoLote() {
     _pasoActualLote = 2;
     mostrarPasoConfirmacionLote();
 }
-
 function volverPasoSeleccionLote() {
     _pasoActualLote = 1;
     mostrarPasoSeleccionLote();
@@ -2432,141 +2465,94 @@ async function emitirLoteConfirmado() {
         return;
     }
     
-    // Validaciones de seguridad
-    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
-    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
+    // ========== VALIDACIÓN DE LÍMITES - BLOQUEANTE ==========
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
     
-    let requiereConfirmacionExtra = false;
-    let advertenciasHtml = '';
+    let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     
-    if (maxFacturas && _lotePrevio?.total > maxFacturas) {
-        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
-            <span class="material-icons" style="font-size: 14px;">warning</span> 
-            Vas a emitir ${_lotePrevio.total} facturas (máximo: ${maxFacturas})
-        </div>`;
-        requiereConfirmacionExtra = true;
-    }
-    if (maxMonto && _lotePrevio?.montoTotal > maxMonto) {
-        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
-            <span class="material-icons" style="font-size: 14px;">warning</span> 
-            Monto total excede el límite de ${formatCurrency(maxMonto)}
-        </div>`;
-        requiereConfirmacionExtra = true;
-    }
-    
-    // Mostrar modal interno en lugar de confirm nativo
-    const confirmModal = document.getElementById('confirmacionLoteInterna');
-    const titulo = document.getElementById('confirmacionLoteTitulo');
-    const mensajeEl = document.getElementById('confirmacionLoteMensaje');
-    const detalleEl = document.getElementById('confirmacionLoteDetalle');
-    const btnAceptar = document.getElementById('confirmacionLoteAceptar');
-    const btnCancelar = document.getElementById('confirmacionLoteCancelar');
-    
-    if (!confirmModal) {
-        // Fallback por si no existe el modal interno
-        let mensajeConfirmacion = `📋 ¿Emitir facturas en lote?\n\nPeríodo: ${desde} → ${hasta}\n📄 Facturas: ${_lotePrevio?.total || 0}\n💰 Monto total: ${formatCurrency(_lotePrevio?.montoTotal || 0)}\n\n`;
-        if (requiereConfirmacionExtra) {
-            mensajeConfirmacion += `⚠️ Esta operación excede los límites configurados.\n`;
+    // Si supera algún límite, mostrar error y BLOQUEAR
+    if (excedeFacturas || excedeMonto) {
+        let mensajeError = '⚠️ <strong>No se puede emitir el lote</strong><br><br>';
+        mensajeError += 'Los siguientes límites están superados:<br>';
+        if (excedeFacturas) {
+            mensajeError += `• <strong>Facturas:</strong> ${_lotePrevio.total} (máximo: ${maxFacturas})<br>`;
         }
-        if (!confirm(mensajeConfirmacion)) return;
-        if (requiereConfirmacionExtra) {
-            const confirmExtra = confirm(`⚠️ ADVERTENCIA DE SEGURIDAD ⚠️\n\nEsta operación excede los límites configurados.\n¿Estás ABSOLUTAMENTE SEGURO de querer continuar?`);
-            if (!confirmExtra) return;
+        if (excedeMonto) {
+            mensajeError += `• <strong>Monto total:</strong> ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})<br>`;
         }
-        ejecutarEmisionReal(desde, hasta);
-        return;
-    }
-    
-    titulo.textContent = requiereConfirmacionExtra ? '⚠️ Advertencia de seguridad' : 'Confirmar emisión por lote';
-    titulo.style.color = requiereConfirmacionExtra ? 'var(--yellow)' : 'var(--text-1)';
-    mensajeEl.textContent = `¿Emitir ${_lotePrevio?.total || 0} facturas en lote?`;
-    
-    detalleEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <span style="color: var(--text-3);">Período:</span>
-            <span style="font-weight: 600;">${desde} → ${hasta}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <span style="color: var(--text-3);">Facturas a emitir:</span>
-            <span style="font-weight: 700; font-size: 16px;">${_lotePrevio?.total || 0}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-3);">Monto total:</span>
-            <span style="font-weight: 700; font-size: 16px; color: var(--green);">${formatCurrency(_lotePrevio?.montoTotal || 0)}</span>
-        </div>
-        ${advertenciasHtml}
-    `;
-    
-    // Mostrar modal
-    confirmModal.style.display = 'flex';
-    
-    // Función para ejecutar la emisión
-    const ejecutarEmision = async () => {
-        confirmModal.style.display = 'none';
+        mensajeError += '<br>📋 <strong>Para continuar, debes aumentar los límites en:</strong><br>';
+        mensajeError += '&nbsp;&nbsp;&nbsp;→ <strong>Configuración</strong> → <strong>Límites para Emisión en Lote</strong>';
         
-        const btn = document.getElementById('btnEmitirLoteConfirmado');
-        const originalText = btn?.innerHTML;
-        if (btn) {
-            btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
-            btn.disabled = true;
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeError;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '16px';
+            errorDiv.style.borderRadius = '12px';
+            errorDiv.style.color = 'var(--text-1)';
         }
         
-        if (errorDiv) errorDiv.style.display = 'none';
-        
-        try {
-            let result;
-            if (window._modoPruebaLote) {
-                // Simular emisión
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
-            } else {
-                const response = await fetch('/api/emitir-lote', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ desde, hasta })
-                });
-                result = await response.json();
-            }
-            
+        toast('⚠️ Superaste los límites configurados. Aumentalos en Configuración.', 'error');
+        return; // 🔴 SALIDA - NO CONTINUAR
+    }
+    // ============================================================
+    
+    // ========== EMITIR DIRECTAMENTE SIN SEGUNDO MODAL ==========
+    const btn = document.getElementById('btnEmitirLoteConfirmado');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+        btn.disabled = true;
+    }
+    
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    try {
+        let result;
+        if (window._modoPruebaLote === true) {
+            // Simular emisión
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
+            toast(`🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`, 'info');
+            cerrarModalLote();
+        } else {
+            const response = await fetch('/api/emitir-lote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ desde, hasta })
+            });
+            result = await response.json();
             if (result.success) {
-                const msg = window._modoPruebaLote 
-                    ? `🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`
-                    : `✅ ${result.emitidos} comprobantes emitidos en lote`;
-                toast(msg, window._modoPruebaLote ? 'info' : 'success');
+                toast(`✅ ${result.emitidos} comprobantes emitidos en lote`, 'success');
                 cerrarModalLote();
-                if (!window._modoPruebaLote) location.reload();
+                location.reload();
             } else {
-                if (errorDiv) {
-                    errorDiv.innerText = result.error || 'Error al emitir el lote';
-                    errorDiv.style.display = 'block';
-                }
-                volverPasoSeleccionLote();
-            }
-        } catch (err) {
-            if (errorDiv) {
-                errorDiv.innerText = 'Error de conexión: ' + err.message;
-                errorDiv.style.display = 'block';
-            }
-            volverPasoSeleccionLote();
-        } finally {
-            if (btn) {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                throw new Error(result.error || 'Error al emitir el lote');
             }
         }
-    };
-    
-    // Configurar botones (remover listeners anteriores para evitar duplicados)
-    const nuevaEjecutar = () => ejecutarEmision();
-    const nuevaCancelar = () => confirmModal.style.display = 'none';
-    
-    btnAceptar.removeEventListener('click', ejecutarEmision);
-    btnCancelar.removeEventListener('click', nuevaCancelar);
-    btnAceptar.addEventListener('click', nuevaEjecutar, { once: true });
-    btnCancelar.addEventListener('click', nuevaCancelar, { once: true });
+    } catch (err) {
+        if (errorDiv) {
+            errorDiv.innerText = err.message;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '12px';
+            errorDiv.style.borderRadius = '10px';
+        }
+        volverPasoSeleccionLote();
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
 }
-
 // ========== PREVIEW (MODIFICADO PARA GUARDAR EN _lotePrevio) ==========
 
 async function previewEmitirLote() {
@@ -2866,7 +2852,26 @@ async function emitirLotePrueba(desde, hasta) {
     };
 }
 
-// Modificar emitirLoteConfirmado para usar modo prueba
+// ==================== MODO PRUEBA - SIN EMITIR FACTURAS REALES ====================
+
+window._modoPruebaLote = true;  // true = simulación, false = emisión real
+
+// Función de prueba que simula la emisión
+async function emitirLotePrueba(desde, hasta) {
+    console.log('🧪 MODO PRUEBA - Simulando emisión de lote');
+    console.log(`📅 Período: ${desde} → ${hasta}`);
+    await new Promise(resolve => setTimeout(resolve, 1500));
+    const facturasSimuladas = _lotePrevio?.total || Math.floor(Math.random() * 15) + 5;
+    const montoSimulado = _lotePrevio?.montoTotal || (facturasSimuladas * (Math.floor(Math.random() * 50000) + 10000));
+    return {
+        success: true,
+        emitidos: facturasSimuladas,
+        montoTotal: montoSimulado,
+        modo: 'prueba'
+    };
+}
+
+// Función principal de emisión (SIN segundo modal)
 async function emitirLoteConfirmado() {
     const desde = document.getElementById('loteFechaDesde')?.value;
     const hasta = document.getElementById('loteFechaHasta')?.value;
@@ -2880,147 +2885,101 @@ async function emitirLoteConfirmado() {
         return;
     }
     
-    // Validaciones de seguridad
-    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : null;
-    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : null;
+    // ========== VALIDACIÓN DE LÍMITES - BLOQUEANTE ==========
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
     
-    let requiereConfirmacionExtra = false;
-    let advertenciasHtml = '';
+    let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     
-    if (maxFacturas && _lotePrevio?.total > maxFacturas) {
-        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
-            <span class="material-icons" style="font-size: 14px;">warning</span> 
-            Vas a emitir ${_lotePrevio.total} facturas (máximo: ${maxFacturas})
-        </div>`;
-        requiereConfirmacionExtra = true;
-    }
-    if (maxMonto && _lotePrevio?.montoTotal > maxMonto) {
-        advertenciasHtml += `<div style="color: var(--yellow); margin-top: 8px; display: flex; align-items: center; gap: 6px;">
-            <span class="material-icons" style="font-size: 14px;">warning</span> 
-            Monto total excede el límite de ${formatCurrency(maxMonto)}
-        </div>`;
-        requiereConfirmacionExtra = true;
-    }
-    
-    // Obtener modal interno
-    const confirmModal = document.getElementById('confirmacionLoteInterna');
-    const titulo = document.getElementById('confirmacionLoteTitulo');
-    const mensajeEl = document.getElementById('confirmacionLoteMensaje');
-    const detalleEl = document.getElementById('confirmacionLoteDetalle');
-    const btnAceptar = document.getElementById('confirmacionLoteAceptar');
-    const btnCancelar = document.getElementById('confirmacionLoteCancelar');
-    
-    // Si no existe el modal, mostrar error y salir (sin fallback)
-    if (!confirmModal) {
-        console.error('❌ No se encuentra el modal interno');
-        toast('Error: No se puede mostrar la confirmación', 'error');
+    if (excedeFacturas || excedeMonto) {
+        let mensajeError = '⚠️ <strong>No se puede emitir el lote</strong><br><br>';
+        mensajeError += 'Los siguientes límites están superados:<br>';
+        if (excedeFacturas) {
+            mensajeError += `• <strong>Facturas:</strong> ${_lotePrevio.total} (máximo: ${maxFacturas})<br>`;
+        }
+        if (excedeMonto) {
+            mensajeError += `• <strong>Monto total:</strong> ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})<br>`;
+        }
+        mensajeError += '<br>📋 <strong>Para continuar, debes aumentar los límites en:</strong><br>';
+        mensajeError += '&nbsp;&nbsp;&nbsp;→ <strong>Configuración</strong> → <strong>Límites para Emisión en Lote</strong>';
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeError;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '16px';
+            errorDiv.style.borderRadius = '12px';
+            errorDiv.style.color = 'var(--text-1)';
+        }
+        toast('⚠️ Superaste los límites configurados. Aumentalos en Configuración.', 'error');
         return;
     }
+    // ============================================================
     
-    // Construir mensaje según modo prueba
-    const esModoPrueba = window._modoPruebaLote === true;
-    const modoTexto = esModoPrueba ? '🧪 MODO PRUEBA - SIMULACIÓN 🧪' : (requiereConfirmacionExtra ? '⚠️ Advertencia de seguridad' : 'Confirmar emisión por lote');
-    const modoColor = esModoPrueba ? 'var(--green)' : (requiereConfirmacionExtra ? 'var(--yellow)' : 'var(--text-1)');
+    // ========== EMITIR DIRECTAMENTE (SIN SEGUNDO MODAL) ==========
+    const btn = document.getElementById('btnEmitirLoteConfirmado');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+        btn.disabled = true;
+    }
     
-    titulo.textContent = modoTexto;
-    titulo.style.color = modoColor;
-    mensajeEl.textContent = esModoPrueba 
-        ? `⚠️ NO se emitirán facturas reales contra AFIP`
-        : `¿Emitir ${_lotePrevio?.total || 0} facturas en lote?`;
+    if (errorDiv) errorDiv.style.display = 'none';
     
-    detalleEl.innerHTML = `
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <span style="color: var(--text-3);">Período:</span>
-            <span style="font-weight: 600;">${desde} → ${hasta}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between; margin-bottom: 10px;">
-            <span style="color: var(--text-3);">Facturas a emitir:</span>
-            <span style="font-weight: 700; font-size: 16px;">${_lotePrevio?.total || 0}</span>
-        </div>
-        <div style="display: flex; justify-content: space-between;">
-            <span style="color: var(--text-3);">Monto total:</span>
-            <span style="font-weight: 700; font-size: 16px; color: var(--green);">${formatCurrency(_lotePrevio?.montoTotal || 0)}</span>
-        </div>
-        ${advertenciasHtml}
-        ${esModoPrueba ? '<div style="margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--border); color: var(--green); font-size: 12px; display: flex; align-items: center; gap: 6px;"><span class="material-icons" style="font-size: 14px;">science</span> Modo prueba activado - No se emitirán facturas reales</div>' : ''}
-    `;
-    
-    // Mostrar modal
-    confirmModal.style.display = 'flex';
-    
-    // Función para ejecutar la emisión
-    const ejecutarEmision = async () => {
-        confirmModal.style.display = 'none';
-        
-        const btn = document.getElementById('btnEmitirLoteConfirmado');
-        const originalText = btn?.innerHTML;
-        if (btn) {
-            btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
-            btn.disabled = true;
-        }
-        
-        if (errorDiv) errorDiv.style.display = 'none';
-        
-        try {
-            let result;
-            if (window._modoPruebaLote === true) {
-                // Simular emisión
-                await new Promise(resolve => setTimeout(resolve, 1500));
-                result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
-                toast(`🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`, 'info');
+    try {
+        let result;
+        if (window._modoPruebaLote === true) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
+            toast(`🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`, 'info');
+            cerrarModalLote();
+        } else {
+            const response = await fetch('/api/emitir-lote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ desde, hasta })
+            });
+            result = await response.json();
+            if (result.success) {
+                toast(`✅ ${result.emitidos} comprobantes emitidos en lote`, 'success');
                 cerrarModalLote();
+                location.reload();
             } else {
-                const response = await fetch('/api/emitir-lote', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    credentials: 'include',
-                    body: JSON.stringify({ desde, hasta })
-                });
-                result = await response.json();
-                if (result.success) {
-                    toast(`✅ ${result.emitidos} comprobantes emitidos en lote`, 'success');
-                    cerrarModalLote();
-                    location.reload();
-                } else {
-                    throw new Error(result.error || 'Error al emitir el lote');
-                }
-            }
-        } catch (err) {
-            if (errorDiv) {
-                errorDiv.innerText = err.message;
-                errorDiv.style.display = 'block';
-            }
-            volverPasoSeleccionLote();
-        } finally {
-            if (btn) {
-                btn.innerHTML = originalText;
-                btn.disabled = false;
+                throw new Error(result.error || 'Error al emitir el lote');
             }
         }
-    };
-    
-    // Configurar botones (remover listeners anteriores)
-    const nuevaEjecutar = () => ejecutarEmision();
-    const nuevaCancelar = () => {
-        confirmModal.style.display = 'none';
-    };
-    
-    // Remover event listeners antiguos y agregar nuevos
-    btnAceptar.replaceWith(btnAceptar.cloneNode(true));
-    btnCancelar.replaceWith(btnCancelar.cloneNode(true));
-    
-    const nuevoBtnAceptar = document.getElementById('confirmacionLoteAceptar');
-    const nuevoBtnCancelar = document.getElementById('confirmacionLoteCancelar');
-    
-    nuevoBtnAceptar.addEventListener('click', nuevaEjecutar, { once: true });
-    nuevoBtnCancelar.addEventListener('click', nuevaCancelar, { once: true });
+    } catch (err) {
+        if (errorDiv) {
+            errorDiv.innerText = err.message;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '12px';
+            errorDiv.style.borderRadius = '10px';
+        }
+        volverPasoSeleccionLote();
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
 }
-// Función para alternar entre modo prueba y modo real (opcional)
+
+// Función para alternar entre modo prueba y modo real
 function toggleModoPruebaLote() {
-    _modoPruebaLote = !_modoPruebaLote;
-    const mensaje = _modoPruebaLote 
+    window._modoPruebaLote = !window._modoPruebaLote;
+    const mensaje = window._modoPruebaLote 
         ? '🧪 Modo PRUEBA activado - NO se emitirán facturas reales'
         : '🔴 Modo REAL activado - Se emitirán facturas contra AFIP';
-    toast(mensaje, _modoPruebaLote ? 'info' : 'warn');
-    console.log(`Modo lote: ${_modoPruebaLote ? 'PRUEBA' : 'REAL'}`);
+    toast(mensaje, window._modoPruebaLote ? 'info' : 'warn');
+    console.log(`Modo lote: ${window._modoPruebaLote ? 'PRUEBA' : 'REAL'}`);
 }
+
+// Inicializar modo prueba
+console.log(`🧪 Modo prueba inicial: ${window._modoPruebaLote ? 'ACTIVADO' : 'DESACTIVADO'}`);

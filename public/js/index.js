@@ -2318,50 +2318,11 @@ function siguientePasoLote() {
     const desde = document.getElementById('loteFechaDesde').value;
     const hasta = document.getElementById('loteFechaHasta').value;
     const errorDiv = document.getElementById('loteError');
-    
-    // Limpiar error anterior
-    if (errorDiv) {
-        errorDiv.style.display = 'none';
-        errorDiv.innerHTML = '';
-    }
-    
-    if (!desde || !hasta) {
-        if (errorDiv) {
-            errorDiv.innerText = 'Completá ambas fechas';
-            errorDiv.style.display = 'block';
-        }
-        return;
-    }
-    
-    if (new Date(desde) > new Date(hasta)) {
-        if (errorDiv) {
-            errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
-            errorDiv.style.display = 'block';
-        }
-        return;
-    }
-    
-    // Si no hay preview, generarlo y luego verificar
-    if (!_lotePrevio) {
-        toast('Generando previsualización...', 'info');
-        previewEmitirLote().then(() => {
-            // Verificar límites después del preview
-            verificarLimitesYContinuar(desde, hasta, errorDiv);
-        });
-        return;
-    }
-    
-    // Si ya hay preview, verificar directamente
-    verificarLimitesYContinuar(desde, hasta, errorDiv);
-}
-
-// ========== NAVEGACIÓN ENTRE PASOS ==========
-
-function siguientePasoLote() {
-    const desde = document.getElementById('loteFechaDesde').value;
-    const hasta = document.getElementById('loteFechaHasta').value;
-    const errorDiv = document.getElementById('loteError');
     const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
+    console.log('👉 siguientePasoLote ejecutándose');
+    console.log('   desde:', desde);
+    console.log('   hasta:', hasta);
     
     // Limpiar error anterior y habilitar botón
     if (errorDiv) {
@@ -2401,7 +2362,6 @@ function siguientePasoLote() {
     
     verificarLimitesYContinuar(desde, hasta, errorDiv);
 }
-
 function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     const btnSiguiente = document.getElementById('btnSiguienteLote');
     
@@ -2414,14 +2374,11 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
     let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     
-    console.log('🔍 Verificando límites:', { 
-        excedeFacturas, 
-        excedeMonto, 
-        total: _lotePrevio?.total, 
-        monto: _lotePrevio?.montoTotal,
-        maxFacturas,
-        maxMonto
-    });
+    console.log('🔍 verificarLimitesYContinuar ejecutándose');
+    console.log('   excedeFacturas:', excedeFacturas);
+    console.log('   excedeMonto:', excedeMonto);
+    console.log('   total:', _lotePrevio?.total);
+    console.log('   monto:', _lotePrevio?.montoTotal);
     
     if (excedeFacturas || excedeMonto) {
         // 🔴 DESHABILITAR BOTÓN SIGUIENTE
@@ -2429,6 +2386,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
             btnSiguiente.disabled = true;
             btnSiguiente.style.opacity = '0.5';
             btnSiguiente.style.cursor = 'not-allowed';
+            console.log('   ✅ Botón Siguiente DESHABILITADO');
         }
         
         // Construir mensaje de error HTML
@@ -2451,6 +2409,9 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
             errorDiv.style.padding = '16px';
             errorDiv.style.borderRadius = '12px';
             errorDiv.style.color = 'var(--text-1)';
+            console.log('   ✅ Mensaje de error MOSTRADO');
+        } else {
+            console.log('   ❌ errorDiv NO EXISTE');
         }
         
         toast('⚠️ Superaste los límites configurados. Aumentalos en Configuración.', 'error');
@@ -2462,6 +2423,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
         btnSiguiente.disabled = false;
         btnSiguiente.style.opacity = '1';
         btnSiguiente.style.cursor = 'pointer';
+        console.log('   ✅ Botón Siguiente HABILITADO (dentro de límites)');
     }
     
     // Si pasa las validaciones, continuar al paso 2
@@ -2473,6 +2435,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
         return;
     }
     
+    console.log('   ✅ Pasando al paso 2');
     _pasoActualLote = 2;
     mostrarPasoConfirmacionLote();
 }

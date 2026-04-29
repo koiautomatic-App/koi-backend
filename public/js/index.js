@@ -2688,7 +2688,10 @@ async function previewEmitirLote() {
     
     if (!desde || !hasta) {
         if (previewDiv) previewDiv.innerHTML = '';
-        if (seguridadDiv) seguridadDiv.innerHTML = '';
+        if (seguridadDiv) {
+            seguridadDiv.style.display = 'none';
+            seguridadDiv.innerHTML = '';
+        }
         if (errorDiv) {
             errorDiv.style.display = 'none';
             errorDiv.innerHTML = '';
@@ -2707,15 +2710,6 @@ async function previewEmitirLote() {
         errorDiv.innerHTML = '';
     }
     
-    // Cargar límites configurables (solo para guardar en _lotePrevio)
-    const maxDias = window._limitesConfig?.activarDias !== false ? (window._limitesConfig?.maxDias || 90) : Infinity;
-    
-    // Validar rango máximo de días
-    const fechaDesde = new Date(desde);
-    const fechaHasta = new Date(hasta);
-    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
-    const rangoExcedido = diffDays > maxDias;
-    
     try {
         const res = await fetch('/api/orders/preview-lote', {
             method: 'POST',
@@ -2731,12 +2725,10 @@ async function previewEmitirLote() {
             montoTotal: data.montoTotal,
             desde,
             hasta,
-            esMesAnterior: data.esMesAnterior || false,
-            diffDays: diffDays,
-            rangoExcedido: rangoExcedido
+            esMesAnterior: data.esMesAnterior || false
         };
         
-        // Mostrar preview de órdenes SOLAMENTE
+        // Mostrar preview de órdenes
         if (previewDiv) {
             if (data.total === 0) {
                 previewDiv.innerHTML = `
@@ -2785,10 +2777,9 @@ async function previewEmitirLote() {
             }
         }
         
-        // NO generar el bloque de seguridad aquí (se hará en verificarLimitesYContinuar)
-        if (seguridadDiv) {
-            seguridadDiv.style.display = 'none';
-            seguridadDiv.innerHTML = '';
+        // 👇 NUEVO: Verificar límites y mostrar advertencias INMEDIATAMENTE
+        if (errorDiv && _lotePrevio) {
+            verificarLimitesYContinuar(desde, hasta, errorDiv);
         }
         
         // Habilitar/deshabilitar botón siguiente

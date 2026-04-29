@@ -2679,123 +2679,163 @@ async function emitirLoteConfirmado() {
 
 // ==================== PREVIEW (MODIFICADO - SIN GENERAR ADVERTENCIAS) ====================
 
-async function previewEmitirLote() {
-    const desde = document.getElementById('loteFechaDesde').value;
-    const hasta = document.getElementById('loteFechaHasta').value;
-    const previewDiv = document.getElementById('lotePreview');
-    const seguridadDiv = document.getElementById('loteSeguridad');
-    const errorDiv = document.getElementById('loteError');
-    
-    if (!desde || !hasta) {
-        if (previewDiv) previewDiv.innerHTML = '';
-        if (seguridadDiv) {
-            seguridadDiv.style.display = 'none';
-            seguridadDiv.innerHTML = '';
-        }
-        if (errorDiv) {
-            errorDiv.style.display = 'none';
-            errorDiv.innerHTML = '';
-        }
-        _lotePrevio = null;
-        return;
+function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    // Asegurar que errorDiv sea #loteError
+    if (!errorDiv || errorDiv.id !== 'loteError') {
+        errorDiv = document.getElementById('loteError');
     }
+    
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    const seguridadDiv = document.getElementById('loteSeguridad');
     
     // Limpiar mensajes anteriores
     if (seguridadDiv) {
         seguridadDiv.style.display = 'none';
         seguridadDiv.innerHTML = '';
     }
+    
+    // Obtener límites activos
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    
+    // Verificar advertencias adicionales
+    const fechaDesde = new Date(desde);
+    const fechaHasta = new Date(hasta);
+    const hoy = new Date();
+    const esPeriodoAnterior = fechaHasta < new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const maxDias = window._limitesConfig?.maxDias || 90;
+    const excedeDias = diffDays > maxDias;
+    
+    let excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    let excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
+    let tieneAdvertencias = excedeFacturas || excedeMonto || esPeriodoAnterior || excedeDias;
+    
+    if (tieneAdvertencias) {
+        // Deshabilitar botón si supera límites críticos
+        if (excedeFacturas || excedeMonto) {
+            if (btnSiguiente) {
+                btnSiguiente.disabled = true;
+                btnSiguiente.style.opacity = '0.5';
+                btnSiguiente.style.cursor = 'not-allowed';
+            }
+        }
+        
+        // Construir mensaje unificado
+        let mensajeUnificado = `
+            <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; background: rgba(255,61,87,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">🛡️</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 16px; color: var(--red);">ADVERTENCIAS DE SEGURIDAD</div>
+                        <div style="font-size: 12px; color: var(--text-3);">Estamos cuidando tus intereses</div>
+                    </div>
+                </div>
+                
+                <div style="background: rgba(255,255,255,0.03); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <span style="font-size: 18px;">🚫</span>
+                        <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">No se puede continuar con la emisión por lote</span>
+                    </div>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+        `;
+        
+        if (excedeFacturas) {
+            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.06); padding: 8px 12px; border-radius: 10px;">
+                <span>⚠️</span>
+                <span>La operación intenta emitir <strong>${_lotePrevio.total} facturas</strong> (máximo configurado: <strong>${maxFacturas}</strong>)</span>
+            </div>`;
+        }
+        
+        if (excedeMonto) {
+            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.06); padding: 8px 12px; border-radius: 10px;">
+                <span>⚠️</span>
+                <span>El monto total alcanza <strong>${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite configurado: <strong>${formatCurrency(maxMonto)}</strong>)</span>
+            </div>`;
+        }
+        
+        if (esPeriodoAnterior) {
+            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,179,0,0.06); padding: 8px 12px; border-radius: 10px;">
+                <span>⚠️</span>
+                <span>El período seleccionado es anterior al mes actual. Verificá que sea correcto.</span>
+            </div>`;
+        }
+        
+        if (excedeDias) {
+            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,179,0,0.06); padding: 8px 12px; border-radius: 10px;">
+                <span>⚠️</span>
+                <span>El período abarca <strong>${diffDays} días</strong> (máximo configurado: <strong>${maxDias} días</strong>)</span>
+            </div>`;
+        }
+        
+        mensajeUnificado += `
+                    </div>
+                </div>
+                
+                <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 18px;">💡</span>
+                        <span style="font-weight: 700; font-size: 13px; color: var(--green);">¿Cómo solucionarlo?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-2); line-height: 1.5; padding-left: 26px;">
+                        Para poder emitir este lote, solo tenés que aumentar los límites en:<br>
+                        <strong style="color: var(--orange-2);">→ Configuración → Límites para Emisión en Lote</strong>
+                    </div>
+                </div>
+                
+                <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
+                    <span>🔒</span>
+                    <span>Estamos cuidando tus intereses</span>
+                </div>
+            </div>
+        `;
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeUnificado;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'transparent';
+            errorDiv.style.border = 'none';
+            errorDiv.style.padding = '0';
+        }
+        
+        if (excedeFacturas || excedeMonto) {
+            toast('⚠️ Límites superados. Aumentalos en Configuración para continuar.', 'error');
+        }
+        return;
+    }
+    
+    // ========== SI NO HAY ADVERTENCIAS ==========
+    
+    // Habilitar botón siguiente
+    if (btnSiguiente) {
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
+    }
+    
+    // LIMPIAR MENSAJE DE ERROR
     if (errorDiv) {
         errorDiv.style.display = 'none';
         errorDiv.innerHTML = '';
     }
     
-    try {
-        const res = await fetch('/api/orders/preview-lote', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ desde, hasta })
-        });
-        const data = await res.json();
-        
-        // Guardar preview para el paso 2
-        _lotePrevio = {
-            total: data.total,
-            montoTotal: data.montoTotal,
-            desde,
-            hasta,
-            esMesAnterior: data.esMesAnterior || false
-        };
-        
-        // Mostrar preview de órdenes
-        if (previewDiv) {
-            if (data.total === 0) {
-                previewDiv.innerHTML = `
-                    <div style="background: rgba(255,61,87,0.1); padding: 16px; border-radius: 12px; margin-top: 16px; border: 1px solid rgba(255,61,87,0.2);">
-                        <div style="color: #ff3d57; font-weight: 700;">❌ No hay órdenes pendientes en este período</div>
-                        <div style="font-size: 12px; margin-top: 8px;">📅 Período: ${desde} → ${hasta}</div>
-                    </div>
-                `;
-            } else {
-                let filas = '';
-                data.detalle.slice(0, 10).forEach((o, idx) => {
-                    const fechaOrden = o.fecha || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—');
-                    const externalId = o.externalId || o.id || `orden-${idx}`;
-                    
-                    filas += `
-                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.05); flex-wrap: wrap; gap: 8px;">
-                            <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
-                                <span style="color: var(--text-3); min-width: 70px; font-family: var(--font-num);">#${externalId}</span>
-                                <span style="color: var(--text-3); min-width: 85px; font-size: 11px;">📅 ${fechaOrden}</span>
-                                <span style="word-break: break-word;">${o.customerName.length > 25 ? o.customerName.slice(0, 25) + '…' : o.customerName}</span>
-                            </div>
-                            <div style="font-family: var(--font-num); font-weight: 600;">${formatCurrency(o.amount, o.currency)}</div>
-                        </div>
-                    `;
-                });
-                
-                const masOrdenes = data.total > 10 ? `<div style="padding: 10px 0; text-align: center; color: var(--text-3); font-size: 12px;">... y ${data.total - 10} órdenes más</div>` : '';
-                
-                previewDiv.innerHTML = `
-                    <div style="background: var(--card-2); border-radius: 12px; margin-top: 16px; overflow: hidden;">
-                        <div style="padding: 12px; background: rgba(0,230,118,0.08); border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px;">
-                                <div>
-                                    <span style="font-weight: 700;">📋 ÓRDENES A EMITIR</span>
-                                    <span style="background: var(--green); color: #080810; padding: 2px 8px; border-radius: 20px; font-size: 11px; margin-left: 8px;">${data.total}</span>
-                                </div>
-                                <div style="font-family: var(--font-num); font-weight: 700; font-size: 16px;">${formatCurrency(data.montoTotal)}</div>
-                            </div>
-                        </div>
-                        <div style="max-height: 250px; overflow-y: auto; padding: 0 12px;">
-                            ${filas}
-                            ${masOrdenes}
-                        </div>
-                    </div>
-                `;
-            }
+    // Si no hay órdenes pendientes
+    if (_lotePrevio.total === 0) {
+        if (errorDiv) {
+            errorDiv.innerText = 'No hay órdenes pendientes en este período';
+            errorDiv.style.display = 'block';
         }
-        
-        // 👇 NUEVO: Verificar límites y mostrar advertencias INMEDIATAMENTE
-        if (errorDiv && _lotePrevio) {
-            verificarLimitesYContinuar(desde, hasta, errorDiv);
-        }
-        
-        // Habilitar/deshabilitar botón siguiente
-        const btnSiguiente = document.getElementById('btnSiguienteLote');
-        if (btnSiguiente) btnSiguiente.disabled = (data.total === 0);
-        
-        return data;
-        
-    } catch(e) {
-        console.error('Error en preview:', e);
-        if (previewDiv) {
-            previewDiv.innerHTML = '<div style="color: var(--red); padding: 12px;">❌ Error al cargar previsualización</div>';
-        }
-        _lotePrevio = null;
-        return null;
+        return;
     }
+    
+    // Continuar al paso 2
+    _pasoActualLote = 2;
+    mostrarPasoConfirmacionLote();
 }
 // ==================== LÍMITES CONFIGURABLES ====================
 

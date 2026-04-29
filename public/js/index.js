@@ -2369,8 +2369,23 @@ function siguientePasoLote() {
     verificarLimitesYContinuar(desde, hasta, errorDiv);
 }
 function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    // Asegurar que errorDiv sea #loteError
+    if (!errorDiv || errorDiv.id !== 'loteError') {
+        errorDiv = document.getElementById('loteError');
+    }
+    
     const btnSiguiente = document.getElementById('btnSiguienteLote');
     const seguridadDiv = document.getElementById('loteSeguridad');
+    
+    // Limpiar mensajes anteriores
+    if (seguridadDiv) {
+        seguridadDiv.style.display = 'none';
+        seguridadDiv.innerHTML = '';
+    }
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
     
     // Obtener límites activos
     const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
@@ -2392,11 +2407,6 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     let tieneAdvertencias = excedeFacturas || excedeMonto || esPeriodoAnterior || excedeDias;
     
     if (tieneAdvertencias) {
-        // Ocultar el preview de seguridad viejo
-        if (seguridadDiv) {
-            seguridadDiv.style.display = 'none';
-        }
-        
         // Deshabilitar botón si supera límites críticos
         if (excedeFacturas || excedeMonto) {
             if (btnSiguiente) {
@@ -2406,7 +2416,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
             }
         }
         
-        // Construir mensaje unificado estilo KOI
+        // Construir mensaje unificado
         let mensajeUnificado = `
             <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
                 <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
@@ -2484,7 +2494,6 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
             errorDiv.style.background = 'transparent';
             errorDiv.style.border = 'none';
             errorDiv.style.padding = '0';
-            errorDiv.style.marginTop = '0';
         }
         
         if (excedeFacturas || excedeMonto) {
@@ -2493,20 +2502,11 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
         return;
     }
     
-    // Si no hay advertencias, mostrar preview normal
-    if (seguridadDiv) {
-        seguridadDiv.style.display = 'block';
-    }
-    
+    // Si no hay advertencias, habilitar botón
     if (btnSiguiente) {
         btnSiguiente.disabled = false;
         btnSiguiente.style.opacity = '1';
         btnSiguiente.style.cursor = 'pointer';
-    }
-    
-    if (errorDiv) {
-        errorDiv.style.display = 'none';
-        errorDiv.innerHTML = '';
     }
     
     if (_lotePrevio.total === 0) {
@@ -2677,22 +2677,37 @@ async function emitirLoteConfirmado() {
 }
 // ========== PREVIEW (MODIFICADO PARA GUARDAR EN _lotePrevio) ==========
 
+// ==================== PREVIEW (MODIFICADO - SIN GENERAR ADVERTENCIAS) ====================
+
 async function previewEmitirLote() {
     const desde = document.getElementById('loteFechaDesde').value;
     const hasta = document.getElementById('loteFechaHasta').value;
     const previewDiv = document.getElementById('lotePreview');
     const seguridadDiv = document.getElementById('loteSeguridad');
+    const errorDiv = document.getElementById('loteError');
     
     if (!desde || !hasta) {
         if (previewDiv) previewDiv.innerHTML = '';
         if (seguridadDiv) seguridadDiv.innerHTML = '';
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.innerHTML = '';
+        }
         _lotePrevio = null;
         return;
     }
     
-    // Cargar límites configurables
-    const maxFacturas = window._limitesConfig?.activarFacturas !== false ? (window._limitesConfig?.maxFacturas || 20) : Infinity;
-    const maxMonto = window._limitesConfig?.activarMonto !== false ? (window._limitesConfig?.maxMonto || 1000000) : Infinity;
+    // Limpiar mensajes anteriores
+    if (seguridadDiv) {
+        seguridadDiv.style.display = 'none';
+        seguridadDiv.innerHTML = '';
+    }
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    
+    // Cargar límites configurables (solo para guardar en _lotePrevio)
     const maxDias = window._limitesConfig?.activarDias !== false ? (window._limitesConfig?.maxDias || 90) : Infinity;
     
     // Validar rango máximo de días
@@ -2715,10 +2730,13 @@ async function previewEmitirLote() {
             total: data.total,
             montoTotal: data.montoTotal,
             desde,
-            hasta
+            hasta,
+            esMesAnterior: data.esMesAnterior || false,
+            diffDays: diffDays,
+            rangoExcedido: rangoExcedido
         };
         
-        // Mostrar preview de órdenes
+        // Mostrar preview de órdenes SOLAMENTE
         if (previewDiv) {
             if (data.total === 0) {
                 previewDiv.innerHTML = `
@@ -2767,37 +2785,10 @@ async function previewEmitirLote() {
             }
         }
         
-        // Sección de seguridad y advertencias
-        let alertas = [];
-        
-        if (data.total > maxFacturas) {
-            alertas.push(`⚠️ Estás por emitir ${data.total} facturas (máximo configurado: ${maxFacturas === Infinity ? 'sin límite' : maxFacturas}).`);
-        }
-        if (data.montoTotal > maxMonto) {
-            alertas.push(`⚠️ El monto total es ${formatCurrency(data.montoTotal)} (máximo configurado: ${maxMonto === Infinity ? 'sin límite' : formatCurrency(maxMonto)}).`);
-        }
-        if (rangoExcedido) {
-            alertas.push(`⚠️ El período seleccionado abarca ${diffDays} días (máximo configurado: ${maxDias === Infinity ? 'sin límite' : maxDias} días).`);
-        }
-        if (data.esMesAnterior) {
-            alertas.push(`⚠️ El período seleccionado es anterior al mes actual. Verificá que sea correcto.`);
-        }
-        
+        // NO generar el bloque de seguridad aquí (se hará en verificarLimitesYContinuar)
         if (seguridadDiv) {
-            if (alertas.length > 0) {
-                seguridadDiv.innerHTML = `
-                    <div style="background: rgba(255,179,0,0.1); border: 1px solid rgba(255,179,0,0.3); border-radius: 12px; padding: 14px; margin-top: 12px;">
-                        <div style="font-weight: 700; margin-bottom: 8px; color: var(--yellow);">🛡️ ADVERTENCIAS DE SEGURIDAD</div>
-                        ${alertas.map(a => `<div style="font-size: 12px; margin: 4px 0;">${a}</div>`).join('')}
-                    </div>
-                `;
-            } else {
-                seguridadDiv.innerHTML = `
-                    <div style="background: rgba(0,230,118,0.08); border: 1px solid rgba(0,230,118,0.2); border-radius: 12px; padding: 10px; margin-top: 12px;">
-                        <div style="font-size: 12px; color: var(--green);">✅ Todo en orden. Podés continuar.</div>
-                    </div>
-                `;
-            }
+            seguridadDiv.style.display = 'none';
+            seguridadDiv.innerHTML = '';
         }
         
         // Habilitar/deshabilitar botón siguiente

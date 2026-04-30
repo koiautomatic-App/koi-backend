@@ -2219,7 +2219,7 @@ let _lotePrevio = null;       // guardar datos del preview para el paso 2
 window._modoPruebaLote = true; // true = simulación, false = emisión real
 
 // Inicializar límites configurables (valores por defecto)
-window._limitesConfig = window._limitesConfig || { maxFacturas: 20, maxMonto: 1000000, maxDias: 90 };
+window._limitesConfig = window._limitesConfig || { maxFacturas: 20, maxMonto: 1000000, maxDias: 90, activarFacturas: true, activarMonto: true, activarDias: true };
 
 // ========== FUNCIONES DE VISUALIZACIÓN DE PASOS ==========
 
@@ -2601,6 +2601,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     _pasoActualLote = 2;
     mostrarPasoConfirmacionLote();
 }
+
 // ========== RESUMEN DE CONFIRMACIÓN ==========
 
 async function cargarResumenConfirmacionLote() {
@@ -2662,16 +2663,19 @@ async function emitirLoteConfirmado() {
     const fechaDesde = new Date(desde);
     const fechaHasta = new Date(hasta);
     const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const diasDesdePeriodo = Math.ceil((new Date() - fechaHasta) / (1000 * 60 * 60 * 24));
     const excedeDias = maxDiasActivo && diffDays > maxDias;
+    const periodoMuyAntiguo = maxDiasActivo && diasDesdePeriodo > maxDias;
     const excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
     const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     
-    if (excedeFacturas || excedeMonto || excedeDias) {
+    if (excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo) {
         let mensajeError = '⚠️ <strong>No se puede emitir el lote</strong><br><br>';
         mensajeError += 'Los siguientes límites están superados:<br>';
         if (excedeFacturas) mensajeError += `• <strong>Facturas:</strong> ${_lotePrevio.total} (máximo: ${maxFacturas})<br>`;
         if (excedeMonto) mensajeError += `• <strong>Monto total:</strong> ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})<br>`;
-        if (excedeDias) mensajeError += `• <strong>Días:</strong> ${diffDays} (máximo: ${maxDias})<br>`;
+        if (excedeDias) mensajeError += `• <strong>Rango de días:</strong> ${diffDays} (máximo: ${maxDias})<br>`;
+        if (periodoMuyAntiguo) mensajeError += `• <strong>Período muy antiguo:</strong> hace ${diasDesdePeriodo} días (máximo: ${maxDias} días)<br>`;
         mensajeError += '<br>📋 <strong>Para continuar, debes aumentar los límites en:</strong><br>';
         mensajeError += '&nbsp;&nbsp;&nbsp;→ <strong>Configuración</strong> → <strong>Límites para Emisión en Lote</strong>';
         
@@ -2750,16 +2754,71 @@ function toggleModoPruebaLote() {
 }
 
 console.log(`🧪 Modo prueba inicial: ${window._modoPruebaLote ? 'ACTIVADO' : 'DESACTIVADO'}`);
-// ==================== GUARDAR LÍMITES ====================
 
+// ==================== LÍMITES CONFIGURABLES (VERSIÓN DEFINITIVA) ====================
+
+// Cargar límites desde localStorage a inputs
+function cargarLimitesLote() {
+    try {
+        const guardados = localStorage.getItem('koi_limites_lote');
+        if (guardados) {
+            const limites = JSON.parse(guardados);
+            window._limitesConfig = limites;
+            
+            const inputFacturas = document.getElementById('cfgMaxFacturas');
+            const inputMonto = document.getElementById('cfgMaxMonto');
+            const inputDias = document.getElementById('cfgMaxDias');
+            const switchFacturas = document.getElementById('switchLimiteFacturas');
+            const switchMonto = document.getElementById('switchLimiteMonto');
+            const switchDias = document.getElementById('switchLimiteDias');
+            
+            if (inputFacturas) inputFacturas.value = limites.maxFacturas ?? 20;
+            if (inputMonto) inputMonto.value = limites.maxMonto ?? 1000000;
+            if (inputDias) inputDias.value = limites.maxDias ?? 90;
+            if (switchFacturas) switchFacturas.checked = limites.activarFacturas !== false;
+            if (switchMonto) switchMonto.checked = limites.activarMonto !== false;
+            if (switchDias) switchDias.checked = limites.activarDias !== false;
+            
+            if (typeof toggleLimiteFacturas === 'function') toggleLimiteFacturas(switchFacturas?.checked);
+            if (typeof toggleLimiteMonto === 'function') toggleLimiteMonto(switchMonto?.checked);
+            if (typeof toggleLimiteDias === 'function') toggleLimiteDias(switchDias?.checked);
+            
+            console.log('✅ Límites cargados:', window._limitesConfig);
+        } else {
+            window._limitesConfig = { 
+                maxFacturas: 20, 
+                maxMonto: 1000000, 
+                maxDias: 90,
+                activarFacturas: true,
+                activarMonto: true,
+                activarDias: true
+            };
+            if (document.getElementById('switchLimiteFacturas')) {
+                document.getElementById('switchLimiteFacturas').checked = true;
+                document.getElementById('switchLimiteMonto').checked = true;
+                document.getElementById('switchLimiteDias').checked = true;
+            }
+        }
+    } catch(e) {
+        console.warn('Error cargando límites:', e);
+    }
+}
+
+// Guardar límites (SIN TOAST - silencioso)
 function guardarLimitesLote() {
-    const maxFacturas = parseInt(document.getElementById('cfgMaxFacturas')?.value) || 20;
-    const maxMonto = parseFloat(document.getElementById('cfgMaxMonto')?.value) || 1000000;
-    const maxDias = parseInt(document.getElementById('cfgMaxDias')?.value) || 90;
+    const inputFacturas = document.getElementById('cfgMaxFacturas');
+    const inputMonto = document.getElementById('cfgMaxMonto');
+    const inputDias = document.getElementById('cfgMaxDias');
+    const switchFacturas = document.getElementById('switchLimiteFacturas');
+    const switchMonto = document.getElementById('switchLimiteMonto');
+    const switchDias = document.getElementById('switchLimiteDias');
     
-    const activarFacturas = document.getElementById('switchLimiteFacturas')?.checked ?? true;
-    const activarMonto = document.getElementById('switchLimiteMonto')?.checked ?? true;
-    const activarDias = document.getElementById('switchLimiteDias')?.checked ?? true;
+    const maxFacturas = parseInt(inputFacturas?.value) || 20;
+    const maxMonto = parseFloat(inputMonto?.value) || 1000000;
+    const maxDias = parseInt(inputDias?.value) || 90;
+    const activarFacturas = switchFacturas?.checked ?? true;
+    const activarMonto = switchMonto?.checked ?? true;
+    const activarDias = switchDias?.checked ?? true;
     
     if (activarFacturas && (maxFacturas < 1 || maxFacturas > 500)) {
         toast('El máximo de facturas debe estar entre 1 y 500', 'error');
@@ -2774,36 +2833,26 @@ function guardarLimitesLote() {
         return;
     }
     
-    window._limitesConfig = { 
-        maxFacturas, 
-        maxMonto, 
-        maxDias,
-        activarFacturas,
-        activarMonto,
-        activarDias
-    };
-    
+    window._limitesConfig = { maxFacturas, maxMonto, maxDias, activarFacturas, activarMonto, activarDias };
     localStorage.setItem('koi_limites_lote', JSON.stringify(window._limitesConfig));
     
-    toast('✅ Límites guardados', 'success');
+    // SIN TOAST - solo se guarda silenciosamente
     console.log('✅ Límites guardados:', window._limitesConfig);
 }
-// ==================== GUARDADO AUTOMÁTICO DE LÍMITES ====================
 
-function configurarAutoGuardadoLimites() {
-    // Inputs numéricos
+// Auto-guardado silencioso
+function initAutoGuardadoLimites() {
     const inputs = ['cfgMaxFacturas', 'cfgMaxMonto', 'cfgMaxDias'];
     inputs.forEach(id => {
         const input = document.getElementById(id);
         if (input) {
-            input.removeEventListener('change', guardarLimitesLote);
-            input.addEventListener('change', guardarLimitesLote);
             input.removeEventListener('input', guardarLimitesLote);
             input.addEventListener('input', guardarLimitesLote);
+            input.removeEventListener('change', guardarLimitesLote);
+            input.addEventListener('change', guardarLimitesLote);
         }
     });
     
-    // Switches
     const switches = ['switchLimiteFacturas', 'switchLimiteMonto', 'switchLimiteDias'];
     switches.forEach(id => {
         const sw = document.getElementById(id);
@@ -2813,12 +2862,9 @@ function configurarAutoGuardadoLimites() {
         }
     });
     
-    console.log('✅ Auto-guardado de límites configurado');
+    console.log('✅ Auto-guardado silencioso de límites configurado');
 }
 
-// Ejecutar al cargar la página
-if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', configurarAutoGuardadoLimites);
-} else {
-    configurarAutoGuardadoLimites();
-}
+// Inicializar límites
+cargarLimitesLote();
+initAutoGuardadoLimites();

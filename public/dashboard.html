@@ -668,24 +668,26 @@
       </div>
     </div><!-- /vista-config -->
 
- <!-- ── VISTA MI NEGOCIO (ONBOARDING POST-LOGIN) ─────────────── -->
+<!-- ── VISTA MI NEGOCIO (ONBOARDING POST-LOGIN) ─────────────── -->
 <div class="content" id="vista-negocio" style="display:none">
 
-  <!-- Versión ONBOARDING (sin tiendas conectadas) -->
+  <!-- Versión ONBOARDING (sin tiendas conectadas) - USA EL MISMO MODAL QUE LA VERSIÓN NORMAL -->
   <div id="onboardingNegocio" style="display: none;">
-    <div class="onboarding-container" style="max-width: 1000px; margin: 0 auto; padding: 20px 0;">
+    <div style="max-width: 1000px; margin: 0 auto; padding: 20px 0;">
       
+      <!-- Header de bienvenida -->
       <div style="text-align: center; margin-bottom: 40px;">
         <div style="display: flex; align-items: center; justify-content: center; gap: 12px; margin-bottom: 20px;">
-          <div class="koi-logo-mark" style="width: 48px; height: 48px; font-size: 28px;">K</div>
-          <span class="badge-arca" style="background: rgba(0,230,118,0.12); color: #00e676; padding: 4px 12px; border-radius: 20px; font-size: 12px;">ARCA · AFIP</span>
+          <div class="koi-logo-mark" style="width: 48px; height: 48px; font-size: 28px; background: linear-gradient(135deg, #00e676, #00b0ff); border-radius: 16px; display: flex; align-items: center; justify-content: center;">K</div>
+          <span style="background: rgba(0,230,118,0.12); color: #00e676; padding: 4px 12px; border-radius: 20px; font-size: 12px;">ARCA · AFIP</span>
         </div>
         <h1 style="font-size: 32px; font-weight: 700; margin-bottom: 12px; color: var(--text-1);">¡Bienvenido a KOI, <span id="onboardingUserName">usuario</span>!</h1>
         <p style="font-size: 18px; color: var(--text-2);">Para empezar a facturar automáticamente, conectá tu tienda en un solo paso:</p>
       </div>
 
-      <!-- Grid de integraciones -->
-      <div class="neg-plataformas" style="grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));">
+      <!-- MISMA SECCIÓN "Conectar plataforma" que usás en negocioNormal -->
+      <div class="neg-section-label" style="margin-top: 0;">Conectar plataforma</div>
+      <div class="neg-plataformas">
         
         <!-- WooCommerce -->
         <div class="neg-card" data-plataforma="woocommerce">
@@ -700,18 +702,20 @@
                 <ellipse cx="36" cy="19.5" rx="3" ry="3.5" stroke="#7F54B3" stroke-width="2"/>
               </svg>
             </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div class="neg-card-info">
             <div class="neg-card-name">WooCommerce</div>
             <div class="neg-card-desc" id="onboarding-desc-woocommerce">Sin conectar</div>
           </div>
           <div class="neg-card-footer">
-            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="woocommerce">Conectar</button>
-          </div>
-          <div class="onboarding-campos" id="onboarding-campos-woocommerce" style="display: none; margin-top: 12px;">
-            <input type="text" placeholder="URL de tu tienda" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="Consumer Key" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="Consumer Secret" class="cfg-input">
+            <span class="neg-card-badge neg-badge-oauth">OAuth</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="woocommerce" onclick="abrirConexionOnboarding('woocommerce')">Conectar</button>
           </div>
         </div>
 
@@ -729,17 +733,20 @@
                 <path d="M17 27c0-2.8 2.2-5 5-5s5 2.2 5 5" fill="#009EE3"/>
               </svg>
             </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div class="neg-card-info">
             <div class="neg-card-name">Mercado Libre</div>
             <div class="neg-card-desc" id="onboarding-desc-mercadolibre">Sin conectar</div>
           </div>
           <div class="neg-card-footer">
-            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="mercadolibre">Conectar</button>
-          </div>
-          <div class="onboarding-campos" id="onboarding-campos-mercadolibre" style="display: none; margin-top: 12px;">
-            <input type="text" placeholder="App ID" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="Access Token" class="cfg-input">
+            <span class="neg-card-badge neg-badge-oauth">OAuth</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="mercadolibre" onclick="abrirConexionOnboarding('mercadolibre')">Conectar</button>
           </div>
         </div>
 
@@ -753,17 +760,20 @@
                 <path d="M23 19l-3 5h4l-3 6" stroke="#1EAAF1" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div class="neg-card-info">
             <div class="neg-card-name">Tienda Nube</div>
             <div class="neg-card-desc" id="onboarding-desc-tiendanube">Sin conectar</div>
           </div>
           <div class="neg-card-footer">
-            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="tiendanube">Conectar</button>
-          </div>
-          <div class="onboarding-campos" id="onboarding-campos-tiendanube" style="display: none; margin-top: 12px;">
-            <input type="text" placeholder="Store ID" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="API Token" class="cfg-input">
+            <span class="neg-card-badge neg-badge-token">Token</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="tiendanube" onclick="abrirConexionOnboarding('tiendanube')">Conectar</button>
           </div>
         </div>
 
@@ -779,17 +789,20 @@
                 <rect x="20" y="27" width="4" height="7" rx="1" fill="#00C37A"/>
               </svg>
             </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div class="neg-card-info">
             <div class="neg-card-name">Empretienda</div>
             <div class="neg-card-desc" id="onboarding-desc-empretienda">Sin conectar</div>
           </div>
           <div class="neg-card-footer">
-            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="empretienda">Conectar</button>
-          </div>
-          <div class="onboarding-campos" id="onboarding-campos-empretienda" style="display: none; margin-top: 12px;">
-            <input type="text" placeholder="Slug de tienda" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="API Token" class="cfg-input">
+            <span class="neg-card-badge neg-badge-token">Token</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="empretienda" onclick="abrirConexionOnboarding('empretienda')">Conectar</button>
           </div>
         </div>
 
@@ -804,23 +817,55 @@
                 <path d="M17 22v8M17 22h5a2.5 2.5 0 0 1 0 5h-5m5 0l3 3" stroke="#FF441B" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
             </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
           </div>
           <div class="neg-card-info">
             <div class="neg-card-name">Rappi</div>
             <div class="neg-card-desc" id="onboarding-desc-rappi">Sin conectar</div>
           </div>
           <div class="neg-card-footer">
-            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="rappi">Conectar</button>
+            <span class="neg-card-badge neg-badge-token">Token</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="rappi" onclick="abrirConexionOnboarding('rappi')">Conectar</button>
           </div>
-          <div class="onboarding-campos" id="onboarding-campos-rappi" style="display: none; margin-top: 12px;">
-            <input type="text" placeholder="Restaurant ID" class="cfg-input" style="margin-bottom: 8px;">
-            <input type="text" placeholder="API Token" class="cfg-input">
+        </div>
+
+        <!-- VTEX -->
+        <div class="neg-card" data-plataforma="vtex">
+          <div class="neg-card-top">
+            <div class="neg-card-logo">
+              <svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                <rect width="44" height="44" rx="12" fill="#F71963"/>
+                <path d="M5 13l5.5 13L16 13" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                <path d="M18 13h7M21.5 13v13" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M27 13h7M27 19.5h5M27 26h7" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                <path d="M36 13l5 13M41 13l-5 13" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+              </svg>
+            </div>
+            <div class="neg-card-toggle-wrap">
+              <label class="neg-toggle" style="opacity:0.5; pointer-events:none;">
+                <input type="checkbox" disabled/>
+                <span class="neg-toggle-track"></span>
+              </label>
+            </div>
+          </div>
+          <div class="neg-card-info">
+            <div class="neg-card-name">VTEX</div>
+            <div class="neg-card-desc" id="onboarding-desc-vtex">Sin conectar</div>
+          </div>
+          <div class="neg-card-footer">
+            <span class="neg-card-badge neg-badge-token">Token</span>
+            <button class="neg-card-btn btn-onboarding-conectar" data-plataforma="vtex" onclick="abrirConexionOnboarding('vtex')">Conectar</button>
           </div>
         </div>
 
       </div>
 
-      <!-- Footer -->
+      <!-- Footer con botones -->
       <div style="margin-top: 48px; padding-top: 32px; border-top: 1px solid rgba(255,255,255,0.08);">
         <div style="display: flex; gap: 16px; background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 16px; padding: 20px; margin-bottom: 32px;">
           <span style="font-size: 28px;">💡</span>
@@ -830,8 +875,8 @@
           </div>
         </div>
         <div style="display: flex; justify-content: flex-end; gap: 16px;">
-          <button class="btn-skip-onboarding" id="btnConfigurarMasTarde" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 24px; color: var(--text-2); cursor: pointer;">Configurar más tarde</button>
-          <button class="btn-continuar-onboarding" id="btnContinuarOnboarding" disabled style="background: #00e676; border: none; border-radius: 12px; padding: 12px 32px; color: #0a0e1a; font-weight: 700; cursor: pointer; opacity: 0.4;">Continuar →</button>
+          <button id="btnConfigurarMasTarde" style="background: transparent; border: 1px solid rgba(255,255,255,0.2); border-radius: 12px; padding: 12px 24px; color: var(--text-2); cursor: pointer;">Configurar más tarde</button>
+          <button id="btnContinuarOnboarding" disabled style="background: #00e676; border: none; border-radius: 12px; padding: 12px 32px; color: #0a0e1a; font-weight: 700; cursor: pointer; opacity: 0.4;">Continuar →</button>
         </div>
       </div>
 
@@ -862,11 +907,11 @@
     <div class="neg-section-label" style="margin-top:28px">Conectar plataforma</div>
     <div class="neg-plataformas" id="negPlataformas">
       <!-- Aquí van las plataformas igual que antes -->
+      <!-- Las cards se generan dinámicamente con JavaScript -->
     </div>
   </div>
 
 </div>
-    </div><!-- /vista-negocio -->
 
     <!-- ── MODAL CONECTAR PLATAFORMA ──────────────────────── -->
     <div class="modal-overlay" id="negModalOverlay" onclick="cerrarConexion()"></div>

@@ -2128,8 +2128,13 @@ document.addEventListener('DOMContentLoaded', async () => {
     
     // Configurar auto-guardado de límites
     initAutoGuardadoLimites();
+    
+    // ========== 👇 AGREGAR ONBOARDING AL FINAL ==========
+    setTimeout(() => {
+        console.log('🔄 Verificando onboarding automáticamente...');
+        mostrarOnboardingSiNecesario();
+    }, 500);
 });
-
 // ========== FUNCIONES DE CONFIGURACIÓN ==========
 
 // Modificar la función guardarPerfilVista() para incluir condicionFiscal
@@ -3115,5 +3120,46 @@ async function mostrarPantallaOnboardingSiNecesario() {
         
     } else {
         console.log('✅ Usuario ya tiene tiendas → No mostrar onboarding');
+    }
+}
+// ========== FUNCIÓN DE ONBOARDING AUTOMÁTICO ==========
+async function mostrarOnboardingSiNecesario() {
+    console.log('🔍 Verificando si mostrar onboarding...');
+    
+    try {
+        const res = await fetch('/api/integrations', { credentials: 'include' });
+        const data = await res.json();
+        const integraciones = data.integrations || [];
+        
+        if (integraciones.length === 0) {
+            console.log('🚀 Usuario sin tiendas → Mostrando onboarding');
+            
+            const onboardingDiv = document.getElementById('onboardingNegocio');
+            const normalDiv = document.getElementById('negocioNormal');
+            const vistaNegocio = document.getElementById('vista-negocio');
+            
+            // Ocultar todas las vistas
+            document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+            
+            if (vistaNegocio) vistaNegocio.style.display = 'block';
+            if (onboardingDiv) onboardingDiv.style.display = 'block';
+            if (normalDiv) normalDiv.style.display = 'none';
+            
+            // Cargar nombre del usuario
+            try {
+                const userRes = await fetch('/api/me', { credentials: 'include' });
+                const userData = await userRes.json();
+                const userNameSpan = document.getElementById('onboardingUserName');
+                if (userNameSpan && userData.user) {
+                    userNameSpan.textContent = userData.user.nombre?.split(' ')[0] || userData.user.email?.split('@')[0] || 'usuario';
+                }
+            } catch(e) {
+                console.error('Error cargando nombre:', e);
+            }
+        } else {
+            console.log('✅ Usuario con', integraciones.length, 'tienda(s), no mostrar onboarding');
+        }
+    } catch(err) {
+        console.error('Error verificando integraciones:', err);
     }
 }

@@ -576,6 +576,10 @@ let _rangoHasta = null;
 let _dashDesde = null;
 let _dashHasta = null;
 
+// ========== VARIABLES GLOBALES DE ONBOARDING ==========
+let tieneTiendaConectadaOnboarding = false;
+let _plataformaOnboardingActual = null;
+
 
 function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
@@ -905,9 +909,10 @@ function abrirConexion(plataforma) {
 }
 
 function cerrarConexion() {
-  document.getElementById('negModalOverlay').classList.remove('open');
-  document.getElementById('negModal').classList.remove('open');
-  _plataformaActual = null;
+    _plataformaOnboardingActual = null;  // 👈 AGREGAR ESTA LÍNEA
+    document.getElementById('negModalOverlay').classList.remove('open');
+    document.getElementById('negModal').classList.remove('open');
+    _plataformaActual = null;
 }
 
 async function confirmarConexion() {
@@ -945,6 +950,16 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Tienda Nube conectada', 'success');
+        
+        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
+        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
+          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
+          _plataformaOnboardingActual = null;
+          cerrarConexion();
+          cargarIntegraciones();
+          return;
+        }
+        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -962,6 +977,16 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Empretienda conectada', 'success');
+        
+        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
+        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
+          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
+          _plataformaOnboardingActual = null;
+          cerrarConexion();
+          cargarIntegraciones();
+          return;
+        }
+        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -980,6 +1005,16 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Rappi conectado', 'success');
+        
+        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
+        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
+          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
+          _plataformaOnboardingActual = null;
+          cerrarConexion();
+          cargarIntegraciones();
+          return;
+        }
+        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -998,6 +1033,16 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ VTEX conectado', 'success');
+        
+        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
+        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
+          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
+          _plataformaOnboardingActual = null;
+          cerrarConexion();
+          cargarIntegraciones();
+          return;
+        }
+        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -3009,28 +3054,9 @@ function toggleLimiteDias(activado) {
         if (input) input.disabled = !activado;
     }
 }
-
-// Inicializar límites
-cargarLimitesLote();
-async function handleLoginSuccess() {
-    // Verificar si tiene tiendas conectadas
-    const tieneTiendas = await verificarTiendasConectadas();
-    
-    if (!tieneTiendas) {
-        await mostrarPantallaOnboarding();
-    } else {
-        // Verificar ARCA y redirigir
-        const arcaStatus = await fetch('/api/user/arca-status');
-        const data = await arcaStatus.json();
-        if (data.autorizado) {
-            mostrarVista('dashboard');
-        } else {
-            mostrarVista('arca');
-        }
-    }
-}
 // ========== ONBOARDING POST-LOGIN ==========
 let tieneTiendaConectadaOnboarding = false;
+let _plataformaOnboardingActual = null;
 
 // Función principal que se ejecuta después del login
 async function redirigirPostLogin() {
@@ -3044,11 +3070,8 @@ async function redirigirPostLogin() {
         await mostrarPantallaOnboarding();
     } else {
         console.log('✅ Usuario con tiendas → Verificando ARCA');
-        // Verificar ARCA y redirigir
         try {
-            const arcaStatus = await fetch('/api/user/arca-status', {
-                credentials: 'include'
-            });
+            const arcaStatus = await fetch('/api/user/arca-status', { credentials: 'include' });
             const data = await arcaStatus.json();
             if (data.autorizado) {
                 mostrarVista('dashboard');
@@ -3065,9 +3088,7 @@ async function redirigirPostLogin() {
 // Verificar si tiene tiendas conectadas
 async function verificarTiendasConectadas() {
     try {
-        const res = await fetch('/api/integrations', {
-            credentials: 'include'
-        });
+        const res = await fetch('/api/integrations', { credentials: 'include' });
         const data = await res.json();
         const integraciones = data.integrations || [];
         console.log('📦 Integraciones encontradas:', integraciones.length);
@@ -3087,9 +3108,7 @@ async function mostrarPantallaOnboarding() {
     
     // Mostrar vista negocio
     const vistaNegocio = document.getElementById('vista-negocio');
-    if (vistaNegocio) {
-        vistaNegocio.style.display = 'block';
-    }
+    if (vistaNegocio) vistaNegocio.style.display = 'block';
     
     // Mostrar versión onboarding, ocultar versión normal
     const onboardingDiv = document.getElementById('onboardingNegocio');
@@ -3099,9 +3118,24 @@ async function mostrarPantallaOnboarding() {
         onboardingDiv.style.display = 'block';
         console.log('✅ Onboarding visible');
     }
-    if (normalDiv) {
-        normalDiv.style.display = 'none';
+    if (normalDiv) normalDiv.style.display = 'none';
+    
+    // Resetear estado de conexiones
+    tieneTiendaConectadaOnboarding = false;
+    const btnContinuar = document.getElementById('btnContinuarOnboarding');
+    if (btnContinuar) {
+        btnContinuar.disabled = true;
+        btnContinuar.style.opacity = '0.4';
     }
+    
+    // Resetear descripciones de las cards
+    const plataformas = ['woocommerce', 'mercadolibre', 'tiendanube', 'empretienda', 'rappi', 'vtex'];
+    plataformas.forEach(p => {
+        const descSpan = document.getElementById(`onboarding-desc-${p}`);
+        if (descSpan) descSpan.innerHTML = 'Sin conectar';
+        const btn = document.querySelector(`.btn-onboarding-conectar[data-plataforma="${p}"]`);
+        if (btn) btn.textContent = 'Conectar';
+    });
     
     // Cargar nombre del usuario
     try {
@@ -3123,11 +3157,12 @@ async function mostrarPantallaOnboarding() {
 function configurarEventosOnboarding() {
     console.log('🔧 Configurando eventos de onboarding...');
     
-    // Botones de conexión
+    // Botones de conexión - ahora abren el modal
     document.querySelectorAll('.btn-onboarding-conectar').forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
-            manejadorConexion(btn);
+            const plataforma = btn.dataset.plataforma;
+            abrirConexionOnboarding(plataforma);
         };
     });
     
@@ -3150,98 +3185,79 @@ function configurarEventosOnboarding() {
     }
 }
 
-// Manejador de conexión
-async function manejadorConexion(btn) {
-    const plataforma = btn.dataset.plataforma;
-    const camposDiv = document.getElementById(`onboarding-campos-${plataforma}`);
+// ========== FUNCIONES PARA ABRIR MODAL DESDE ONBOARDING ==========
+
+// Abrir modal de conexión desde onboarding
+function abrirConexionOnboarding(plataforma) {
+    _plataformaOnboardingActual = plataforma;
     
-    if (camposDiv && camposDiv.style.display === 'none') {
-        // Cerrar otros campos y mostrar este
-        document.querySelectorAll('[id^="onboarding-campos-"]').forEach(c => c.style.display = 'none');
-        camposDiv.style.display = 'block';
-    } else if (camposDiv && camposDiv.style.display === 'block') {
-        // Recolectar datos
-        const inputs = camposDiv.querySelectorAll('input');
-        let valido = true;
-        const datos = {};
-        
-        inputs.forEach(input => {
-            const key = input.placeholder.toLowerCase().replace(/ /g, '_');
-            datos[key] = input.value;
-            if (!input.value.trim()) valido = false;
-        });
-        
-        if (!valido) {
-            toast('⚠️ Completá todos los campos', 'warning');
-            return;
-        }
-        
-        // Conectar
-        const textoOriginal = btn.textContent;
-        btn.textContent = 'Conectando...';
-        btn.disabled = true;
-        
-        const success = await conectarPlataformaAPI(plataforma, datos);
-        
-        btn.textContent = textoOriginal;
-        btn.disabled = false;
-        
-        if (success) {
-            const descSpan = document.getElementById(`onboarding-desc-${plataforma}`);
-            if (descSpan) {
-                descSpan.innerHTML = '<span style="color:#00e676;">✓ Conectado</span>';
-            }
-            btn.textContent = 'Reconectar';
-            camposDiv.style.display = 'none';
-            
-            tieneTiendaConectadaOnboarding = true;
-            const btnContinuar = document.getElementById('btnContinuarOnboarding');
-            if (btnContinuar) {
-                btnContinuar.disabled = false;
-                btnContinuar.style.opacity = '1';
-            }
-        }
-    } else {
-        // Plataforma sin campos
-        const success = await conectarPlataformaAPI(plataforma, {});
-        if (success) {
-            const descSpan = document.getElementById(`onboarding-desc-${plataforma}`);
-            if (descSpan) {
-                descSpan.innerHTML = '<span style="color:#00e676;">✓ Conectado</span>';
-            }
-            btn.textContent = 'Reconectar';
-            tieneTiendaConectadaOnboarding = true;
-            const btnContinuar = document.getElementById('btnContinuarOnboarding');
-            if (btnContinuar) {
-                btnContinuar.disabled = false;
-                btnContinuar.style.opacity = '1';
-            }
-        }
+    // Limpiar error
+    const errDiv = document.getElementById('negMsgError');
+    if (errDiv) errDiv.style.display = 'none';
+    
+    // Ocultar todos los forms
+    document.querySelectorAll('.neg-form').forEach(f => f.style.display = 'none');
+    
+    const NOMBRES = {
+        woocommerce: 'WooCommerce',
+        mercadolibre: 'Mercado Libre',
+        tiendanube: 'Tienda Nube',
+        empretienda: 'Empretienda',
+        rappi: 'Rappi',
+        vtex: 'VTEX'
+    };
+    
+    const modalTitle = document.getElementById('negModalTitle');
+    if (modalTitle) {
+        modalTitle.innerHTML = `<span class="material-icons" style="color:var(--orange-2)">link</span> Conectar ${NOMBRES[plataforma] || plataforma}`;
     }
+    
+    // Mostrar form correspondiente
+    const formMap = {
+        woocommerce: 'negFormWoo',
+        mercadolibre: 'negFormML',
+        tiendanube: 'negFormTN',
+        empretienda: 'negFormEM',
+        rappi: 'negFormRappi',
+        vtex: 'negFormVTEX'
+    };
+    
+    const formId = formMap[plataforma];
+    if (formId) {
+        const form = document.getElementById(formId);
+        if (form) form.style.display = 'block';
+    }
+    
+    // Cambiar texto del botón
+    const isOAuth = ['woocommerce', 'mercadolibre'].includes(plataforma);
+    const btnConectar = document.querySelector('#negModal .btn-registrar');
+    if (btnConectar) {
+        btnConectar.innerHTML = isOAuth 
+            ? '<span class="material-icons" style="font-size:14px!important">link</span> Ir a autorizar →'
+            : '<span class="material-icons" style="font-size:14px!important">save</span> Conectar';
+    }
+    
+    // Abrir modal
+    const overlay = document.getElementById('negModalOverlay');
+    const modal = document.getElementById('negModal');
+    if (overlay) overlay.classList.add('open');
+    if (modal) modal.classList.add('open');
 }
 
-// Conectar plataforma API
-async function conectarPlataformaAPI(plataforma, datos) {
-    try {
-        const res = await fetch('/api/integrations', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ platform: plataforma, ...datos })
-        });
-        const result = await res.json();
-        
-        if (res.ok && result.ok !== false) {
-            toast(`✅ ${plataforma} conectada correctamente`, 'success');
-            return true;
-        } else {
-            toast(`❌ Error: ${result.error || 'No se pudo conectar'}`, 'error');
-            return false;
-        }
-    } catch (err) {
-        console.error('Error al conectar:', err);
-        toast('❌ Error de conexión con el servidor', 'error');
-        return false;
+// Función para actualizar el onboarding después de conexión exitosa
+function actualizarOnboardingDespuesDeConexion(plataforma) {
+    const descSpan = document.getElementById(`onboarding-desc-${plataforma}`);
+    if (descSpan) {
+        descSpan.innerHTML = '<span style="color:#00e676;">✓ Conectado</span>';
+    }
+    const btn = document.querySelector(`.btn-onboarding-conectar[data-plataforma="${plataforma}"]`);
+    if (btn) btn.textContent = 'Reconectar';
+    
+    tieneTiendaConectadaOnboarding = true;
+    const btnContinuar = document.getElementById('btnContinuarOnboarding');
+    if (btnContinuar) {
+        btnContinuar.disabled = false;
+        btnContinuar.style.opacity = '1';
     }
 }
 
@@ -3252,7 +3268,6 @@ async function continuarOnboarding() {
         return;
     }
     
-    // Verificar ARCA
     try {
         const res = await fetch('/api/user/arca-status', { credentials: 'include' });
         const data = await res.json();
@@ -3268,19 +3283,17 @@ async function continuarOnboarding() {
     }
 }
 
-// Configurar más tarde (saltar onboarding)
+// Configurar más tarde
 function configurarMasTarde() {
     mostrarVista('dashboard');
     toast('⚠️ Podés conectar tu tienda más tarde desde "Conectar Mi Negocio"', 'warning');
 }
 
-// Modificar la función mostrarVista existente para soportar 'arca' y otras vistas
-// (Tu función mostrarVista ya existe, está bien)
-
 // ========== INICIALIZAR AL CARGAR LA PÁGINA ==========
-// Agregar esto al final del DOMContentLoaded o crear uno nuevo
 document.addEventListener('DOMContentLoaded', () => {
-    // Pequeño delay para asegurar que todo está cargado
+    // Inicializar límites
+    cargarLimitesLote();
+    
     setTimeout(() => {
         redirigirPostLogin();
     }, 500);

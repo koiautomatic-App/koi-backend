@@ -3163,3 +3163,13 @@ async function mostrarOnboardingSiNecesario() {
         console.error('Error verificando integraciones:', err);
     }
 }
+// ========== TOGGLE CATEGORÍA  ==========
+function toggleCategoriaField() {
+    const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+    const categoriaGroup = document.getElementById('categoriaGroup2');
+    
+    if (condicionSelect && categoriaGroup) {
+        const esMonotributo = condicionSelect.value === 'monotributo';
+        categoriaGroup.style.display = esMonotributo ? 'block' : 'none';
+    }
+}

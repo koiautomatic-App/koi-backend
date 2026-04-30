@@ -2018,160 +2018,212 @@ async function enviarMail(orderId) {
 }
 
 /* ── INIT ──────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', async () => {
-  _initDashPeriod();
 
-  // Cargar datos reales desde la API REST
-  try {
-    // Período por defecto: mes actual
-    const _ahora = new Date();
-    const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString();
-    const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth()+1, 0, 23, 59, 59).toISOString();
-    const raw  = await api.get(`/api/stats/dashboard?desde=${_desde}&hasta=${_hasta}`);
-    const data = adaptarStats(raw);
-    if (data) {
-      cargarDashboard(data);
-    } else {
-      renderStatus(false);
-      cargarDashboard(MOCK);
-    }
-  } catch(e) {
-    console.error('Init error:', e.message);
-    // Si falla auth → redirigir al login
-    if (e.message.includes('401') || e.message.includes('autenticado')) {
-      window.location.href = '/login';
-      return;
-    }
-    renderStatus(false);
-    toast('Error cargando datos: ' + e.message, 'error');
-    cargarDashboard(MOCK);
-  }
+// ========== VARIABLE GLOBAL DE CONDICIÓN FISCAL ==========
+let _condicionFiscal = null;
 
-  // Detectar retorno de OAuth
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('woo') === 'connected') {
-    toast('✅ WooCommerce conectado correctamente', 'success');
-    history.replaceState({}, '', '/dashboard');
-    mostrarVista('negocio');
-  }
-  if (params.get('ml') === 'connected') {
-    toast('✅ Mercado Libre conectado correctamente', 'success');
-    history.replaceState({}, '', '/dashboard');
-    mostrarVista('negocio');
-  }
-  if (params.get('error') === 'ml_failed') {
-    toast('Error al conectar Mercado Libre', 'error');
-    history.replaceState({}, '', '/dashboard');
-  }
-  
-  // 👇 AGREGAR ESTA LÍNEA 👇
-  conectarBusquedaComprobantes();
-});
-// Función para mostrar/ocultar el campo de categoría según condición fiscal
-function toggleCategoriaField() {
-  const condicionSelect = document.getElementById('cfgCondicionFiscal2');
-  const categoriaGroup = document.getElementById('categoriaGroup2');
-  const categoriaSelect = document.getElementById('cfgCategoria2');
-  
-  if (!condicionSelect || !categoriaGroup) return;
-  
-  const condicion = condicionSelect.value;
-  
-  if (condicion === 'monotributo') {
-    // Mostrar y habilitar el campo de categoría
-    categoriaGroup.style.display = 'block';
-    if (categoriaSelect) categoriaSelect.disabled = false;
-  } else {
-    // Ocultar y deshabilitar el campo de categoría
-    categoriaGroup.style.display = 'none';
-    if (categoriaSelect) categoriaSelect.disabled = true;
-  }
+// ========== FUNCIONES DE CONDICIÓN FISCAL ==========
+
+// Función para cargar la condición fiscal del usuario
+async function cargarCondicionFiscal() {
+    try {
+        const res = await fetch('/api/me');
+        const { user } = await res.json();
+        if (user?.settings?.condicionFiscal) {
+            _condicionFiscal = user.settings.condicionFiscal;
+        } else {
+            _condicionFiscal = 'responsable_inscripto';
+        }
+    } catch (err) {
+        console.warn('Error cargando condición fiscal:', err);
+        _condicionFiscal = 'responsable_inscripto';
+    }
+    console.log('📋 Condición fiscal cargada:', _condicionFiscal);
 }
+
+// Función para obtener la condición fiscal actual
+function getCondicionFiscal() {
+    return _condicionFiscal || 'responsable_inscripto';
+}
+
+// Función para obtener el mensaje según condición fiscal
+function getMensajePeriodoAnterior() {
+    const condicion = getCondicionFiscal();
+    
+    if (condicion === 'monotributo') {
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
+            Verificá antes de continuar.
+        `;
+    } else if (condicion === 'responsable_inscripto') {
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
+            Verificá tu situación fiscal antes de continuar.
+        `;
+    } else {
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar tu declaración fiscal del período actual.<br>
+            Verificá antes de continuar.
+        `;
+    }
+}
+
+// ========== INIT (UNIFICADO) ==========
+document.addEventListener('DOMContentLoaded', async () => {
+    // Cargar condición fiscal primero
+    await cargarCondicionFiscal();
+    
+    // Cargar configuración del usuario
+    await cargarConfiguracion();
+    
+    // Inicializar período del dashboard
+    _initDashPeriod();
+
+    // Cargar datos reales desde la API REST
+    try {
+        const _ahora = new Date();
+        const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString();
+        const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        const raw = await api.get(`/api/stats/dashboard?desde=${_desde}&hasta=${_hasta}`);
+        const data = adaptarStats(raw);
+        if (data) {
+            cargarDashboard(data);
+        } else {
+            renderStatus(false);
+            cargarDashboard(MOCK);
+        }
+    } catch(e) {
+        console.error('Init error:', e.message);
+        if (e.message.includes('401') || e.message.includes('autenticado')) {
+            window.location.href = '/login';
+            return;
+        }
+        renderStatus(false);
+        toast('Error cargando datos: ' + e.message, 'error');
+        cargarDashboard(MOCK);
+    }
+
+    // Detectar retorno de OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('woo') === 'connected') {
+        toast('✅ WooCommerce conectado correctamente', 'success');
+        history.replaceState({}, '', '/dashboard');
+        mostrarVista('negocio');
+    }
+    if (params.get('ml') === 'connected') {
+        toast('✅ Mercado Libre conectado correctamente', 'success');
+        history.replaceState({}, '', '/dashboard');
+        mostrarVista('negocio');
+    }
+    if (params.get('error') === 'ml_failed') {
+        toast('Error al conectar Mercado Libre', 'error');
+        history.replaceState({}, '', '/dashboard');
+    }
+    
+    // Conectar búsqueda de comprobantes
+    conectarBusquedaComprobantes();
+    
+    // Configurar auto-guardado de límites
+    initAutoGuardadoLimites();
+});
+
+// ========== FUNCIONES DE CONFIGURACIÓN ==========
 
 // Modificar la función guardarPerfilVista() para incluir condicionFiscal
 async function guardarPerfilVista() {
-  const condicionFiscal = document.getElementById('cfgCondicionFiscal2').value;
-  const categoria = document.getElementById('cfgCategoria2').value;
-  const cuit = document.getElementById('cfgCuit2').value;
-  const email = document.getElementById('cfgEmail2').value;
-  
-  const payload = {
-    condicionFiscal,
-    categoria: condicionFiscal === 'monotributo' ? categoria : 'C',
-    cuit,
-    email
-  };
-  
-  // Mostrar loading
-  const btn = event?.target?.closest?.('.btn-cfg-save') || document.querySelector('.btn-cfg-save');
-  if (btn) btn.disabled = true;
-  
-  try {
-    const res = await fetch('/api/me/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const condicionFiscal = document.getElementById('cfgCondicionFiscal2').value;
+    const categoria = document.getElementById('cfgCategoria2').value;
+    const cuit = document.getElementById('cfgCuit2').value;
+    const email = document.getElementById('cfgEmail2').value;
     
-    const data = await res.json();
+    const payload = {
+        condicionFiscal,
+        categoria: condicionFiscal === 'monotributo' ? categoria : 'C',
+        cuit,
+        email
+    };
     
-    if (data.ok) {
-      // Mostrar mensaje de éxito
-      const statusDiv = document.getElementById('cfgSaveStatus2');
-      if (statusDiv) {
-        statusDiv.style.display = 'block';
-        setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
-      }
-      console.log('✅ Configuración guardada:', payload);
-    } else {
-      alert('Error: ' + (data.error || 'No se pudo guardar'));
+    const btn = event?.target?.closest?.('.btn-cfg-save') || document.querySelector('.btn-cfg-save');
+    if (btn) btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+            // Actualizar variable global de condición fiscal
+            _condicionFiscal = condicionFiscal;
+            
+            const statusDiv = document.getElementById('cfgSaveStatus2');
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+            }
+            console.log('✅ Configuración guardada:', payload);
+            
+            // Si el modal de lote está abierto, actualizar mensaje
+            const desde = document.getElementById('loteFechaDesde')?.value;
+            const hasta = document.getElementById('loteFechaHasta')?.value;
+            if (desde && hasta && _lotePrevio) {
+                const errorDiv = document.getElementById('loteError');
+                if (typeof verificarLimitesYContinuar === 'function') {
+                    verificarLimitesYContinuar(desde, hasta, errorDiv);
+                }
+            }
+        } else {
+            alert('Error: ' + (data.error || 'No se pudo guardar'));
+        }
+    } catch (err) {
+        console.error('Error al guardar:', err);
+        alert('Error al guardar la configuración');
+    } finally {
+        if (btn) btn.disabled = false;
     }
-  } catch (err) {
-    console.error('Error al guardar:', err);
-    alert('Error al guardar la configuración');
-  } finally {
-    if (btn) btn.disabled = false;
-  }
 }
 
 // Función para cargar los datos del usuario
 async function cargarConfiguracion() {
-  try {
-    const res = await fetch('/api/me');
-    const { user } = await res.json();
-    
-    if (user?.settings) {
-      // Cargar condición fiscal
-      const condicion = user.settings.condicionFiscal || 'responsable_inscripto';
-      const condicionSelect = document.getElementById('cfgCondicionFiscal2');
-      if (condicionSelect) condicionSelect.value = condicion;
-      
-      // Cargar categoría
-      const categoria = user.settings.categoria || 'C';
-      const categoriaSelect = document.getElementById('cfgCategoria2');
-      if (categoriaSelect) categoriaSelect.value = categoria;
-      
-      // Cargar CUIT
-      const cuitInput = document.getElementById('cfgCuit2');
-      if (cuitInput && user.settings.cuit) cuitInput.value = user.settings.cuit;
-      
-      // Aplicar visibilidad del campo categoría
-      toggleCategoriaField();
+    try {
+        const res = await fetch('/api/me');
+        const { user } = await res.json();
+        
+        if (user?.settings) {
+            // Sincronizar variable global de condición fiscal
+            _condicionFiscal = user.settings.condicionFiscal || 'responsable_inscripto';
+            
+            // Cargar condición fiscal
+            const condicion = user.settings.condicionFiscal || 'responsable_inscripto';
+            const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+            if (condicionSelect) condicionSelect.value = condicion;
+            
+            // Cargar categoría
+            const categoria = user.settings.categoria || 'C';
+            const categoriaSelect = document.getElementById('cfgCategoria2');
+            if (categoriaSelect) categoriaSelect.value = categoria;
+            
+            // Cargar CUIT
+            const cuitInput = document.getElementById('cfgCuit2');
+            if (cuitInput && user.settings.cuit) cuitInput.value = user.settings.cuit;
+            
+            // Cargar email
+            const emailInput = document.getElementById('cfgEmail2');
+            if (emailInput && user.email) emailInput.value = user.email;
+            
+            // Aplicar visibilidad del campo categoría
+            toggleCategoriaField();
+        }
+    } catch (err) {
+        console.error('Error al cargar configuración:', err);
     }
-  } catch (err) {
-    console.error('Error al cargar configuración:', err);
-  }
 }
-
-// Agregar event listener cuando se carga la página
-document.addEventListener('DOMContentLoaded', () => {
-  cargarConfiguracion();
-  
-  const condicionSelect = document.getElementById('cfgCondicionFiscal2');
-  if (condicionSelect) {
-    condicionSelect.addEventListener('change', toggleCategoriaField);
-  }
-});
 
 // Cancelar factura y emitir Nota de Crédito
 async function cancelarFactura(orderId) {
@@ -2199,6 +2251,7 @@ async function cancelarFactura(orderId) {
         toast('Error: ' + e.message, 'error');
     }
 }
+
 // Forzar regeneración automática al cargar la página
 (function() {
     const originalLoad = window.onload;
@@ -2212,6 +2265,7 @@ async function cancelarFactura(orderId) {
         }, 100);
     };
 })();
+
 // ==================== EMITIR LOTE (FLUJO DE DOS PASOS) ====================
 
 let _pasoActualLote = 1;      // 1: selección, 2: confirmación
@@ -2453,83 +2507,70 @@ function volverPasoSeleccionLote() {
 
 // ========== VALIDACIÓN DE LÍMITES ==========
 
-function verificarLimitesYContinuar(desde, hasta, errorDiv) {
-    if (!errorDiv || errorDiv.id !== 'loteError') {
-        errorDiv = document.getElementById('loteError');
+// ========== CASO 1: ERROR BLOQUEANTE ==========
+if (bloquea) {
+    let erroresLista = '';
+    let advertenciaFiscal = '';
+    
+    // Advertencia fiscal (si el período es anterior)
+    if (esPeriodoAnterior) {
+        advertenciaFiscal = `
+            <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <span>📅</span>
+                    <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                        <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                        Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
+                        Verificá tu situación fiscal antes de continuar.
+                    </span>
+                </div>
+            </div>
+        `;
     }
     
-    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    if (excedeFacturas) {
+        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+            <span>⚠️</span>
+            <span><strong>La operación intenta emitir ${_lotePrevio.total} facturas</strong> (máximo: ${maxFacturas})</span>
+        </div>`;
+    }
+    if (excedeMonto) {
+        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+            <span>⚠️</span>
+            <span><strong>El monto total alcanza ${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite: ${formatCurrency(maxMonto)})</span>
+        </div>`;
+    }
+    if (excedeDias) {
+        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+            <span>⚠️</span>
+            <span><strong>El período abarca ${diffDays} días</strong> (máximo: ${maxDias} días)</span>
+        </div>`;
+    }
+    if (periodoMuyAntiguo) {
+        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+            <span>⚠️</span>
+            <span><strong>El período terminó hace ${diasDesdePeriodo} días</strong> (máximo: ${maxDias} días atrás)</span>
+        </div>`;
+    }
     
-    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
-    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
-    const maxDiasActivo = window._limitesConfig?.activarDias !== false;
-    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
-    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
-    const maxDias = window._limitesConfig?.maxDias || 90;
-    
-    const fechaDesde = new Date(desde);
-    const fechaHasta = new Date(hasta);
-    const hoy = new Date();
-    const mesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    const esPeriodoAnterior = fechaHasta < mesActual;
-    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
-    const excedeDias = maxDiasActivo && diffDays > maxDias;
-    
-    // 👇 NUEVA VALIDACIÓN: días desde que terminó el período hasta hoy
-    const diasDesdePeriodo = Math.ceil((hoy - fechaHasta) / (1000 * 60 * 60 * 24));
-    const periodoMuyAntiguo = maxDiasActivo && diasDesdePeriodo > maxDias;
-    
-    const excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
-    const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
-    
-    // INCLUIR periodoMuyAntiguo en el bloqueo
-    const bloquea = excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo;
-    
-    // ========== CASO 1: ERROR BLOQUEANTE ==========
-    if (bloquea) {
-        let mensajeUnificado = `<div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+    let mensajeUnificado = `
+        <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
                 <div style="width: 44px; height: 44px; background: rgba(255,61,87,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
                     <span style="font-size: 24px;">🛡️</span>
                 </div>
                 <div>
                     <div style="font-weight: 800; font-size: 16px; color: var(--red);">ADVERTENCIAS DE SEGURIDAD</div>
-                    <div style="font-size: 12px; color: var(--text-3);">Estamos cuidando tus intereses</div>
                 </div>
             </div>
+            ${advertenciaFiscal}
             <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
                 <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
                     <span style="font-size: 18px;">🚫</span>
                     <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">No se puede continuar con la emisión por lote</span>
                 </div>
-                <div style="display: flex; flex-direction: column; gap: 10px;">`;
-        
-        if (excedeFacturas) {
-            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-                <span>⚠️</span>
-                <span><strong>La operación intenta emitir ${_lotePrevio.total} facturas</strong> (máximo: ${maxFacturas})</span>
-            </div>`;
-        }
-        if (excedeMonto) {
-            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-                <span>⚠️</span>
-                <span><strong>El monto total alcanza ${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite: ${formatCurrency(maxMonto)})</span>
-            </div>`;
-        }
-        if (excedeDias) {
-            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-                <span>⚠️</span>
-                <span><strong>El período abarca ${diffDays} días</strong> (máximo: ${maxDias} días)</span>
-            </div>`;
-        }
-        if (periodoMuyAntiguo) {
-            mensajeUnificado += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-                <span>⚠️</span>
-                <span><strong>El período terminó hace ${diasDesdePeriodo} días</strong> (máximo: ${maxDias} días atrás)</span>
-            </div>`;
-        }
-        
-        mensajeUnificado += `
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    ${erroresLista}
                 </div>
             </div>
             <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
@@ -2546,60 +2587,24 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
                 <span>🔒</span>
                 <span>Estamos cuidando tus intereses</span>
             </div>
-        </div>`;
-        
-        if (errorDiv) {
-            errorDiv.innerHTML = mensajeUnificado;
-            errorDiv.style.display = 'block';
-            errorDiv.style.background = 'transparent';
-            errorDiv.style.border = 'none';
-            errorDiv.style.padding = '0';
-        }
-        
-        if (btnSiguiente) {
-            btnSiguiente.disabled = true;
-            btnSiguiente.style.opacity = '0.5';
-            btnSiguiente.style.cursor = 'not-allowed';
-        }
-        toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
-        return;
+        </div>
+    `;
+    
+    if (errorDiv) {
+        errorDiv.innerHTML = mensajeUnificado;
+        errorDiv.style.display = 'block';
+        errorDiv.style.background = 'transparent';
+        errorDiv.style.border = 'none';
+        errorDiv.style.padding = '0';
     }
     
-    // ========== CASO 2: ADVERTENCIA INFORMATIVA ==========
-    if (esPeriodoAnterior) {
-        if (errorDiv) {
-            errorDiv.innerHTML = `
-                <div style="background: rgba(255,179,0,0.08); border: 1px solid rgba(255,179,0,0.2); border-radius: 12px; padding: 12px; margin-top: 12px;">
-                    <div style="font-weight: 700; margin-bottom: 6px; color: var(--yellow);">📅 Período anterior al mes actual</div>
-                    <div style="font-size: 12px; color: var(--text-2);">Verificá que el período seleccionado sea correcto antes de continuar.</div>
-                </div>
-            `;
-            errorDiv.style.display = 'block';
-        }
-    } else {
-        if (errorDiv) {
-            errorDiv.style.display = 'none';
-            errorDiv.innerHTML = '';
-        }
-    }
-    
-    // ========== CONTINUAR AL PASO 2 ==========
     if (btnSiguiente) {
-        btnSiguiente.disabled = false;
-        btnSiguiente.style.opacity = '1';
-        btnSiguiente.style.cursor = 'pointer';
+        btnSiguiente.disabled = true;
+        btnSiguiente.style.opacity = '0.5';
+        btnSiguiente.style.cursor = 'not-allowed';
     }
-    
-    if (_lotePrevio.total === 0) {
-        if (errorDiv) {
-            errorDiv.innerText = 'No hay órdenes pendientes en este período';
-            errorDiv.style.display = 'block';
-        }
-        return;
-    }
-    
-    _pasoActualLote = 2;
-    mostrarPasoConfirmacionLote();
+    toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
+    return;
 }
 
 // ========== RESUMEN DE CONFIRMACIÓN ==========
@@ -2615,6 +2620,17 @@ async function cargarResumenConfirmacionLote() {
     
     const desde = document.getElementById('loteFechaDesde')?.value || '';
     const hasta = document.getElementById('loteFechaHasta')?.value || '';
+    
+    const advertenciaImputacion = `
+        <div style="background: rgba(255,179,0,0.08); border-left: 3px solid var(--yellow); padding: 10px 12px; margin-top: 14px; border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">📅</span>
+                <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                    ${getMensajePeriodoAnterior()}
+                </span>
+            </div>
+        </div>
+    `;
     
     confirmacionDiv.innerHTML = `
         <div style="background: var(--card-2); border-radius: 12px; padding: 16px;">
@@ -2633,6 +2649,7 @@ async function cargarResumenConfirmacionLote() {
             <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: var(--text-3);">
                 📋 Esta acción emitirá CAE para TODAS las órdenes pendientes en el período seleccionado.
             </div>
+            ${advertenciaImputacion}
         </div>
     `;
 }
@@ -2755,7 +2772,7 @@ function toggleModoPruebaLote() {
 
 console.log(`🧪 Modo prueba inicial: ${window._modoPruebaLote ? 'ACTIVADO' : 'DESACTIVADO'}`);
 
-// ==================== LÍMITES CONFIGURABLES (VERSIÓN DEFINITIVA) ====================
+// ==================== LÍMITES CONFIGURABLES ====================
 
 // Cargar límites desde localStorage a inputs
 function cargarLimitesLote() {
@@ -2836,7 +2853,6 @@ function guardarLimitesLote() {
     window._limitesConfig = { maxFacturas, maxMonto, maxDias, activarFacturas, activarMonto, activarDias };
     localStorage.setItem('koi_limites_lote', JSON.stringify(window._limitesConfig));
     
-    // SIN TOAST - solo se guarda silenciosamente
     console.log('✅ Límites guardados:', window._limitesConfig);
 }
 
@@ -2865,6 +2881,34 @@ function initAutoGuardadoLimites() {
     console.log('✅ Auto-guardado silencioso de límites configurado');
 }
 
+// ========== TOGGLE DE LÍMITES ==========
+
+function toggleLimiteFacturas(activado) {
+    const campo = document.getElementById('campoMaxFacturas');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxFacturas');
+        if (input) input.disabled = !activado;
+    }
+}
+
+function toggleLimiteMonto(activado) {
+    const campo = document.getElementById('campoMaxMonto');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxMonto');
+        if (input) input.disabled = !activado;
+    }
+}
+
+function toggleLimiteDias(activado) {
+    const campo = document.getElementById('campoMaxDias');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxDias');
+        if (input) input.disabled = !activado;
+    }
+}
+
 // Inicializar límites
 cargarLimitesLote();
-initAutoGuardadoLimites();

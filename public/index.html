@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>KOI-FACTURA | Facturación electrónica sin complicaciones</title>
+  <title>KOI-FACTURA | Próximamente</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <style>
@@ -53,8 +53,8 @@
     .nav-name span { color: #F97316; }
 
     .nav-links { display: flex; gap: 32px; }
-    .nav-links a { font-size: 13px; font-weight: 500; color: #4B5563; transition: color .2s; }
-    .nav-links a:hover { color: #F9FAFB; }
+    .nav-links a { font-size: 13px; font-weight: 500; color: #4B5563; transition: color .2s; cursor: default; }
+    .nav-links a:hover { color: #4B5563; }
 
     .nav-right { display: flex; gap: 10px; align-items: center; }
 
@@ -62,17 +62,22 @@
       font-size: 13px; font-weight: 600; color: #6B7280;
       padding: 8px 18px; border-radius: 8px;
       border: 0.5px solid rgba(255,255,255,0.08);
-      transition: all .2s;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
-    .btn-ghost:hover { color: #F9FAFB; border-color: rgba(255,255,255,0.15); }
 
     .btn-primary {
       font-size: 13px; font-weight: 700; color: #fff;
       padding: 8px 20px; border-radius: 8px;
       background: linear-gradient(90deg, #F97316, #FB923C);
-      transition: opacity .2s;
+      cursor: not-allowed;
+      opacity: 0.5;
     }
-    .btn-primary:hover { opacity: .9; }
+
+    /* Badge de "En desarrollo" sobre los botones */
+    .dev-badge-tooltip {
+      position: relative;
+    }
 
     /* ── HERO ── */
     .hero-wrap {
@@ -103,6 +108,23 @@
 
     .hero-eyebrow-dot { width: 5px; height: 5px; border-radius: 50%; background: #F97316; }
 
+    /* Banner de desarrollo */
+    .dev-banner {
+      background: rgba(249,115,22,0.08);
+      border: 0.5px solid rgba(249,115,22,0.2);
+      border-radius: 12px;
+      padding: 12px 20px;
+      margin-bottom: 24px;
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: #FB923C;
+    }
+    .dev-banner svg {
+      flex-shrink: 0;
+    }
+
     .hero-h1 {
       font-size: 54px;
       font-weight: 900;
@@ -130,18 +152,18 @@
       font-size: 15px; font-weight: 700; color: #fff;
       padding: 14px 28px; border-radius: 10px;
       background: linear-gradient(90deg, #F97316, #FB923C);
-      transition: opacity .2s;
+      cursor: not-allowed;
+      opacity: 0.5;
     }
-    .btn-hero-primary:hover { opacity: .9; }
 
     .btn-hero-secondary {
       display: flex; align-items: center; gap: 8px;
       font-size: 14px; font-weight: 600; color: #9CA3AF;
       padding: 14px 22px; border-radius: 10px;
       border: 0.5px solid rgba(255,255,255,0.08);
-      transition: all .2s;
+      cursor: not-allowed;
+      opacity: 0.6;
     }
-    .btn-hero-secondary:hover { color: #F9FAFB; border-color: rgba(255,255,255,0.15); }
 
     .hero-proof { display: flex; align-items: center; gap: 16px; }
     .hero-proof-stat { font-size: 12px; color: #4B5563; display: flex; align-items: center; gap: 5px; }
@@ -250,6 +272,29 @@
       max-width: 460px;
       margin-left: auto;
       margin-right: auto;
+    }
+
+    /* Overlay de desarrollo en secciones interactivas */
+    .dev-overlay {
+      position: relative;
+      pointer-events: none;
+    }
+    
+    .dev-overlay::after {
+      content: "⚙️ En desarrollo";
+      position: absolute;
+      top: 20px;
+      right: 20px;
+      background: rgba(0,0,0,0.8);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 11px;
+      font-weight: 600;
+      color: #FB923C;
+      border: 0.5px solid rgba(249,115,22,0.3);
+      pointer-events: none;
+      z-index: 10;
     }
 
     /* ── FLUJO ── */
@@ -449,6 +494,7 @@
       border-radius: 20px;
       overflow: hidden;
       margin-top: 40px;
+      position: relative;
     }
 
     .price-top-bar { height: 3px; background: linear-gradient(90deg, #F97316, #22C55E); }
@@ -504,13 +550,30 @@
       font-family: 'Inter', sans-serif;
       font-size: 15px;
       font-weight: 700;
-      cursor: pointer;
+      cursor: not-allowed;
       letter-spacing: 0.02em;
-      transition: opacity .2s;
+      opacity: 0.5;
     }
-    .price-btn:hover { opacity: .9; }
 
     .price-footnote { text-align: center; font-size: 12px; color: #1F2937; margin-top: 14px; }
+
+    /* Tooltip flotante para indicar que es demo */
+    .dev-watermark {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: rgba(0,0,0,0.7);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 30px;
+      font-size: 10px;
+      font-weight: 500;
+      color: #FB923C;
+      border: 0.5px solid rgba(249,115,22,0.3);
+      z-index: 1000;
+      pointer-events: none;
+      font-family: monospace;
+    }
 
     /* ── FOOTER CTA ── */
     .footer-cta {
@@ -545,7 +608,7 @@
     .footer-copy { font-size: 11px; color: #1F2937; }
 
     .footer-links { display: flex; gap: 24px; }
-    .footer-links a { font-size: 11px; color: #1F2937; transition: color .2s; }
+    .footer-links a { font-size: 11px; color: #1F2937; transition: color .2s; cursor: pointer; }
     .footer-links a:hover { color: #4B5563; }
 
     /* ── RESPONSIVE ── */
@@ -564,10 +627,16 @@
       .footer { flex-direction: column; gap: 16px; text-align: center; padding: 24px; }
       .footer-cta { padding: 48px 24px; }
       .divider { margin: 0 24px; }
+      .dev-banner { font-size: 11px; }
     }
   </style>
 </head>
 <body>
+
+  <!-- Watermark fijo indicando versión demo -->
+  <div class="dev-watermark">
+    🔧 KOI · En desarrollo — Acceso restringido
+  </div>
 
   <!-- NAV -->
   <nav class="nav">
@@ -582,17 +651,21 @@
       <a href="#">Ayuda</a>
     </div>
     <div class="nav-right">
-      <a href="/login" class="btn-ghost">Iniciar sesión</a>
-      <a href="/login?tab=register" class="btn-primary">Empezá gratis</a>
+      <span class="btn-ghost" style="display: inline-block;">🔒 Iniciar sesión</span>
+      <span class="btn-primary" style="display: inline-block;">🔒 Empezá gratis</span>
     </div>
   </nav>
 
   <!-- HERO -->
   <div class="hero-wrap">
     <div>
-      <div class="hero-eyebrow">
-        <div class="hero-eyebrow-dot"></div>
-        AFIP · WSFE · ARCA conectado
+      <!-- Banner de desarrollo reemplazando el eyebrow original -->
+      <div class="dev-banner">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
+          <circle cx="8" cy="8" r="6" stroke="#FB923C" stroke-width="1.2"/>
+          <path d="M8 4v4l2 2" stroke="#FB923C" stroke-width="1.2" stroke-linecap="round"/>
+        </svg>
+        ⚙️ Versión en desarrollo · Próximamente disponible
       </div>
       <h1 class="hero-h1">
         Tu negocio.<br>
@@ -601,11 +674,11 @@
       </h1>
       <p class="hero-sub">Conectá tu tienda, sincronizá con ARCA y empezá a emitir facturas electrónicas en minutos. Automático o manual — vos elegís.</p>
       <div class="hero-actions">
-        <a href="/login?tab=register" class="btn-hero-primary">
+        <span class="btn-hero-primary" style="display: inline-flex;">
           <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Empezá gratis ahora
-        </a>
-        <a href="#como-funciona" class="btn-hero-secondary">Ver cómo funciona</a>
+          🔒 Acceso restringido
+        </span>
+        <span class="btn-hero-secondary" style="display: inline-flex;">Ver cómo funciona</span>
       </div>
       <div class="hero-proof">
         <div class="hero-proof-stat"><strong>+2.400</strong> vendedores activos</div>
@@ -668,7 +741,6 @@
       <h2 class="section-h2">Automático o manual.<br>Vos mandás.</h2>
       <p class="section-sub">Tanto la facturación como el envío al cliente son configurables de forma independiente.</p>
       <div class="modes-grid">
-
         <div class="mode-card accent">
           <div class="mode-icon-row">
             <div class="mode-icon mi-orange">
@@ -680,7 +752,6 @@
           <div class="mode-desc">Con cada venta, KOI emite el comprobante al instante sin que toques nada. Ideal para tiendas con volumen.</div>
           <div class="mode-note"><b>Envío:</b> también podés configurar el envío del PDF al cliente de forma automática por mail.</div>
         </div>
-
         <div class="mode-card">
           <div class="mode-icon-row">
             <div class="mode-icon mi-green">
@@ -692,7 +763,6 @@
           <div class="mode-desc">Emitís vos desde el dashboard cuando querés. Revisás cada venta antes de facturar. Total control.</div>
           <div class="mode-note"><b>Envío:</b> también podés elegir cuándo y cómo enviar el comprobante al cliente.</div>
         </div>
-
         <div class="mode-card wide">
           <div class="mode-wide-inner">
             <div class="mode-icon mi-green">
@@ -704,7 +774,6 @@
             </div>
           </div>
         </div>
-
       </div>
     </div>
   </div>
@@ -819,10 +888,10 @@
                 <span class="price-feature-text">Soporte por WhatsApp</span>
               </div>
             </div>
-            <button class="price-btn" onclick="location.href='/login?tab=register'">
+            <span class="price-btn" style="display: flex;">
               <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              Activar KOI ahora
-            </button>
+              🔒 Próximamente
+            </span>
             <div class="price-footnote">Débito automático · Mercado Pago</div>
           </div>
         </div>
@@ -834,10 +903,10 @@
   <div class="footer-cta">
     <h2>¿Listo para empezar?</h2>
     <p>Sumáte a los miles de vendedores que ya simplificaron su facturación.</p>
-    <a href="/login?tab=register" class="btn-hero-primary" style="display:inline-flex;">
+    <span class="btn-hero-primary" style="display: inline-flex; cursor: not-allowed; opacity: 0.5;">
       <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M7.5 1.5L13 7.5 7.5 13.5M1.5 7.5h11" stroke="#fff" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      Activar KOI ahora
-    </a>
+      🔒 Próximamente
+    </span>
   </div>
 
   <!-- FOOTER -->
@@ -845,7 +914,7 @@
     <div class="footer-left">
       <div class="nav-fish" style="width:26px;height:26px;border-radius:6px;font-size:12px;">K</div>
       <span class="footer-brand">KOI-FACTURA</span>
-      <span class="footer-copy">· Sistema de Facturación Electrónica</span>
+      <span class="footer-copy">· Sistema de Facturación Electrónica (En desarrollo)</span>
     </div>
     <div class="footer-links">
       <a href="#">Términos y condiciones</a>

@@ -2509,14 +2509,14 @@ function volverPasoSeleccionLote() {
 
 // Función para obtener mensaje según condición fiscal (siempre el correcto)
 function getMensajePorCondicionFiscal() {
-    const condicionFiscal = window._condicionFiscal || 'responsable_inscripto';
+    // Usar _condicionFiscal en lugar de window._condicionFiscal
+    const condicionFiscal = typeof _condicionFiscal !== 'undefined' ? _condicionFiscal : 'responsable_inscripto';
     
-    if (condicionFiscal === 'monotributista') {
+    if (condicionFiscal === 'monotributo' || condicionFiscal === 'monotributista') {
         return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
                 Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
                 Verificá antes de continuar.`;
     } else {
-        // Responsable Inscripto, Exento, Consumidor Final, etc.
         return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
                 Facturar períodos anteriores puede afectar el <strong>cómputo de IVA, Ganancias y percepciones de IIBB</strong>.<br>
                 Verificá tu situación fiscal antes de continuar.`;

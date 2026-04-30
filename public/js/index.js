@@ -3012,3 +3012,108 @@ function toggleLimiteDias(activado) {
 
 // Inicializar límites
 cargarLimitesLote();
+// ========== ONBOARDING POST-LOGIN (NUEVO - SIN ROMPER EXISTENTE) ==========
+
+// Función para verificar si el usuario tiene tiendas conectadas
+async function verificarTiendasConectadas() {
+    console.log('🔍 Verificando tiendas conectadas...');
+    try {
+        const res = await fetch('/api/integrations', { 
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!res.ok) {
+            console.error('Error en /api/integrations:', res.status);
+            return false;
+        }
+        
+        const data = await res.json();
+        const integraciones = data.integrations || [];
+        console.log('📦 Integraciones encontradas:', integraciones.length);
+        return integraciones.length > 0;
+    } catch (err) {
+        console.error('❌ Error al verificar tiendas:', err);
+        return false;
+    }
+}
+
+// Función para mostrar onboarding (solo si no tiene tiendas)
+async function mostrarPantallaOnboardingSiNecesario() {
+    console.log('🔄 Verificando si mostrar onboarding...');
+    
+    const tieneTiendas = await verificarTiendasConectadas();
+    
+    if (!tieneTiendas) {
+        console.log('🚀 Usuario sin tiendas → Mostrando onboarding');
+        
+        // Ocultar todas las vistas
+        document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+        
+        // Mostrar vista negocio
+        const vistaNegocio = document.getElementById('vista-negocio');
+        if (vistaNegocio) vistaNegocio.style.display = 'block';
+        
+        // Mostrar versión onboarding, ocultar versión normal
+        const onboardingDiv = document.getElementById('onboardingNegocio');
+        const normalDiv = document.getElementById('negocioNormal');
+        
+        if (onboardingDiv) onboardingDiv.style.display = 'block';
+        if (normalDiv) normalDiv.style.display = 'none';
+        
+        // Configurar botón continuar (deshabilitado hasta conectar)
+        const btnContinuar = document.getElementById('btnContinuarOnboarding');
+        if (btnContinuar) {
+            btnContinuar.disabled = true;
+            btnContinuar.style.opacity = '0.4';
+            btnContinuar.onclick = () => {
+                console.log('➡️ Continuar a ARCA');
+                mostrarVista('arca');
+            };
+        }
+        
+        // Configurar botón más tarde
+        const btnMasTarde = document.getElementById('btnConfigurarMasTarde');
+        if (btnMasTarde) {
+            btnMasTarde.onclick = () => {
+                console.log('⏰ Configurar más tarde');
+                mostrarVista('dashboard');
+            };
+        }
+        
+        // Cargar nombre del usuario
+        try {
+            const res = await fetch('/api/me', { credentials: 'include' });
+            const data = await res.json();
+            const userNameSpan = document.getElementById('onboardingUserName');
+            if (userNameSpan && data.user) {
+                userNameSpan.textContent = data.user.nombre?.split(' ')[0] || data.user.email?.split('@')[0] || 'usuario';
+            }
+        } catch(e) {
+            console.error('Error cargando nombre:', e);
+        }
+        
+        // Escuchar conexiones exitosas para habilitar continuar
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    const conectados = document.querySelectorAll('[id^="onboarding-desc-"]');
+                    let algunaConectada = false;
+                    conectados.forEach(desc => {
+                        if (desc.innerHTML.includes('✓ Conectado')) algunaConectada = true;
+                    });
+                    if (algunaConectada && btnContinuar) {
+                        btnContinuar.disabled = false;
+                        btnContinuar.style.opacity = '1';
+                        observer.disconnect();
+                    }
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        
+    } else {
+        console.log('✅ Usuario ya tiene tiendas → No mostrar onboarding');
+    }
+}

@@ -3054,48 +3054,77 @@ function toggleLimiteDias(activado) {
         if (input) input.disabled = !activado;
     }
 }
-// ========== ONBOARDING POST-LOGIN ==========
-let tieneTiendaConectadaOnboarding = false;
-let _plataformaOnboardingActual = null;
 
-// Función principal que se ejecuta después del login
-async function redirigirPostLogin() {
-    console.log('🔍 Verificando estado del usuario...');
+// Función para cambiar entre vistas
+function mostrarVista(vista) {
+    console.log('📱 Mostrando vista:', vista);
     
-    // Verificar si tiene tiendas conectadas
-    const tieneTiendas = await verificarTiendasConectadas();
+    document.querySelectorAll('.content').forEach(el => {
+        el.style.display = 'none';
+    });
     
-    if (!tieneTiendas) {
-        console.log('🚀 Usuario sin tiendas → Mostrando onboarding');
-        await mostrarPantallaOnboarding();
-    } else {
-        console.log('✅ Usuario con tiendas → Verificando ARCA');
-        try {
-            const arcaStatus = await fetch('/api/user/arca-status', { credentials: 'include' });
-            const data = await arcaStatus.json();
-            if (data.autorizado) {
-                mostrarVista('dashboard');
-            } else {
-                mostrarVista('arca');
-            }
-        } catch(e) {
-            console.error('Error verificando ARCA:', e);
-            mostrarVista('arca');
-        }
+    const vistaElement = document.getElementById(`vista-${vista}`);
+    if (vistaElement) {
+        vistaElement.style.display = 'block';
+    }
+    
+    document.querySelectorAll('.nav-item').forEach(el => {
+        el.classList.remove('active');
+    });
+    
+    const navItem = document.getElementById(`nav-${vista}`);
+    if (navItem) {
+        navItem.classList.add('active');
     }
 }
 
-// Verificar si tiene tiendas conectadas
+// Función para notificaciones
+function toast(mensaje, tipo = 'info') {
+    console.log(`[${tipo}] ${mensaje}`);
+}
+
+// Función para verificar tiendas conectadas
 async function verificarTiendasConectadas() {
+    console.log('🔍 Verificando tiendas conectadas...');
     try {
-        const res = await fetch('/api/integrations', { credentials: 'include' });
+        const res = await fetch('/api/integrations', { 
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!res.ok) {
+            console.error('Error en /api/integrations:', res.status);
+            return false;
+        }
+        
         const data = await res.json();
         const integraciones = data.integrations || [];
         console.log('📦 Integraciones encontradas:', integraciones.length);
         return integraciones.length > 0;
     } catch (err) {
-        console.error('Error al verificar tiendas:', err);
+        console.error('❌ Error al verificar tiendas:', err);
         return false;
+    }
+}
+
+// Función principal que se ejecuta después del login
+async function redirigirPostLogin() {
+    console.log('🔍 [1] Iniciando redirigirPostLogin()');
+    
+    try {
+        const tieneTiendas = await verificarTiendasConectadas();
+        console.log('🔍 [3] tieneTiendas =', tieneTiendas);
+        
+        if (!tieneTiendas) {
+            console.log('🚀 [4] Usuario SIN tiendas → Mostrando onboarding');
+            await mostrarPantallaOnboarding();
+        } else {
+            console.log('✅ [6] Usuario CON tiendas → Mostrando Dashboard');
+            mostrarVista('dashboard');
+        }
+    } catch(error) {
+        console.error('❌ [ERROR] redirigirPostLogin:', error);
     }
 }
 
@@ -3103,196 +3132,46 @@ async function verificarTiendasConectadas() {
 async function mostrarPantallaOnboarding() {
     console.log('🔄 Mostrando onboarding...');
     
-    // Ocultar todas las vistas
     document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
     
-    // Mostrar vista negocio
     const vistaNegocio = document.getElementById('vista-negocio');
     if (vistaNegocio) vistaNegocio.style.display = 'block';
     
-    // Mostrar versión onboarding, ocultar versión normal
     const onboardingDiv = document.getElementById('onboardingNegocio');
-    const normalDiv = document.getElementById('negocioNormal');
+    if (onboardingDiv) onboardingDiv.style.display = 'block';
     
-    if (onboardingDiv) {
-        onboardingDiv.style.display = 'block';
-        console.log('✅ Onboarding visible');
-    }
+    const normalDiv = document.getElementById('negocioNormal');
     if (normalDiv) normalDiv.style.display = 'none';
     
-    // Resetear estado de conexiones
-    tieneTiendaConectadaOnboarding = false;
-    const btnContinuar = document.getElementById('btnContinuarOnboarding');
-    if (btnContinuar) {
-        btnContinuar.disabled = true;
-        btnContinuar.style.opacity = '0.4';
-    }
-    
-    // Resetear descripciones de las cards
-    const plataformas = ['woocommerce', 'mercadolibre', 'tiendanube', 'empretienda', 'rappi', 'vtex'];
-    plataformas.forEach(p => {
-        const descSpan = document.getElementById(`onboarding-desc-${p}`);
-        if (descSpan) descSpan.innerHTML = 'Sin conectar';
-        const btn = document.querySelector(`.btn-onboarding-conectar[data-plataforma="${p}"]`);
-        if (btn) btn.textContent = 'Conectar';
-    });
-    
-    // Cargar nombre del usuario
-    try {
-        const res = await fetch('/api/me', { credentials: 'include' });
-        const data = await res.json();
-        const userNameSpan = document.getElementById('onboardingUserName');
-        if (userNameSpan && data.user) {
-            userNameSpan.textContent = data.user.nombre?.split(' ')[0] || data.user.email?.split('@')[0] || 'usuario';
-        }
-    } catch(e) {
-        console.error('Error cargando nombre:', e);
-    }
-    
     // Configurar eventos
-    configurarEventosOnboarding();
-}
-
-// Configurar eventos de onboarding
-function configurarEventosOnboarding() {
-    console.log('🔧 Configurando eventos de onboarding...');
-    
-    // Botones de conexión - ahora abren el modal
     document.querySelectorAll('.btn-onboarding-conectar').forEach(btn => {
         btn.onclick = (e) => {
             e.preventDefault();
-            const plataforma = btn.dataset.plataforma;
-            abrirConexionOnboarding(plataforma);
+            const plataforma = btn.getAttribute('data-plataforma');
+            console.log('🔌 Conectar:', plataforma);
         };
     });
     
-    // Botón continuar
     const btnContinuar = document.getElementById('btnContinuarOnboarding');
     if (btnContinuar) {
-        btnContinuar.onclick = (e) => {
-            e.preventDefault();
-            continuarOnboarding();
+        btnContinuar.onclick = () => {
+            console.log('➡️ Continuar');
+            mostrarVista('arca');
         };
     }
     
-    // Botón configurar más tarde
     const btnMasTarde = document.getElementById('btnConfigurarMasTarde');
     if (btnMasTarde) {
-        btnMasTarde.onclick = (e) => {
-            e.preventDefault();
-            configurarMasTarde();
+        btnMasTarde.onclick = () => {
+            console.log('⏰ Más tarde');
+            mostrarVista('dashboard');
         };
     }
 }
 
-// ========== FUNCIONES PARA ABRIR MODAL DESDE ONBOARDING ==========
-
-// Abrir modal de conexión desde onboarding
-function abrirConexionOnboarding(plataforma) {
-    _plataformaOnboardingActual = plataforma;
-    
-    // Limpiar error
-    const errDiv = document.getElementById('negMsgError');
-    if (errDiv) errDiv.style.display = 'none';
-    
-    // Ocultar todos los forms
-    document.querySelectorAll('.neg-form').forEach(f => f.style.display = 'none');
-    
-    const NOMBRES = {
-        woocommerce: 'WooCommerce',
-        mercadolibre: 'Mercado Libre',
-        tiendanube: 'Tienda Nube',
-        empretienda: 'Empretienda',
-        rappi: 'Rappi',
-        vtex: 'VTEX'
-    };
-    
-    const modalTitle = document.getElementById('negModalTitle');
-    if (modalTitle) {
-        modalTitle.innerHTML = `<span class="material-icons" style="color:var(--orange-2)">link</span> Conectar ${NOMBRES[plataforma] || plataforma}`;
-    }
-    
-    // Mostrar form correspondiente
-    const formMap = {
-        woocommerce: 'negFormWoo',
-        mercadolibre: 'negFormML',
-        tiendanube: 'negFormTN',
-        empretienda: 'negFormEM',
-        rappi: 'negFormRappi',
-        vtex: 'negFormVTEX'
-    };
-    
-    const formId = formMap[plataforma];
-    if (formId) {
-        const form = document.getElementById(formId);
-        if (form) form.style.display = 'block';
-    }
-    
-    // Cambiar texto del botón
-    const isOAuth = ['woocommerce', 'mercadolibre'].includes(plataforma);
-    const btnConectar = document.querySelector('#negModal .btn-registrar');
-    if (btnConectar) {
-        btnConectar.innerHTML = isOAuth 
-            ? '<span class="material-icons" style="font-size:14px!important">link</span> Ir a autorizar →'
-            : '<span class="material-icons" style="font-size:14px!important">save</span> Conectar';
-    }
-    
-    // Abrir modal
-    const overlay = document.getElementById('negModalOverlay');
-    const modal = document.getElementById('negModal');
-    if (overlay) overlay.classList.add('open');
-    if (modal) modal.classList.add('open');
-}
-
-// Función para actualizar el onboarding después de conexión exitosa
-function actualizarOnboardingDespuesDeConexion(plataforma) {
-    const descSpan = document.getElementById(`onboarding-desc-${plataforma}`);
-    if (descSpan) {
-        descSpan.innerHTML = '<span style="color:#00e676;">✓ Conectado</span>';
-    }
-    const btn = document.querySelector(`.btn-onboarding-conectar[data-plataforma="${plataforma}"]`);
-    if (btn) btn.textContent = 'Reconectar';
-    
-    tieneTiendaConectadaOnboarding = true;
-    const btnContinuar = document.getElementById('btnContinuarOnboarding');
-    if (btnContinuar) {
-        btnContinuar.disabled = false;
-        btnContinuar.style.opacity = '1';
-    }
-}
-
-// Continuar al siguiente paso (ARCA)
-async function continuarOnboarding() {
-    if (!tieneTiendaConectadaOnboarding) {
-        toast('⚠️ Conectá al menos una tienda para continuar', 'warning');
-        return;
-    }
-    
-    try {
-        const res = await fetch('/api/user/arca-status', { credentials: 'include' });
-        const data = await res.json();
-        
-        if (data.autorizado) {
-            mostrarVista('dashboard');
-        } else {
-            mostrarVista('arca');
-        }
-    } catch (err) {
-        console.error('Error:', err);
-        mostrarVista('arca');
-    }
-}
-
-// Configurar más tarde
-function configurarMasTarde() {
-    mostrarVista('dashboard');
-    toast('⚠️ Podés conectar tu tienda más tarde desde "Conectar Mi Negocio"', 'warning');
-}
-
-// ========== INICIALIZAR AL CARGAR LA PÁGINA ==========
+// ========== INICIALIZAR ==========
 document.addEventListener('DOMContentLoaded', () => {
-    // Inicializar límites
-    cargarLimitesLote();
+    console.log('🚀 DOMContentLoaded ejecutado');
     
     setTimeout(() => {
         redirigirPostLogin();

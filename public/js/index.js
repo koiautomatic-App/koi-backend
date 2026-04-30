@@ -3012,3 +3012,20 @@ function toggleLimiteDias(activado) {
 
 // Inicializar límites
 cargarLimitesLote();
+async function handleLoginSuccess() {
+    // Verificar si tiene tiendas conectadas
+    const tieneTiendas = await verificarTiendasConectadas();
+    
+    if (!tieneTiendas) {
+        await mostrarPantallaOnboarding();
+    } else {
+        // Verificar ARCA y redirigir
+        const arcaStatus = await fetch('/api/user/arca-status');
+        const data = await arcaStatus.json();
+        if (data.autorizado) {
+            mostrarVista('dashboard');
+        } else {
+            mostrarVista('arca');
+        }
+    }
+}

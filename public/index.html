@@ -655,7 +655,45 @@
       <span class="btn-primary" style="display: inline-block;">🔒 Empezá gratis</span>
     </div>
   </nav>
-
+<!-- 🔥 PEGA EL SCRIPT AQUÍ, ANTES DE CERRAR HEAD 🔥 -->
+  <script>
+    (function() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isTestMode = urlParams.get('test') === '1';
+      
+      if (!isTestMode) {
+        document.addEventListener('DOMContentLoaded', function() {
+          // Deshabilitar botones de login/registro
+          const botones = document.querySelectorAll('.btn-primary, .btn-hero-primary, .price-btn, .btn-ghost');
+          botones.forEach(btn => {
+            btn.style.cursor = 'not-allowed';
+            btn.style.opacity = '0.5';
+            btn.removeAttribute('href');
+          });
+          
+          // Deshabilitar enlaces del nav
+          document.querySelectorAll('.nav-links a').forEach(link => {
+            link.style.cursor = 'default';
+            link.removeAttribute('href');
+          });
+          
+          // Watermark de desarrollo
+          const watermark = document.createElement('div');
+          watermark.innerHTML = '🔧 KOI · En desarrollo — Acceso restringido';
+          watermark.style.cssText = 'position:fixed; bottom:16px; right:16px; background:rgba(0,0,0,0.7); backdrop-filter:blur(8px); padding:6px 14px; border-radius:30px; font-size:10px; color:#FB923C; border:0.5px solid rgba(249,115,22,0.3); z-index:1000; pointer-events:none; font-family:monospace;';
+          document.body.appendChild(watermark);
+        });
+      } else {
+        document.addEventListener('DOMContentLoaded', function() {
+          const testBadge = document.createElement('div');
+          testBadge.innerHTML = '🧪 MODO PRUEBA · LOGIN HABILITADO';
+          testBadge.style.cssText = 'position:fixed; top:16px; right:16px; background:#22C55E; color:#000; padding:6px 14px; border-radius:30px; font-size:11px; font-weight:bold; z-index:1000; pointer-events:none; font-family:monospace;';
+          document.body.appendChild(testBadge);
+        });
+      }
+    })();
+  </script>
+</head>
   <!-- HERO -->
   <div class="hero-wrap">
     <div>

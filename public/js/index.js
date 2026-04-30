@@ -2507,104 +2507,198 @@ function volverPasoSeleccionLote() {
 
 // ========== VALIDACIÓN DE LÍMITES ==========
 
-// ========== CASO 1: ERROR BLOQUEANTE ==========
-if (bloquea) {
-    let erroresLista = '';
-    let advertenciaFiscal = '';
+function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    if (!errorDiv || errorDiv.id !== 'loteError') {
+        errorDiv = document.getElementById('loteError');
+    }
     
-    // Advertencia fiscal (si el período es anterior)
-    if (esPeriodoAnterior) {
-        advertenciaFiscal = `
-            <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <span>📅</span>
-                    <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
-                        <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
-                        Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
-                        Verificá tu situación fiscal antes de continuar.
-                    </span>
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxDiasActivo = window._limitesConfig?.activarDias !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    const maxDias = window._limitesConfig?.maxDias || 90;
+    
+    const fechaDesde = new Date(desde);
+    const fechaHasta = new Date(hasta);
+    const hoy = new Date();
+    const mesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const esPeriodoAnterior = fechaHasta < mesActual;
+    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const excedeDias = maxDiasActivo && diffDays > maxDias;
+    const diasDesdePeriodo = Math.ceil((hoy - fechaHasta) / (1000 * 60 * 60 * 24));
+    const periodoMuyAntiguo = maxDiasActivo && diasDesdePeriodo > maxDias;
+    const excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
+    const bloquea = excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo;
+    
+    // ========== CASO 1: ERROR BLOQUEANTE ==========
+    if (bloquea) {
+        let erroresLista = '';
+        let advertenciaFiscal = '';
+        
+        // Advertencia fiscal (si el período es anterior)
+        if (esPeriodoAnterior) {
+            advertenciaFiscal = `
+                <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span>📅</span>
+                        <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                            Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
+                            Verificá tu situación fiscal antes de continuar.
+                        </span>
+                    </div>
+                </div>
+            `;
+        }
+        
+        if (excedeFacturas) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>La operación intenta emitir ${_lotePrevio.total} facturas</strong> (máximo: ${maxFacturas})</span>
+            </div>`;
+        }
+        if (excedeMonto) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El monto total alcanza ${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite: ${formatCurrency(maxMonto)})</span>
+            </div>`;
+        }
+        if (excedeDias) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El período abarca ${diffDays} días</strong> (máximo: ${maxDias} días)</span>
+            </div>`;
+        }
+        if (periodoMuyAntiguo) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El período terminó hace ${diasDesdePeriodo} días</strong> (máximo: ${maxDias} días atrás)</span>
+            </div>`;
+        }
+        
+        let mensajeUnificado = `
+            <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; background: rgba(255,61,87,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">🛡️</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 16px; color: var(--red);">ADVERTENCIAS DE SEGURIDAD</div>
+                    </div>
+                </div>
+                ${advertenciaFiscal}
+                <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <span style="font-size: 18px;">🚫</span>
+                        <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">No se puede continuar con la emisión por lote</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        ${erroresLista}
+                    </div>
+                </div>
+                <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 18px;">💡</span>
+                        <span style="font-weight: 700; font-size: 13px; color: var(--green);">¿Cómo solucionarlo?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-2); line-height: 1.5; padding-left: 26px;">
+                        Para poder emitir este lote, solo tenés que aumentar los límites en:<br>
+                        <strong style="color: var(--orange-2);">→ Configuración → Límites para Emisión en Lote</strong>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
+                    <span>🔒</span>
+                    <span>Estamos cuidando tus intereses</span>
                 </div>
             </div>
         `;
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeUnificado;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'transparent';
+            errorDiv.style.border = 'none';
+            errorDiv.style.padding = '0';
+        }
+        
+        if (btnSiguiente) {
+            btnSiguiente.disabled = true;
+            btnSiguiente.style.opacity = '0.5';
+            btnSiguiente.style.cursor = 'not-allowed';
+        }
+        toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
+        return;
     }
     
-    if (excedeFacturas) {
-        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-            <span>⚠️</span>
-            <span><strong>La operación intenta emitir ${_lotePrevio.total} facturas</strong> (máximo: ${maxFacturas})</span>
-        </div>`;
-    }
-    if (excedeMonto) {
-        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-            <span>⚠️</span>
-            <span><strong>El monto total alcanza ${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite: ${formatCurrency(maxMonto)})</span>
-        </div>`;
-    }
-    if (excedeDias) {
-        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-            <span>⚠️</span>
-            <span><strong>El período abarca ${diffDays} días</strong> (máximo: ${maxDias} días)</span>
-        </div>`;
-    }
-    if (periodoMuyAntiguo) {
-        erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
-            <span>⚠️</span>
-            <span><strong>El período terminó hace ${diasDesdePeriodo} días</strong> (máximo: ${maxDias} días atrás)</span>
-        </div>`;
+    // ========== CASO 2: ADVERTENCIA INFORMATIVA (AMARILLO) ==========
+    if (esPeriodoAnterior) {
+        let mensajeInformativo = `
+            <div style="background: rgba(255,179,0,0.05); border: 1px solid rgba(255,179,0,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; background: rgba(255,179,0,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">🛡️</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 16px; color: var(--yellow);">ADVERTENCIAS DE SEGURIDAD</div>
+                    </div>
+                </div>
+                <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <span style="font-size: 18px;">📅</span>
+                        <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">Importante</span>
+                    </div>
+                    <div style="font-size: 13px; color: var(--text-2); line-height: 1.5; padding: 0 8px;">
+                        ${getMensajePeriodoAnterior()}
+                    </div>
+                </div>
+                <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 18px;">✅</span>
+                        <span style="font-weight: 700; font-size: 13px; color: var(--green);">Podés continuar con la emisión</span>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
+                    <span>🔒</span>
+                    <span>Estamos cuidando tus intereses</span>
+                </div>
+            </div>
+        `;
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeInformativo;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'transparent';
+            errorDiv.style.border = 'none';
+            errorDiv.style.padding = '0';
+        }
+    } else {
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.innerHTML = '';
+        }
     }
     
-    let mensajeUnificado = `
-        <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
-            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
-                <div style="width: 44px; height: 44px; background: rgba(255,61,87,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
-                    <span style="font-size: 24px;">🛡️</span>
-                </div>
-                <div>
-                    <div style="font-weight: 800; font-size: 16px; color: var(--red);">ADVERTENCIAS DE SEGURIDAD</div>
-                </div>
-            </div>
-            ${advertenciaFiscal}
-            <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                    <span style="font-size: 18px;">🚫</span>
-                    <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">No se puede continuar con la emisión por lote</span>
-                </div>
-                <div style="display: flex; flex-direction: column; gap: 10px;">
-                    ${erroresLista}
-                </div>
-            </div>
-            <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
-                <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                    <span style="font-size: 18px;">💡</span>
-                    <span style="font-weight: 700; font-size: 13px; color: var(--green);">¿Cómo solucionarlo?</span>
-                </div>
-                <div style="font-size: 12px; color: var(--text-2); line-height: 1.5; padding-left: 26px;">
-                    Para poder emitir este lote, solo tenés que aumentar los límites en:<br>
-                    <strong style="color: var(--orange-2);">→ Configuración → Límites para Emisión en Lote</strong>
-                </div>
-            </div>
-            <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
-                <span>🔒</span>
-                <span>Estamos cuidando tus intereses</span>
-            </div>
-        </div>
-    `;
-    
-    if (errorDiv) {
-        errorDiv.innerHTML = mensajeUnificado;
-        errorDiv.style.display = 'block';
-        errorDiv.style.background = 'transparent';
-        errorDiv.style.border = 'none';
-        errorDiv.style.padding = '0';
-    }
-    
+    // ========== CONTINUAR AL PASO 2 ==========
     if (btnSiguiente) {
-        btnSiguiente.disabled = true;
-        btnSiguiente.style.opacity = '0.5';
-        btnSiguiente.style.cursor = 'not-allowed';
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
     }
-    toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
-    return;
+    
+    if (_lotePrevio.total === 0) {
+        if (errorDiv) {
+            errorDiv.innerText = 'No hay órdenes pendientes en este período';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    _pasoActualLote = 2;
+    mostrarPasoConfirmacionLote();
 }
 
 // ========== RESUMEN DE CONFIRMACIÓN ==========

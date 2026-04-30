@@ -576,10 +576,6 @@ let _rangoHasta = null;
 let _dashDesde = null;
 let _dashHasta = null;
 
-// ========== VARIABLES GLOBALES DE ONBOARDING ==========
-let tieneTiendaConectadaOnboarding = false;
-let _plataformaOnboardingActual = null;
-
 
 function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
@@ -909,10 +905,9 @@ function abrirConexion(plataforma) {
 }
 
 function cerrarConexion() {
-    _plataformaOnboardingActual = null;  // 👈 AGREGAR ESTA LÍNEA
-    document.getElementById('negModalOverlay').classList.remove('open');
-    document.getElementById('negModal').classList.remove('open');
-    _plataformaActual = null;
+  document.getElementById('negModalOverlay').classList.remove('open');
+  document.getElementById('negModal').classList.remove('open');
+  _plataformaActual = null;
 }
 
 async function confirmarConexion() {
@@ -950,16 +945,6 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Tienda Nube conectada', 'success');
-        
-        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
-        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
-          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
-          _plataformaOnboardingActual = null;
-          cerrarConexion();
-          cargarIntegraciones();
-          return;
-        }
-        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -977,16 +962,6 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Empretienda conectada', 'success');
-        
-        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
-        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
-          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
-          _plataformaOnboardingActual = null;
-          cerrarConexion();
-          cargarIntegraciones();
-          return;
-        }
-        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -1005,16 +980,6 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ Rappi conectado', 'success');
-        
-        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
-        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
-          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
-          _plataformaOnboardingActual = null;
-          cerrarConexion();
-          cargarIntegraciones();
-          return;
-        }
-        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -1033,16 +998,6 @@ async function confirmarConexion() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al conectar.');
         toast('✅ VTEX conectado', 'success');
-        
-        // 👇 ACTUALIZAR ONBOARDING SI VIENE DEL MODAL DE ONBOARDING
-        if (typeof _plataformaOnboardingActual !== 'undefined' && _plataformaOnboardingActual) {
-          actualizarOnboardingDespuesDeConexion(_plataformaOnboardingActual);
-          _plataformaOnboardingActual = null;
-          cerrarConexion();
-          cargarIntegraciones();
-          return;
-        }
-        
         cerrarConexion();
         cargarIntegraciones();
         break;
@@ -3055,125 +3010,5 @@ function toggleLimiteDias(activado) {
     }
 }
 
-// Función para cambiar entre vistas
-function mostrarVista(vista) {
-    console.log('📱 Mostrando vista:', vista);
-    
-    document.querySelectorAll('.content').forEach(el => {
-        el.style.display = 'none';
-    });
-    
-    const vistaElement = document.getElementById(`vista-${vista}`);
-    if (vistaElement) {
-        vistaElement.style.display = 'block';
-    }
-    
-    document.querySelectorAll('.nav-item').forEach(el => {
-        el.classList.remove('active');
-    });
-    
-    const navItem = document.getElementById(`nav-${vista}`);
-    if (navItem) {
-        navItem.classList.add('active');
-    }
-}
-
-// Función para notificaciones
-function toast(mensaje, tipo = 'info') {
-    console.log(`[${tipo}] ${mensaje}`);
-}
-
-// Función para verificar tiendas conectadas
-async function verificarTiendasConectadas() {
-    console.log('🔍 Verificando tiendas conectadas...');
-    try {
-        const res = await fetch('/api/integrations', { 
-            method: 'GET',
-            credentials: 'include',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        
-        if (!res.ok) {
-            console.error('Error en /api/integrations:', res.status);
-            return false;
-        }
-        
-        const data = await res.json();
-        const integraciones = data.integrations || [];
-        console.log('📦 Integraciones encontradas:', integraciones.length);
-        return integraciones.length > 0;
-    } catch (err) {
-        console.error('❌ Error al verificar tiendas:', err);
-        return false;
-    }
-}
-
-// Función principal que se ejecuta después del login
-async function redirigirPostLogin() {
-    console.log('🔍 [1] Iniciando redirigirPostLogin()');
-    
-    try {
-        const tieneTiendas = await verificarTiendasConectadas();
-        console.log('🔍 [3] tieneTiendas =', tieneTiendas);
-        
-        if (!tieneTiendas) {
-            console.log('🚀 [4] Usuario SIN tiendas → Mostrando onboarding');
-            await mostrarPantallaOnboarding();
-        } else {
-            console.log('✅ [6] Usuario CON tiendas → Mostrando Dashboard');
-            mostrarVista('dashboard');
-        }
-    } catch(error) {
-        console.error('❌ [ERROR] redirigirPostLogin:', error);
-    }
-}
-
-// Mostrar pantalla de onboarding
-async function mostrarPantallaOnboarding() {
-    console.log('🔄 Mostrando onboarding...');
-    
-    document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
-    
-    const vistaNegocio = document.getElementById('vista-negocio');
-    if (vistaNegocio) vistaNegocio.style.display = 'block';
-    
-    const onboardingDiv = document.getElementById('onboardingNegocio');
-    if (onboardingDiv) onboardingDiv.style.display = 'block';
-    
-    const normalDiv = document.getElementById('negocioNormal');
-    if (normalDiv) normalDiv.style.display = 'none';
-    
-    // Configurar eventos
-    document.querySelectorAll('.btn-onboarding-conectar').forEach(btn => {
-        btn.onclick = (e) => {
-            e.preventDefault();
-            const plataforma = btn.getAttribute('data-plataforma');
-            console.log('🔌 Conectar:', plataforma);
-        };
-    });
-    
-    const btnContinuar = document.getElementById('btnContinuarOnboarding');
-    if (btnContinuar) {
-        btnContinuar.onclick = () => {
-            console.log('➡️ Continuar');
-            mostrarVista('arca');
-        };
-    }
-    
-    const btnMasTarde = document.getElementById('btnConfigurarMasTarde');
-    if (btnMasTarde) {
-        btnMasTarde.onclick = () => {
-            console.log('⏰ Más tarde');
-            mostrarVista('dashboard');
-        };
-    }
-}
-
-// ========== INICIALIZAR ==========
-document.addEventListener('DOMContentLoaded', () => {
-    console.log('🚀 DOMContentLoaded ejecutado');
-    
-    setTimeout(() => {
-        redirigirPostLogin();
-    }, 500);
-});
+// Inicializar límites
+cargarLimitesLote();

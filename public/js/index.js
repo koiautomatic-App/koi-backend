@@ -2507,6 +2507,22 @@ function volverPasoSeleccionLote() {
 
 // ========== VALIDACIÓN DE LÍMITES ==========
 
+// Función para obtener mensaje según condición fiscal (siempre el correcto)
+function getMensajePorCondicionFiscal() {
+    const condicionFiscal = window._condicionFiscal || 'responsable_inscripto';
+    
+    if (condicionFiscal === 'monotributista') {
+        return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
+                Verificá antes de continuar.`;
+    } else {
+        // Responsable Inscripto, Exento, Consumidor Final, etc.
+        return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                Facturar períodos anteriores puede afectar el <strong>cómputo de IVA, Ganancias y percepciones de IIBB</strong>.<br>
+                Verificá tu situación fiscal antes de continuar.`;
+    }
+}
+
 function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     if (!errorDiv || errorDiv.id !== 'loteError') {
         errorDiv = document.getElementById('loteError');
@@ -2534,26 +2550,24 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
     const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
     const bloquea = excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo;
     
-    // ========== CASO 1: ERROR BLOQUEANTE ==========
+    // Obtener el mensaje correcto según condición fiscal (SIEMPRE el mismo, haya o no bloqueo)
+    const mensajeFiscalCorrecto = getMensajePorCondicionFiscal();
+    
+    const advertenciaFiscal = `
+        <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span>
+                <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                    <strong>Importante:</strong><br>
+                    ${mensajeFiscalCorrecto}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    // ========== CASO 1: ERROR BLOQUEANTE (rojo) ==========
     if (bloquea) {
         let erroresLista = '';
-        let advertenciaFiscal = '';
-        
-        // Advertencia fiscal (si el período es anterior)
-        if (esPeriodoAnterior) {
-            advertenciaFiscal = `
-                <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
-                    <div style="display: flex; align-items: center; gap: 8px;">
-                        <span>📅</span>
-                        <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
-                            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
-                            Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
-                            Verificá tu situación fiscal antes de continuar.
-                        </span>
-                    </div>
-                </div>
-            `;
-        }
         
         if (excedeFacturas) {
             erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
@@ -2634,7 +2648,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
         return;
     }
     
-    // ========== CASO 2: ADVERTENCIA INFORMATIVA (AMARILLO) ==========
+    // ========== CASO 2: SIN BLOQUEO (amarillo informativo) ==========
     if (esPeriodoAnterior) {
         let mensajeInformativo = `
             <div style="background: rgba(255,179,0,0.05); border: 1px solid rgba(255,179,0,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
@@ -2646,15 +2660,7 @@ function verificarLimitesYContinuar(desde, hasta, errorDiv) {
                         <div style="font-weight: 800; font-size: 16px; color: var(--yellow);">ADVERTENCIAS DE SEGURIDAD</div>
                     </div>
                 </div>
-                <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
-                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
-                        <span style="font-size: 18px;">📅</span>
-                        <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">Importante</span>
-                    </div>
-                    <div style="font-size: 13px; color: var(--text-2); line-height: 1.5; padding: 0 8px;">
-                        ${getMensajePeriodoAnterior()}
-                    </div>
-                </div>
+                ${advertenciaFiscal}
                 <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
                     <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
                         <span style="font-size: 18px;">✅</span>

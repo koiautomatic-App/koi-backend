@@ -1,4 +1,3 @@
-cat > services/afip/wsaa.js << 'EOF'
 const axios = require('axios');
 const https = require('https');
 const fs = require('fs');
@@ -103,4 +102,3 @@ const getAfipToken = async (cuit) => {
 };
 
 module.exports = { getAfipToken };
-EOF

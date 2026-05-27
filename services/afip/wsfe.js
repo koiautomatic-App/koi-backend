@@ -1,4 +1,3 @@
-cat > services/afip/wsfe.js << 'EOF'
 const axios = require('axios');
 const https = require('https');
 const crypto = require('crypto');
@@ -155,4 +154,3 @@ const emitirCAE = async (orderId, userOverride, fechaForzada) => {
 };
 
 module.exports = { emitirCAE, solicitarCAE, getTipoComprobante, getUltimoComprobante };
-EOF

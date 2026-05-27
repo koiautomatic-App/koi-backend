@@ -1,4 +1,3 @@
-cat > services/email/templates.js << 'EOF'
 const ejs = require('ejs');
 const path = require('path');
 
@@ -63,7 +62,7 @@ const generarFacturaHtml = async (userId, orden) => {
 
   const filasItems = items.map(item => {
     const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
-    return '<tr>\n  <td>' + escapeHtml(item.nombre || 'Producto') + '</td>\n  <td>' + (item.cantidad || 1) + '</td>\n  <td>$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n  <td>$ ' + fmtARS(subtotal) + '</td>\n</tr>';
+    return '<td>\n  <td>' + escapeHtml(item.nombre || 'Producto') + '</td>\n  <td>' + (item.cantidad || 1) + '</td>\n  <td>$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n  <td>$ ' + fmtARS(subtotal) + '</td>\n</tr>';
   }).join('');
 
   const caeNum = orden.caeNumber || null;
@@ -117,4 +116,3 @@ const generarFacturaHtml = async (userId, orden) => {
 };
 
 module.exports = { generarFacturaHtml, generarQRHtml };
-EOF

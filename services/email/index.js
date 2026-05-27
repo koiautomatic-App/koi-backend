@@ -1,4 +1,3 @@
-cat > services/email/index.js << 'EOF'
 const { Resend } = require('resend');
 const config = require('../../config');
 const { generarFacturaHtml } = require('./templates');
@@ -46,4 +45,3 @@ const enviarFacturaMail = async (orderId) => {
 };
 
 module.exports = { enviarFacturaMail };
-EOF

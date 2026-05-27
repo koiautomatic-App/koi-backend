@@ -1,4 +1,3 @@
-cat > models/User.js << 'EOF'
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -42,4 +41,3 @@ UserSchema.methods.checkPassword = async function(password) {
 };
 
 module.exports = mongoose.model('User', UserSchema);
-EOF

@@ -44,4 +44,5 @@ const enviarFacturaMail = async (orderId) => {
   }
 };
 
-module.exports = { enviarFacturaMail };
+// 👇 CAMBIAR ESTA LÍNEA - agregar generarFacturaHtml a la exportación
+module.exports = { enviarFacturaMail, generarFacturaHtml };

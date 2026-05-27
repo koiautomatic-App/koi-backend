@@ -1,4 +1,3 @@
-// models/Integration.js
 const mongoose = require('mongoose');
 const crypto = require('crypto');
 const { encrypt, decrypt } = require('../utils/encrypt');

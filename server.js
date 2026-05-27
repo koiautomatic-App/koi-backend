@@ -17,21 +17,24 @@ initPassport();
 // Conectar a MongoDB
 connectDB();
 
-// Configurar rutas - Con verificación de tipo
-const setupRoutes = require('./routes');
-if (typeof setupRoutes === 'function') {
-  setupRoutes(app);
-} else if (typeof setupRoutes === 'object' && setupRoutes.router) {
-  app.use('/', setupRoutes.router);
-} else {
-  logger.warn('⚠️ setupRoutes no es una función, intentando usar como router');
-  app.use('/', setupRoutes);
+// IMPORTAR ROUTER CON VERIFICACIÓN
+let router;
+try {
+  router = require('./routes');
+  logger.info('✅ Router cargado correctamente');
+  if (!router) {
+    throw new Error('Router es undefined');
+  }
+  if (typeof router.use !== 'function') {
+    throw new Error('Router no es un middleware de Express válido');
+  }
+} catch (err) {
+  logger.error('❌ Error cargando router:', err.message);
+  process.exit(1);
 }
 
-// Health check
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date().toISOString() });
-});
+// Configurar rutas
+app.use('/', router);
 
 // Iniciar servidor
 const server = app.listen(config.PORT, () => {

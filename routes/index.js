@@ -13,15 +13,23 @@ const suscripcionRoutes = require('./api/suscripcion');
 const webhookRoutes = require('./webhooks');
 
 // ============================================================
-// RUTAS API
+// RUTAS DE AUTENTICACIÓN (incluye Google OAuth)
 // ============================================================
 router.use('/auth', authRoutes);
+
+// ============================================================
+// RUTAS API
+// ============================================================
 router.use('/api/me', meRoutes);
 router.use('/api/orders', ordersRoutes);
 router.use('/api/integrations', integrationsRoutes);
 router.use('/api/stats', statsRoutes);
 router.use('/api/admin', adminRoutes);
 router.use('/api/suscripcion', suscripcionRoutes);
+
+// ============================================================
+// WEBHOOKS
+// ============================================================
 router.use('/webhook', webhookRoutes);
 
 // ============================================================
@@ -80,11 +88,6 @@ router.get('/admin', (req, res) => {
     return res.redirect('/login');
   }
   res.sendFile(path.join(__dirname, '../public', 'admin.html'));
-});
-
-// Google OAuth callback (ya está en authRoutes, pero aseguramos)
-router.get('/auth/google', (req, res) => {
-  res.redirect('/auth/google');
 });
 
 // Logout

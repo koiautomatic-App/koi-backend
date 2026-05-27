@@ -7,7 +7,8 @@ const {
   emitirOrden,
   cancelarFactura,
   enviarMailOrden,
-  eliminarOrden
+  eliminarOrden,
+  generarPDF  // 👈 Agregar esta importación
 } = require('../../controllers/orderController');
 
 router.get('/', requireAuthAPI, listarOrdenes);
@@ -16,5 +17,6 @@ router.post('/:id/emitir', requireAuthAPI, emitirOrden);
 router.post('/:id/cancelar', requireAuthAPI, cancelarFactura);
 router.post('/:id/mail', requireAuthAPI, enviarMailOrden);
 router.delete('/:id', requireAuthAPI, eliminarOrden);
+router.get('/:id/pdf', requireAuthAPI, generarPDF);  // 👈 Agregar esta línea
 
 module.exports = router;

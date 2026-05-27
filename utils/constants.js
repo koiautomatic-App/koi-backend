@@ -1,4 +1,3 @@
-cat > utils/constants.js << 'EOF'
 const ARCA_LIMIT = 380000;
 const CUIT_CF = '99999999';
 
@@ -15,4 +14,3 @@ module.exports = {
   cleanDoc,
   resolveDoc
 };
-EOF

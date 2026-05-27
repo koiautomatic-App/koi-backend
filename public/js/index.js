@@ -20,8 +20,49 @@ const MOCK = {
 };
 
 /* ── HELPERS ───────────────────────────────────────── */
-const ars = n => new Intl.NumberFormat('es-AR',{style:'currency',currency:'ARS',maximumFractionDigits:0}).format(n);
-const arsShort = n => n>=1e6?`$${(n/1e6).toFixed(2)}M`:n>=1e3?`$${(n/1e3).toFixed(0)}k`:`$${n}`;
+// Formateador de moneda que soporta ARS, USD, EUR
+const formatCurrency = (amount, currency = 'ARS') => {
+  const num = Number(amount);
+  if (isNaN(num) || num === null || num === undefined) {
+    return currency === 'USD' ? 'U$S 0' : '$0';
+  }
+  
+  const formatters = {
+    'ARS': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'ARS',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0
+    }),
+    'USD': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }),
+    'EUR': new Intl.NumberFormat('es-AR', {
+      style: 'currency',
+      currency: 'EUR',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })
+  };
+  
+  const formatter = formatters[currency] || formatters['ARS'];
+  return formatter.format(num);
+};
+
+// Mantener ars para compatibilidad (solo ARS)
+const ars = (n) => formatCurrency(n, 'ARS');
+
+// Versión corta para gráficos (solo ARS, mantiene compatibilidad)
+const arsShort = n => {
+  const num = Number(n);
+  if (isNaN(num)) return '$0';
+  return num >= 1e6 ? `$${(num / 1e6).toFixed(2)}M` 
+       : num >= 1e3 ? `$${(num / 1e3).toFixed(0)}k` 
+       : `$${num}`;
+};
 
 const ICONS = {success:'check_circle',error:'error',info:'info',warn:'warning'};
 function toast(msg,type='info'){
@@ -73,6 +114,15 @@ function renderMetrics(d){
   set('mcHoy', ars(d.hoyFacturado),  'dcHoy', d.hoyDelta,  d.hoyTipo);
   set('mcPend',d.pendientesCAE,       'dcPend',d.pendDelta, d.pendTipo);
   set('mcMes', ars(d.mesFacturado),   'dcMes', d.mesDelta,  d.mesTipo);
+  
+  // 👇 NUEVA MÉTRICA - Notas de Crédito
+  if (document.getElementById('mcNC')) {
+    const ncMonto = d.notasCredito?.montoTotal || 0;
+    const ncCantidad = d.notasCredito?.cantidad || 0;
+    document.getElementById('mcNC').innerText = `-${ars(ncMonto)}`;
+    document.getElementById('dcNC').innerText = `${ncCantidad} NC emitida${ncCantidad !== 1 ? 's' : ''}`;
+  }
+  
   if(d.pendientesCAE>0) document.getElementById('mcPend').style.color='var(--yellow)';
   document.getElementById('navBadge').textContent=d.pendientesCAE;
 }
@@ -117,46 +167,125 @@ function renderChart(d){
     }
   });
 }
+function filtrarComprobantes() {
+  let lista = _todosComp.filter(c => {
+    // Filtro por tipo de comprobante
+    if (_filtroTipo === 'factura' && c.tipo !== 'Factura C') return false;
+    if (_filtroTipo === 'nota' && c.tipo !== 'Nota de Crédito C') return false;
+    
+    // Filtro por estado
+    if (_filtroTipo === 'pendiente' && c.estado !== 'pendiente') return false;
+    
+    // Filtro por origen (plataforma)
+    if (_filtroTipo === 'manual' && c.origen !== 'manual') return false;
+    if (_filtroTipo === 'woo' && c.origen !== 'woo') return false;
+    
+    return true;
+  });
 
-function renderComps(lista){
-  document.getElementById('compBadge').textContent=lista.length;
-  const cont=document.getElementById('compList');
-  if(!lista.length){
-    cont.innerHTML=`<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
+  renderComprobantes(lista);  // 👈 CORREGIDO
+}
+function renderComps(lista) {
+  document.getElementById('compBadge').textContent = lista.length;
+  const cont = document.getElementById('compList');
+  if (!lista.length) {
+    cont.innerHTML = `<div style="padding:30px;text-align:center;color:var(--text-3);font-size:12px">Sin ventas este mes</div>`;
     return;
   }
-  cont.innerHTML=lista.map((c,i)=>{
-    const emitido = c.estado === 'cae-ok';
-    const btnEmitir = emitido
-      ? `<button class="act-btn act-done" title="Emitido ✓" disabled><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/></svg></button>`
-      : `<button class="act-btn act-warn" title="Emitir CAE — requiere credenciales AFIP" onclick="emitir('${c._id||c.id}')"><svg width='13' height='13' viewBox='0 0 14 14' fill='none'><path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/><path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/><circle cx='7' cy='10' r='.6' fill='currentColor'/></svg></button>`;
+  
+  cont.innerHTML = lista.map((c, i) => {
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const emitido = c.estado === 'cae-ok' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '');
+    const esCancelada = c.status === 'cancelled' || esNotaCredito;
+    
+    const btnEmitir = (emitido || esCancelada)
+      ? `<button class="act-btn act-done" title="${esCancelada ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+          </svg>
+         </button>`
+      : `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
+          <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+            <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+            <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+            <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+          </svg>
+         </button>`;
+    
+    const emailSent = c.emailSent === true;
+    const emailTitle = emailSent 
+      ? (esCancelada ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
+      : (esCancelada ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
+    
+    const btnEmail = emailSent
+      ? `<button class="act-btn act-btn-sent" title="${emailTitle}" disabled>
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+            <path d="M9 9l2 2M5 9l-2 2" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+         </button>`
+      : `<button class="act-btn" title="${emailTitle}" onclick="enviarMail('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+          </svg>
+         </button>`;
+    
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito)
+      ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`
+      : '';
+    
+    const montoRaw = (c.monto !== undefined && c.monto !== null) ? c.monto 
+                   : (c.amount !== undefined && c.amount !== null) ? Math.abs(c.amount) 
+                   : 0;
+    const montoMostrar = esCancelada ? Math.abs(montoRaw) : montoRaw;
+    
     return `
     <div class="comp-row" style="animation-delay:${i*55}ms">
-      <div class="cae-dot ${c.estado}"></div>
+      <div class="cae-dot ${c.estado || (emitido ? 'cae-ok' : 'cae-pend')}"></div>
       <div class="comp-info">
-        <div class="comp-cliente">${c.cliente}</div>
+        <div class="comp-cliente">${c.customerName || c.cliente}</div>
         <div class="comp-meta">
-          ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}${c.estado==='cae-ok'&&c.cae ? `CAE ${c.cae.slice(-8)} · Vto ${c.caeVto||'—'}` : c.fecha}
+          ${c.concepto ? `<span style="color:var(--text-2);font-size:11px">${c.concepto.length>48?c.concepto.slice(0,46)+'…':c.concepto}</span> · ` : ''}
+          ${esCancelada ? `NC ${c.caeNumber ? c.caeNumber.slice(-8) : '---'}` : (emitido && c.caeNumber ? `CAE ${c.caeNumber.slice(-8)}` : c.fecha || c.orderDate)}
         </div>
       </div>
-      <div class="comp-monto">${ars(c.monto)}</div>
+      <div class="comp-monto">${formatCurrency(montoMostrar, c.currency || 'ARS')}</div>
       <div class="comp-actions">
-        <button class="act-btn" title="Ver PDF"     onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
+        <button class="act-btn" title="${esCancelada ? 'Ver Nota de Crédito' : 'Ver PDF'}" onclick="verPDF('${c._id||c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+            <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+        </button>
         ${btnEmitir}
-        <button class="act-btn" title="Enviar mail" onclick="enviarMail('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+        ${btnEmail}
+        ${btnCancelar}
       </div>
     </div>`;
   }).join('');
 }
-
 /* ── CARGA INICIAL ─────────────────────────────────── */
 function cargarDashboard(data){
-  const d=data||MOCK;
+  const d = data || MOCK;
+  
+  // 👇 Asegurar que los comprobantes tengan emailSent
+  const comprobantesConEmail = (d.comprobantes || []).map(c => ({
+    ...c,
+    emailSent: c.emailSent || false
+  }));
+  
   renderStatus(d.serverOnline);
   renderMono(d);
   renderMetrics(d);
   renderChart(d);
-  renderComps(d.comprobantes);
+  renderComps(comprobantesConEmail);
 }
 
 /* ── API BRIDGE — reemplaza gasRun para entorno web Render ── */
@@ -208,10 +337,16 @@ const api = {
 function adaptarStats(raw) {
   if (!raw) return null;
 
-  const ahora  = new Date();
-  const mesNom = ahora.toLocaleString('es-AR', { month:'long', year:'numeric' });
+  // Período formateado
+  const ahora = new Date();
+  const mesNom = ahora.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+  
+  const desde = raw.periodo?.desde ? new Date(raw.periodo.desde) : null;
+  const hasta = raw.periodo?.hasta ? new Date(raw.periodo.hasta) : null;
+  const fmtP = d => d?.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+  const periodoLabel = (desde && hasta) ? `${fmtP(desde)} → ${fmtP(hasta)}` : mesNom;
 
-  // Comprobantes para la bandeja — enriquecidos con datos de CAE
+  // Comprobantes para la bandeja
   const comprobantes = (raw.ultimas || []).map(o => ({
     _id:         o._id,
     id:          o.nroFormatted || o.externalId || o._id,
@@ -222,6 +357,7 @@ function adaptarStats(raw) {
     concepto:    o.concepto || '',
     fecha:       (o.orderDate||o.createdAt) ? new Date(o.orderDate||o.createdAt).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'2-digit'}) : '—',
     monto:       o.amount || 0,
+    currency:    o.currency || 'ARS',
     estado:      o.status === 'invoiced'        ? 'cae-ok'
                : o.status === 'error_afip'      ? 'cae-err'
                : o.status === 'error_data'      ? 'cae-err'
@@ -230,13 +366,8 @@ function adaptarStats(raw) {
     caeVto:      o.caeExpiry ? new Date(o.caeExpiry).toLocaleDateString('es-AR') : null,
     origen:      o.platform === 'manual' ? 'manual' : 'woo',
     platform:    o.platform,
+    emailSent:   o.emailSent || false,
   }));
-
-  // Período formateado
-  const desde  = raw.periodo?.desde ? new Date(raw.periodo.desde) : null;
-  const hasta  = raw.periodo?.hasta ? new Date(raw.periodo.hasta) : null;
-  const fmtP   = d => d?.toLocaleDateString('es-AR', { day:'2-digit', month:'2-digit', year:'numeric' });
-  const periodoLabel = (desde && hasta) ? `${fmtP(desde)} → ${fmtP(hasta)}` : mesNom;
 
   return {
     serverOnline:    true,
@@ -257,9 +388,9 @@ function adaptarStats(raw) {
     chartDias:       raw.chartDias      || [],
     chartVentas:     raw.chartVentas    || [],
     comprobantes,
+    notasCredito:    raw.notasCredito   || { montoTotal: 0, cantidad: 0 }
   };
 }
-
 // gasRun() — firma idéntica al original
 async function gasRun(fn, args, onOk, onErr) {
   const handler = API_MAP[fn];
@@ -332,103 +463,295 @@ function mostrarVista(v) {
   } else if (v === 'negocio') {
     document.getElementById('vista-negocio').style.display = 'block';
     document.getElementById('nav-negocio').classList.add('active');
-    cargarIntegraciones();
+    mostrarVistaNormalNegocio();
   } else if (v === 'arca') {
     document.getElementById('vista-arca').style.display = 'block';
     document.getElementById('nav-arca').classList.add('active');
+    if (typeof cargarEstadoARCA === 'function') {
+      cargarEstadoARCA();
+    }
   } else if (v === 'config') {
     document.getElementById('vista-config').style.display = 'block';
     document.getElementById('nav-config').classList.add('active');
     cargarConfigVista();
   } else if (v === 'estado') {
-    document.getElementById('vista-estado').style.display = 'block';
-    document.getElementById('nav-estado').classList.add('active');
-    verificarSuscripcion();
-  }
-}
-
-/* ── SUSCRIPCIÓN KOI / MERCADO PAGO ─────────────────── */
-function verificarSuscripcion() {
-  gasRun('verificarSuscripcion', null,
-    res => {
-      if (res && res.activa) {
-        mostrarSuscripcionActiva(res.fechaAlta);
+    // 👇 NUEVA LÓGICA: Verificar si el usuario está suscripto
+    const vistaEstado = document.getElementById('vista-estado');
+    if (vistaEstado) vistaEstado.style.display = 'none';
+    
+    // Verificar estado de suscripción
+    verificarEstadoSuscripcion().then(activa => {
+      if (activa) {
+        console.log('✅ Usuario suscripto → Mostrando vista de Suscripción Activa');
+        mostrarSuscripcionActiva();
       } else {
-        document.getElementById('susc-activa').style.display   = 'none';
-        document.getElementById('susc-inactiva').style.display = 'block';
-        document.getElementById('susc-cargando').style.display = 'none';
+        console.log('⚠️ Usuario no suscripto → Mostrando onboarding de MI PLAN');
+        if (typeof mostrarOnboardingPlan === 'function') {
+          mostrarOnboardingPlan();
+        } else {
+          if (vistaEstado) vistaEstado.style.display = 'block';
+          if (typeof verificarSuscripcion === 'function') {
+            verificarSuscripcion();
+          }
+        }
       }
-    },
-    () => {
-      document.getElementById('susc-inactiva').style.display = 'block';
-    }
-  );
-  if (typeof google === 'undefined') {
-    document.getElementById('susc-inactiva').style.display = 'block';
+    }).catch(error => {
+      console.error('Error verificando suscripción:', error);
+      // Fallback: mostrar onboarding
+      if (typeof mostrarOnboardingPlan === 'function') {
+        mostrarOnboardingPlan();
+      }
+    });
+    
+    document.getElementById('nav-estado').classList.add('active');
   }
+}
+/* ── SUSCRIPCIÓN KOI / MERCADO PAGO ─────────────────── */
+
+// ============================================================
+//  VERIFICAR SUSCRIPCIÓN (VISTA MI PLAN) - UNIFICADA
+//  Muestra el mismo contenido que el onboarding expirado
+// ============================================================
+
+// ============================================================
+//  VERIFICAR SUSCRIPCIÓN - Redirige al onboarding unificado de MI PLAN
+// ============================================================
+
+async function verificarSuscripcion() {
+    console.log('🔍 Verificando suscripción → mostrando onboarding de MI PLAN');
+    
+    // Mostrar el onboarding unificado que ya tiene todo el HTML y CSS
+    if (typeof mostrarOnboardingPlan === 'function') {
+        mostrarOnboardingPlan();
+    } else {
+        console.warn('⚠️ mostrarOnboardingPlan no está disponible');
+        // Fallback: mostrar mensaje de error
+        const vistaEstado = document.getElementById('vista-estado');
+        if (vistaEstado) {
+            vistaEstado.innerHTML = '<div style="padding: 40px; text-align: center;">Error: No se pudo cargar la vista del plan. Recargá la página.</div>';
+            vistaEstado.style.display = 'block';
+        }
+    }
 }
 
-function mostrarSuscripcionActiva(fechaAlta) {
-  document.getElementById('susc-activa').style.display   = 'block';
-  document.getElementById('susc-inactiva').style.display = 'none';
-  document.getElementById('susc-cargando').style.display = 'none';
-  if (fechaAlta) {
-    document.getElementById('susc-fecha-alta').textContent = 'Activa desde ' + fechaAlta;
-  }
+function descargarComprobante() {
+    toast('📄 Generando comprobante...', 'info');
+    window.open('/api/orders/ultimo/pdf', '_blank');
 }
+
+function verComprobantePago() {
+    window.open('/api/orders/ultimo/pdf', '_blank');
+}
+
+function cambiarMetodoPago() {
+    toast('🔄 Redirigiendo a Mercado Pago...', 'info');
+    window.open('https://www.mercadopago.com.ar', '_blank');
+}
+// ============================================================
+//  MOSTRAR MI PLAN - CORTESÍA ACTIVA (Etapa 5)
+// ============================================================
+
+function mostrarMiPlanCortesiaActiva(diasRestantes) {
+    const contenedor = document.getElementById('susc-inactiva');
+    if (!contenedor) return;
+    
+    contenedor.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">🎉</div>
+            <h3 style="color: #00e676; margin-bottom: 8px;">Período de prueba activo</h3>
+            <p style="color: #8888aa; margin-bottom: 24px;">Te quedan <strong style="color: #00e676">${diasRestantes} días</strong> de cortesía gratuita.</p>
+            
+            <div class="price-card" style="margin-top: 16px; background: #0D0D16; border-radius: 20px; padding: 20px; border: 1px solid rgba(249,115,22,0.2);">
+                <div style="font-size: 11px; color: #F97316; margin-bottom: 16px;">PLAN ÚNICO · MENSUAL</div>
+                <div style="font-size: 48px; font-weight: 900;">$40.000 <span style="font-size: 16px;">/ mes</span></div>
+                <div style="color: #22C55E; margin: 8px 0;">Sin permanencia · Cancelás cuando querés</div>
+                <button id="btnSuscribirMiPlan" class="susc-btn-mp" style="margin-top: 16px; background: linear-gradient(90deg, #F97316, #FB923C); width: 100%; padding: 14px; border-radius: 12px; border: none; color: white; cursor: pointer;">
+                    Suscribirme ahora →
+                </button>
+                <div style="font-size: 11px; color: #4B5563; margin-top: 12px;">Débito automático · Mercado Pago</div>
+            </div>
+        </div>
+    `;
+    
+    const btn = document.getElementById('btnSuscribirMiPlan');
+    if (btn) {
+        btn.onclick = () => iniciarSuscripcion();
+    }
+}
+
+// ============================================================
+//  MOSTRAR MI PLAN - EXPIRADO (COPIA EXACTA DEL ONBOARDING)
+// ============================================================
+
+function mostrarMiPlanExpirado() {
+    const contenedor = document.getElementById('susc-inactiva');
+    if (!contenedor) return;
+    
+    // Obtener el HTML del onboarding (que ya tiene el diseño correcto)
+    const onboarding = document.getElementById('vista-onboarding-plan');
+    
+    if (!onboarding) {
+        // Fallback: usar HTML hardcodeado si no hay onboarding
+        contenedor.innerHTML = `
+            <div class="plan-unified-container" style="max-width: 850px; margin: 0 auto; padding: 20px;">
+                <div class="koi-unified-header">
+                    <div class="koi-unified-icon">K</div>
+                </div>
+                <div class="status-unified-card status-expired">
+                    <div class="status-unified-title">⚠️ Tu período de prueba finalizó</div>
+                    <div class="status-unified-sub">Suscribite para seguir facturando sin interrupciones.</div>
+                </div>
+                <div class="price-unified-card">
+                    <div class="price-unified-top-bar"></div>
+                    <div class="price-unified-inner">
+                        <div class="price-unified-eyebrow">PLAN ÚNICO · MENSUAL</div>
+                        <div class="price-unified-amount">
+                            <span class="price-unified-cur">$</span>
+                            <span class="price-unified-num">40.000</span>
+                            <span class="price-unified-period">/ mes</span>
+                        </div>
+                        <div class="price-unified-note">Sin permanencia · Cancelás cuando querés</div>
+                        <div class="price-unified-divider"></div>
+                        <div class="price-unified-features">
+                            <div class="price-unified-feature"><div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div><span class="price-unified-feature-text">Facturas ilimitadas (A, B y C)</span></div>
+                            <div class="price-unified-feature"><div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div><span class="price-unified-feature-text">Facturación automática o manual</span></div>
+                            <div class="price-unified-feature"><div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div><span class="price-unified-feature-text">Envío automático de comprobantes</span></div>
+                            <div class="price-unified-feature"><div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div><span class="price-unified-feature-text">Multi-integración simultánea</span></div>
+                            <div class="price-unified-feature"><div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div><span class="price-unified-feature-text">Soporte por WhatsApp</span></div>
+                        </div>
+                        <button class="price-unified-btn" id="btnSuscribirMiPlan">Suscribirme ahora →</button>
+                        <div class="price-unified-footnote">Débito automático · Mercado Pago</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    } else {
+        // Copiar exactamente el HTML del onboarding
+        const onboardingHTML = onboarding.innerHTML;
+        contenedor.innerHTML = onboardingHTML;
+        console.log('✅ "Mi Plan" copió el HTML del onboarding');
+    }
+    
+    // Configurar el botón
+    const btn = document.getElementById('btnSuscribirMiPlan');
+    if (btn) {
+        // Clonar para eliminar event listeners anteriores
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        newBtn.onclick = () => {
+            console.log('💳 Iniciando suscripción desde Mi Plan');
+            iniciarSuscripcion();
+        };
+    }
+}
+// ============================================================
+//  MOSTRAR MI PLAN - SIN FECHA (Etapa 3)
+// ============================================================
+
+function mostrarMiPlanSinFecha() {
+    const contenedor = document.getElementById('susc-inactiva');
+    if (!contenedor) return;
+    
+    contenedor.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">⚙️</div>
+            <h3 style="color: #8888aa; margin-bottom: 8px;">Configuración pendiente</h3>
+            <p style="color: #8888aa; margin-bottom: 24px;">Completá la configuración de tu cuenta para comenzar.</p>
+            <button class="susc-btn-mp" onclick="mostrarVista('config')" style="background: linear-gradient(90deg, #F97316, #FB923C); padding: 12px 24px; border-radius: 40px; border: none; color: white; cursor: pointer;">
+                Ir a Configuración →
+            </button>
+        </div>
+    `;
+}
+
+// ============================================================
+//  MOSTRAR MI PLAN - ERROR
+// ============================================================
+
+function mostrarMiPlanError() {
+    const contenedor = document.getElementById('susc-inactiva');
+    if (!contenedor) return;
+    
+    contenedor.innerHTML = `
+        <div style="text-align: center; padding: 20px;">
+            <div style="font-size: 48px; margin-bottom: 16px;">⚠️</div>
+            <h3 style="color: #ff6b7a; margin-bottom: 8px;">Error de conexión</h3>
+            <p style="color: #8888aa; margin-bottom: 24px;">No se pudo verificar el estado de tu cuenta.</p>
+            <button class="susc-btn-mp" onclick="location.reload()" style="background: linear-gradient(90deg, #F97316, #FB923C); padding: 12px 24px; border-radius: 40px; border: none; color: white; cursor: pointer;">
+                Recargar página →
+            </button>
+        </div>
+    `;
+}
+
+// ============================================================
+//  INICIAR SUSCRIPCIÓN (desde Mi Plan)
+// ============================================================
 
 function iniciarSuscripcion() {
-  const btn = document.getElementById('btnSuscribir');
-  document.getElementById('susc-inactiva').style.display = 'none';
-  document.getElementById('susc-cargando').style.display = 'block';
-
-  gasRun('crearLinkSuscripcion', null,
-    res => {
-      document.getElementById('susc-cargando').style.display = 'none';
-      document.getElementById('susc-inactiva').style.display = 'block';
-      if (res && res.error) {
-        toast('Error: ' + res.error, 'error');
+    const btn = document.getElementById('btnSuscribir');
+    const suscInactiva = document.getElementById('susc-inactiva');
+    const suscCargando = document.getElementById('susc-cargando');
+    
+    if (!btn || !suscInactiva || !suscCargando) {
+        console.log('ℹ️ Elementos de suscripción no encontrados, redirigiendo directamente');
+        window.location.href = '/api/suscripcion/crear';
         return;
-      }
-      if (res && res.url) {
-        // Abrir checkout de MP en nueva pestaña
-        window.open(res.url, '_blank');
-        toast('Redirigiendo a Mercado Pago…', 'info');
-      }
-    },
-    err => {
-      document.getElementById('susc-cargando').style.display = 'none';
-      document.getElementById('susc-inactiva').style.display = 'block';
-      toast('Error: ' + err.message, 'error');
     }
-  );
+    
+    suscInactiva.style.display = 'none';
+    suscCargando.style.display = 'block';
 
-  if (typeof google === 'undefined') {
-    setTimeout(() => {
-      document.getElementById('susc-cargando').style.display = 'none';
-      document.getElementById('susc-inactiva').style.display = 'block';
-      toast('Demo: redirigiendo a Mercado Pago…', 'info');
-      window.open('https://www.mercadopago.com.ar', '_blank');
-    }, 1500);
-  }
+    gasRun('crearLinkSuscripcion', null,
+        res => {
+            if (suscCargando) suscCargando.style.display = 'none';
+            if (suscInactiva) suscInactiva.style.display = 'block';
+            
+            if (res && res.error) {
+                toast('Error: ' + res.error, 'error');
+                return;
+            }
+            if (res && res.url) {
+                window.open(res.url, '_blank');
+                toast('Redirigiendo a Mercado Pago…', 'info');
+            }
+        },
+        err => {
+            if (suscCargando) suscCargando.style.display = 'none';
+            if (suscInactiva) suscInactiva.style.display = 'block';
+            toast('Error: ' + err.message, 'error');
+        }
+    );
+
+    if (typeof google === 'undefined') {
+        setTimeout(() => {
+            if (suscCargando) suscCargando.style.display = 'none';
+            if (suscInactiva) suscInactiva.style.display = 'block';
+            toast('Demo: redirigiendo a Mercado Pago…', 'info');
+            window.open('https://www.mercadopago.com.ar', '_blank');
+        }, 1500);
+    }
 }
+
+// ============================================================
+//  CANCELAR SUSCRIPCIÓN
+// ============================================================
 
 function cancelarSuscripcion() {
-  if (!confirm('¿Cancelar la suscripción a KOI APP?\nPerderás acceso al sistema al finalizar el período.')) return;
-  toast('Procesando cancelación…', 'info');
-  gasRun('cancelarSuscripcion', null,
-    res => {
-      if (res && res.ok) {
-        toast('Suscripción cancelada', 'warn');
-        verificarSuscripcion();
-      } else {
-        toast('Error al cancelar: ' + (res && res.error || 'desconocido'), 'error');
-      }
-    },
-    err => toast('Error: ' + err.message, 'error')
-  );
+    if (!confirm('¿Cancelar la suscripción a KOI APP?\nPerderás acceso al sistema al finalizar el período.')) return;
+    toast('Procesando cancelación…', 'info');
+    gasRun('cancelarSuscripcion', null,
+        res => {
+            if (res && res.ok) {
+                toast('Suscripción cancelada', 'warn');
+                verificarSuscripcion();
+            } else {
+                toast('Error al cancelar: ' + (res && res.error || 'desconocido'), 'error');
+            }
+        },
+        err => toast('Error: ' + err.message, 'error')
+    );
 }
-
 /* ── COMPROBANTES UNIFICADOS ────────────────────────── */
 let _todosComp   = [];  // todos sin filtrar
 let _filtroTipo  = 'todos';
@@ -438,6 +761,13 @@ let _filtroMes   = '';
 let paginaActual = 1;
 let totalPaginas = 1;
 let busquedaActual = '';
+
+// 👇 AGREGAR ESTAS VARIABLES GLOBALES DE PERÍODO 👇
+let _rangoDesde = null;
+let _rangoHasta = null;
+let _dashDesde = null;
+let _dashHasta = null;
+
 
 function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
@@ -449,25 +779,20 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
       Cargando comprobantes…
     </tr>`;
 
-  // Construir URL con parámetros de paginación, búsqueda y FECHAS
   const params = new URLSearchParams({
     limit: 25,
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
-  
-  // 👇 AGREGAR ESTAS DOS LÍNEAS PARA LAS FECHAS
   if (_rangoDesde) params.set('desde', _rangoDesde.toISOString().split('T')[0]);
   if (_rangoHasta) params.set('hasta', _rangoHasta.toISOString().split('T')[0]);
   
-  // Cargar desde la API REST con paginación
   api.get(`/api/orders?${params.toString()}`)
     .then(raw => {
       const orders = raw.orders || [];
       totalPaginas = raw.pagination?.pages || 1;
       
       _todosComp = orders.map(o => {
-        // Generar concepto desde items si existe
         let conceptoMostrar = o.concepto || '';
         if (!conceptoMostrar && o.items && o.items.length > 0) {
           conceptoMostrar = o.items.map(i => `${i.cantidad}x ${i.nombre}`).join(', ');
@@ -477,16 +802,24 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
         }
         
         return {
-          id:      o.externalId || o._id,
-          _id:     o._id,
-          cliente: o.customerName  || 'Sin nombre',
-          email:   o.customerEmail || '',
+          id: o.externalId || o._id,
+          _id: o._id,
+          cliente: o.customerName || 'Sin nombre',
+          email: o.customerEmail || '',
           concepto: conceptoMostrar,
-          fecha:   o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
-          tipo:    'Factura C',
-          monto:   o.amount || 0,
-          estado:  o.status === 'invoiced' ? 'emitido' : 'pendiente',
-          origen:  o.platform === 'manual' ? 'manual' : 'woo',
+          fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
+          tipo: 'Factura C',
+          monto: o.amount || 0,
+          currency: o.currency || 'ARS',  // 👈 AGREGADO
+          estado: o.status === 'invoiced' ? 'emitido' : 'pendiente',
+          origen: o.platform === 'manual' ? 'manual' : 'woo',
+          platform: o.platform,
+          emailSent: o.emailSent || false,
+          amount: o.amount,
+          nroFormatted: o.nroFormatted,
+          status: o.status,
+          caeNumber: o.caeNumber,
+          caeExpiry: o.caeExpiry
         };
       });
       
@@ -495,22 +828,10 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
     })
     .catch(err => {
       console.error(`Error (intento ${intento}/3):`, err.message);
-      
       if (intento < 3) {
-        const delay = intento * 2000;
-        setTimeout(() => {
-          cargarTodosComprobantes(page, search, intento + 1);
-        }, delay);
+        setTimeout(() => cargarTodosComprobantes(page, search, intento + 1), intento * 2000);
       } else {
-        document.getElementById('manualesBody').innerHTML =
-          `<td><td colspan="8" style="text-align:center;padding:40px;color:var(--red);font-size:12px">
-            ⚠️ Error de conexión. Recargá la página o intentá más tarde.
-            <br><br>
-            <button onclick="cargarTodosComprobantes(1, '')" style="padding:8px 16px;margin-top:10px;border-radius:6px;border:1px solid var(--border);background:var(--card);cursor:pointer;">
-              Reintentar
-            </button>
-           </div>
-          `;
+        document.getElementById('manualesBody').innerHTML = `<tr><td colspan="8">Error de conexión. Recargá la página.</td></tr>`;
       }
     });
 }
@@ -656,13 +977,35 @@ let _plataformaActual = null;
 function cargarIntegraciones() {
   const cont = document.getElementById('negIntegraciones');
   if (typeof google !== 'undefined') {
-    // En GAS no hay /api/integrations, usar datos reales cuando sea web
     return;
   }
-  fetch('/api/integrations', { credentials:'include' })
+  fetch('/api/integrations', { credentials: 'include' })
     .then(r => r.json())
     .then(data => {
       const list = data.integrations || [];
+      
+      // Actualizar toggles y descripciones en las cards (si existen)
+      const connectedPlatforms = {};
+      list.forEach(i => { connectedPlatforms[i.platform] = i; });
+
+      ['woocommerce', 'mercadolibre', 'tiendanube', 'empretienda', 'rappi', 'vtex'].forEach(p => {
+        const tog = document.getElementById('toggle-' + p);
+        const desc = document.getElementById('desc-' + p);
+        const card = document.getElementById('card-' + p);
+        const integration = connectedPlatforms[p];
+        if (tog) {
+          tog.checked = integration && integration.status === 'active';
+          if (card) card.classList.toggle('is-active', tog.checked);
+        }
+        if (desc) {
+          desc.textContent = integration
+            ? (integration.status === 'active' ? `✓ Conectada — ${integration.storeName || integration.storeId}` : '⚠ Error de conexión')
+            : 'Sin conectar';
+          desc.style.color = integration && integration.status === 'active' ? 'var(--green)' : '';
+        }
+      });
+
+      // Renderizar lista de integraciones activas en negIntegraciones
       if (!list.length) {
         cont.innerHTML = `<div class="neg-empty">
           <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
@@ -673,47 +1016,16 @@ function cargarIntegraciones() {
         </div>`;
         return;
       }
+
       const LOGOS = {
-        woocommerce:  '🛍',
-        tiendanube:   '☁️',
+        woocommerce: '🛍',
+        tiendanube: '☁️',
         mercadolibre: '🛒',
-        empretienda:  '🏪',
-        rappi:        '🛵',
+        empretienda: '🏪',
+        rappi: '🛵',
       };
-      // Actualizar toggles y descripciones en las cards
-    const connectedPlatforms = {};
-    list.forEach(i => { connectedPlatforms[i.platform] = i; });
 
-    ['woocommerce','mercadolibre','tiendanube','empretienda','rappi','vtex'].forEach(p => {
-      const tog  = document.getElementById('toggle-' + p);
-      const desc = document.getElementById('desc-' + p);
-      const card = document.getElementById('card-' + p);
-      const integration = connectedPlatforms[p];
-      if (tog) {
-        tog.checked = integration && integration.status === 'active';
-        if (card) card.classList.toggle('is-active', tog.checked);
-      }
-      if (desc) {
-        desc.textContent = integration
-          ? (integration.status === 'active' ? `✓ Conectada — ${integration.storeName || integration.storeId}` : '⚠ Error de conexión')
-          : 'Sin conectar';
-        desc.style.color = integration && integration.status === 'active' ? 'var(--green)' : '';
-      }
-    });
-
-    // También renderizar lista de integraciones activas arriba
-    if (!list.length) {
-      cont.innerHTML = `<div class="neg-empty">
-        <svg width="32" height="32" viewBox="0 0 32 32" fill="none" opacity=".3">
-          <rect x="2" y="8" width="28" height="20" rx="3" stroke="var(--text-2)" stroke-width="1.5"/>
-          <path d="M10 8V6a6 6 0 0 1 12 0v2" stroke="var(--text-2)" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-        <span>Todavía no conectaste ninguna tienda</span>
-      </div>`;
-      return;
-    }
-
-    cont.innerHTML = list.map(i => `
+      cont.innerHTML = list.map(i => `
         <div class="neg-integration">
           <div class="neg-integration-logo">${LOGOS[i.platform] || '🔗'}</div>
           <div class="neg-integration-info">
@@ -732,8 +1044,7 @@ function cargarIntegraciones() {
           </div>
         </div>`).join('');
     })
-    .cat
-    ch(() => {});
+    .catch(err => console.error('Error cargando integraciones:', err));
 }
 
 async function backfillConcepto(integrationId) {
@@ -1451,26 +1762,72 @@ function renderComprobantes(lista) {
     return;
   }
 
-  tbody.innerHTML = lista.map((c, i) => {
-    const estadoChip = c.estado === 'emitido'
-      ? `<span class="estado-chip ok">● Emitido</span>`
-      : c.estado === 'anulado'
-      ? `<span class="estado-chip anulado">✕ Anulado</span>`
-      : `<span class="estado-chip pend">◌ Pendiente</span>`;
-
-    const origenPill = c.origen === 'manual'
-      ? `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:var(--yellow);background:rgba(255,179,0,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(255,179,0,.2)">MAN</span>`
-      : `<span style="font-size:9px;font-weight:700;letter-spacing:1px;color:#7b8cde;background:rgba(123,140,222,.1);padding:2px 7px;border-radius:4px;border:1px solid rgba(123,140,222,.2)">WOO</span>`;
-
-    const btnAnular = c.origen === 'manual' && c.estado !== 'anulado'
+  let html = '';
+  for (let i = 0; i < lista.length; i++) {
+    const c = lista[i];
+    
+    const esCancelada = c.status === 'cancelled';
+    const esAnulada = c.status === 'cancelled_by_nc';  // 👈 NUEVO: factura original anulada
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
+    const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
+    
+    // 👇 ESTADO CHIP MEJORADO
+    let estadoChip = '';
+    if (esAnulada) {
+      estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
+    } else if (emitido) {
+      estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
+    } else {
+      estadoChip = `<span class="estado-chip pend">◌ Pendiente</span>`;
+    }
+    
+    const origenPill = (() => {
+      switch (c.platform) {
+        case 'mercadolibre':
+          return '<span style="font-size:9px;font-weight:700;background:#FFE600;color:#1a1a1a;padding:2px 7px;border-radius:4px;">ML</span>';
+        case 'woocommerce':
+          return '<span style="font-size:9px;font-weight:700;background:#7F54B3;color:white;padding:2px 7px;border-radius:4px;">WOO</span>';
+        default:
+          return '<span style="font-size:9px;font-weight:700;background:#444;padding:2px 7px;border-radius:4px;">EXT</span>';
+      }
+    })();
+    
+    const btnAnular = c.origen === 'manual' && !emitido && !esAnulada
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
-      : c.origen === 'manual'
-      ? `<button class="act-btn act-done" disabled title="Ya anulado">↩️</button>`
       : '';
-
-    return `
+    
+    // 👇 BOTÓN CANCELAR: NO mostrar si ya está anulada o es NC
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && !esAnulada && c.origen !== 'manual')
+      ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c.orderId || c._id || c.id}')">
+          <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+            <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+            <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+          </svg>
+         </button>`
+      : '';
+    
+    // 👇 TÍTULO DEL BOTÓN PDF
+    const tituloPDF = (esNotaCredito || esCancelada) 
+      ? 'Ver Nota de Crédito' 
+      : (esAnulada ? 'Ver Factura Anulada' : 'Ver PDF');
+    
+    const emailSent = c.emailSent === true;
+    const emailTitle = emailSent 
+      ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
+      : (esNotaCredito ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
+    const emailDisabled = emailSent ? 'disabled' : '';
+    const emailOnclick = emailSent ? '' : `enviarMail('${c._id||c.id}')`;
+    
+    const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
+    const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
+    
+    // 👇 ID para el PDF
+    const pdfId = c._id || c.id;
+    
+    html += `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
+      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
@@ -1478,24 +1835,50 @@ function renderComprobantes(lista) {
       </td>
       <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
-      <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${ars(c.monto)}</td>
+      <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td style="text-align:center">${estadoChip}</td>
       <td style="text-align:center">
         <div class="comp-actions" style="justify-content:center">
-          <button class="act-btn" title="Ver PDF"     onclick="verPDF('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg></button>
-          <button class="act-btn" title="Enviar mail" onclick="enviarMail('${c._id||c.id}')"><svg width="13" height="13" viewBox="0 0 14 14" fill="none"><rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/><path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/></svg></button>
+          <button class="act-btn" title="${tituloPDF}" onclick="verPDF('${pdfId}')">
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+            </svg>
+          </button>
+          ${!emitido && !esNotaCredito && !esAnulada
+            ? `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
+                <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                  <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+                  <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+                  <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+                </svg>
+               </button>`
+            : `<button class="act-btn act-done" title="${esNotaCredito ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
+                <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                  <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+                </svg>
+               </button>`
+          }
+          <button class="act-btn ${emailSent ? 'act-btn-sent' : ''}" title="${emailTitle}" onclick="${emailOnclick}" ${emailDisabled}>
+            <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+              <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+              <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+            </svg>
+          </button>
+          ${btnCancelar}
           ${btnAnular}
         </div>
       </td>
     </tr>`;
-  }).join('');
-
+  }
+  
+  tbody.innerHTML = html;
   renderTotalesComp(lista);
 }
-
 function renderTotalesComp(lista) {
-  const activos = lista.filter(c => c.estado !== 'anulado');
-  const total   = activos.reduce((s, c) => s + c.monto, 0);
+  // Excluir órdenes anuladas/canceladas
+  const activos = lista.filter(c => c.estado !== 'anulado' && c.status !== 'cancelled');
+  const total   = activos.reduce((s, c) => s + Math.abs(c.monto), 0);
   const pend    = activos.filter(c => c.estado === 'pendiente').length;
   const woo     = activos.filter(c => c.origen === 'woo').length;
   const man     = activos.filter(c => c.origen === 'manual').length;
@@ -1661,92 +2044,3451 @@ function verPDF(orderId){
 async function emitir(idOrden) {
   // idOrden es el _id de MongoDB de la orden
   const btn = document.querySelector(`[data-emitir="${idOrden}"]`);
-  if (btn) { btn.disabled = true; btn.innerHTML = '<span class="material-icons" style="font-size:13px;animation:spin .6s linear infinite">sync</span>'; }
+  const originalHtml = btn ? btn.innerHTML : '';
+  if (btn) { 
+    btn.disabled = true; 
+    btn.innerHTML = '<span class="material-icons" style="font-size:13px;animation:spin .6s linear infinite">sync</span>'; 
+  }
 
   toast('Solicitando CAE a AFIP…', 'info');
+  
   try {
-    const res = await api.post(`/api/orders/${idOrden}/emitir`, {});
-    if (res.ok) {
-      toast(`✅ CAE emitido: ${res.cae}`, 'success');
-      // Refrescar dashboard con el período actual
-      _recargarDashConPeriodo();
+    const res = await fetch(`/api/orders/${idOrden}/emitir`, {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+
+    // Caso 1: Requiere confirmación (409 Conflict)
+    if (res.status === 409 && data.requiereConfirmacion) {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+      
+      const confirmar = confirm(data.mensaje);
+      if (confirmar) {
+        toast('Procesando emisión forzada…', 'info');
+        
+        const res2 = await fetch(`/api/orders/${idOrden}/emitir-forzar`, {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data2 = await res2.json();
+        
+        if (data2.ok) {
+          toast(`✅ CAE emitido: ${data2.cae}`, 'success');
+          _recargarDashConPeriodo();
+          if (typeof cargarTodosComprobantes === 'function') {
+            cargarTodosComprobantes(paginaActual, busquedaActual);
+          }
+        } else {
+          toast('❌ Error: ' + data2.error, 'error');
+        }
+      }
+      return;
     }
+
+    // Caso 2: Emisión exitosa (usando api.post)
+    if (data.ok) {
+      toast(`✅ CAE emitido: ${data.cae}`, 'success');
+      _recargarDashConPeriodo();
+      if (typeof cargarTodosComprobantes === 'function') {
+        cargarTodosComprobantes(paginaActual, busquedaActual);
+      }
+    } else {
+      toast('❌ Error: ' + data.error, 'error');
+    }
+    
   } catch(e) {
+    console.error('Error en emitir:', e);
     toast('Error AFIP: ' + e.message, 'error');
-    if (btn) { btn.disabled = false; }
+    if (btn) { 
+      btn.disabled = false; 
+      btn.innerHTML = originalHtml;
+    }
   }
 }
 
 async function emitirLote() {
   if (!confirm('¿Emitir CAE para TODAS las órdenes pendientes?')) return;
-  toast('Emitiendo en lote… esto puede tardar unos segundos', 'info');
+  
+  toast('Verificando órdenes pendientes…', 'info');
+  
   try {
-    const res = await api.post('/api/orders/emitir-lote', {});
-    toast(`✅ ${res.message}`, 'success');
-    setTimeout(_recargarDashConPeriodo, 3000);
+    const res = await fetch('/api/orders/emitir-lote', {
+      method: 'POST',
+      credentials: 'include',
+      headers: { 'Content-Type': 'application/json' }
+    });
+    
+    const data = await res.json();
+    
+    // Caso 1: Requiere confirmación (409 Conflict)
+    if (res.status === 409 && data.requiereConfirmacion) {
+      const confirmar = confirm(data.mensaje);
+      if (confirmar) {
+        toast('Emitiendo lote forzado… Esto puede tardar unos segundos', 'info');
+        
+        const res2 = await fetch('/api/orders/emitir-lote-forzar', {
+          method: 'POST',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data2 = await res2.json();
+        
+        if (data2.ok) {
+          toast(`✅ ${data2.message || 'Lote emitido correctamente'}`, 'success');
+          setTimeout(_recargarDashConPeriodo, 3000);
+          if (typeof cargarTodosComprobantes === 'function') {
+            setTimeout(() => cargarTodosComprobantes(1, ''), 3000);
+          }
+        } else {
+          toast('❌ Error: ' + data2.error, 'error');
+        }
+      }
+      return;
+    }
+    
+    // Caso 2: Emisión directa
+    if (data.ok) {
+      toast(`✅ ${data.message || 'Lote emitido correctamente'}`, 'success');
+      setTimeout(_recargarDashConPeriodo, 3000);
+      if (typeof cargarTodosComprobantes === 'function') {
+        setTimeout(() => cargarTodosComprobantes(1, ''), 3000);
+      }
+    } else {
+      toast('❌ Error: ' + data.error, 'error');
+    }
+    
   } catch(e) {
+    console.error('Error en emitirLote:', e);
     toast('Error: ' + e.message, 'error');
   }
 }
 
-async function enviarMail(orderId){
+async function enviarMail(orderId) {
   if (!orderId) return;
-  toast('Enviando factura por mail…','info');
+  
+  // Obtener la orden para saber su estado
   try {
+    const ordenRes = await fetch(`/api/orders/${orderId}`, { credentials: 'include' });
+    const orden = await ordenRes.json();
+    const esCancelada = orden.status === 'cancelled';
+    const tipoMensaje = esCancelada ? 'Nota de Crédito' : 'factura';
+    
+    toast(`Enviando ${tipoMensaje} por mail…`, 'info');
+    
     const res = await api.post(`/api/orders/${orderId}/mail`, {});
-    toast(res.message || 'Mail enviado correctamente', 'success');
+    
+    if (res.ok) {
+      toast(res.message || `${tipoMensaje} enviada correctamente`, 'success');
+      
+      // Actualizar visualmente el botón
+      const buttons = document.querySelectorAll(`button[onclick*="enviarMail('${orderId}')"]`);
+      buttons.forEach(btn => {
+        btn.classList.remove('act-btn');
+        btn.classList.add('act-btn-sent');
+        btn.title = `${tipoMensaje} ya enviada`;
+        btn.disabled = true;
+        btn.onclick = null;
+      });
+      
+      // Recargar la lista
+      setTimeout(() => cargarTodosComprobantes(paginaActual, busquedaActual), 1500);
+    } else {
+      toast(res.message || 'Error al enviar', 'error');
+    }
   } catch(e) {
     toast('Error: ' + e.message, 'error');
   }
 }
 
 /* ── INIT ──────────────────────────────────────────── */
-document.addEventListener('DOMContentLoaded', async () => {
-  _initDashPeriod();
 
-  // Cargar datos reales desde la API REST
-  try {
-    // Período por defecto: mes actual
-    const _ahora = new Date();
-    const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString();
-    const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth()+1, 0, 23, 59, 59).toISOString();
-    const raw  = await api.get(`/api/stats/dashboard?desde=${_desde}&hasta=${_hasta}`);
-    const data = adaptarStats(raw);
-    if (data) {
-      cargarDashboard(data);
+// ========== VARIABLE GLOBAL DE CONDICIÓN FISCAL ==========
+let _condicionFiscal = null;
+
+// ========== FUNCIONES DE CONDICIÓN FISCAL ==========
+
+// Función para cargar la condición fiscal del usuario
+async function cargarCondicionFiscal() {
+    try {
+        const res = await fetch('/api/me');
+        const { user } = await res.json();
+        if (user?.settings?.condicionFiscal) {
+            _condicionFiscal = user.settings.condicionFiscal;
+        } else {
+            _condicionFiscal = 'responsable_inscripto';
+        }
+    } catch (err) {
+        console.warn('Error cargando condición fiscal:', err);
+        _condicionFiscal = 'responsable_inscripto';
+    }
+    console.log('📋 Condición fiscal cargada:', _condicionFiscal);
+}
+
+// Función para obtener la condición fiscal actual
+function getCondicionFiscal() {
+    return _condicionFiscal || 'responsable_inscripto';
+}
+
+// Función para obtener el mensaje según condición fiscal
+function getMensajePeriodoAnterior() {
+    const condicion = getCondicionFiscal();
+    
+    if (condicion === 'monotributo') {
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
+            Verificá antes de continuar.
+        `;
+    } else if (condicion === 'responsable_inscripto') {
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar el cómputo de <strong>IVA, Ganancias y percepciones de IIBB</strong>.<br>
+            Verificá tu situación fiscal antes de continuar.
+        `;
     } else {
-      renderStatus(false);
-      cargarDashboard(MOCK);
+        return `
+            <strong>Importante:</strong> Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+            Facturar períodos anteriores puede afectar tu declaración fiscal del período actual.<br>
+            Verificá antes de continuar.
+        `;
     }
-  } catch(e) {
-    console.error('Init error:', e.message);
-    // Si falla auth → redirigir al login
-    if (e.message.includes('401') || e.message.includes('autenticado')) {
-      window.location.href = '/login';
-      return;
-    }
-    renderStatus(false);
-    toast('Error cargando datos: ' + e.message, 'error');
-    cargarDashboard(MOCK);
-  }
+}
 
-  // Detectar retorno de OAuth
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('woo') === 'connected') {
-    toast('✅ WooCommerce conectado correctamente', 'success');
-    history.replaceState({}, '', '/dashboard');
-    mostrarVista('negocio');
+
+// ========== INIT (UNIFICADO) ==========
+document.addEventListener('DOMContentLoaded', async () => {
+    // Cargar condición fiscal primero
+    await cargarCondicionFiscal();
+    
+    // Cargar configuración del usuario
+    await cargarConfiguracion();
+    
+    // Inicializar período del dashboard
+    _initDashPeriod();
+
+    // Cargar datos reales desde la API REST
+    try {
+        const _ahora = new Date();
+        const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString();
+        const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth() + 1, 0, 23, 59, 59).toISOString();
+        const raw = await api.get(`/api/stats/dashboard?desde=${_desde}&hasta=${_hasta}`);
+        const data = adaptarStats(raw);
+        if (data) {
+            cargarDashboard(data);
+        } else {
+            renderStatus(false);
+            cargarDashboard(MOCK);
+        }
+    } catch(e) {
+        console.error('Init error:', e.message);
+        if (e.message.includes('401') || e.message.includes('autenticado')) {
+            window.location.href = '/login';
+            return;
+        }
+        renderStatus(false);
+        toast('Error cargando datos: ' + e.message, 'error');
+        cargarDashboard(MOCK);
+    }
+
+    // Detectar retorno de OAuth
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('woo') === 'connected') {
+        toast('✅ WooCommerce conectado correctamente', 'success');
+        history.replaceState({}, '', '/dashboard');
+        // Después de conectar una tienda, verificar si necesita onboarding de ARCA
+        setTimeout(() => {
+            if (typeof mostrarPantallaInicial === 'function') {
+                mostrarPantallaInicial();
+            } else {
+                console.error('❌ mostrarPantallaInicial no está definida');
+                mostrarVista('dashboard');
+            }
+        }, 500);
+    }
+    if (params.get('ml') === 'connected') {
+        toast('✅ Mercado Libre conectado correctamente', 'success');
+        history.replaceState({}, '', '/dashboard');
+        // Después de conectar una tienda, verificar si necesita onboarding de ARCA
+        setTimeout(() => {
+            if (typeof mostrarPantallaInicial === 'function') {
+                mostrarPantallaInicial();
+            } else {
+                console.error('❌ mostrarPantallaInicial no está definida');
+                mostrarVista('dashboard');
+            }
+        }, 500);
+    }
+    if (params.get('error') === 'ml_failed') {
+        toast('Error al conectar Mercado Libre', 'error');
+        history.replaceState({}, '', '/dashboard');
+    }
+    
+    // Conectar búsqueda de comprobantes
+    conectarBusquedaComprobantes();
+    
+    // Configurar auto-guardado de límites
+    initAutoGuardadoLimites();
+    
+    // ========== 👇 NUEVA LÓGICA DE ONBOARDING ==========
+    setTimeout(() => {
+        console.log('🔄 Verificando pantalla inicial (tiendas + ARCA)...');
+        if (typeof mostrarPantallaInicial === 'function') {
+            mostrarPantallaInicial();
+        } else {
+            console.error('❌ mostrarPantallaInicial no está definida - revisá el orden de carga del script');
+            console.log('📋 Funciones disponibles en window:', Object.keys(window).filter(k => k.includes('mostrar')));
+            mostrarVista('dashboard');
+        }
+    }, 500);
+});
+// ========== FUNCIONES DE CONFIGURACIÓN ==========
+
+// Modificar la función guardarPerfilVista() para incluir condicionFiscal
+async function guardarPerfilVista() {
+    const condicionFiscal = document.getElementById('cfgCondicionFiscal2').value;
+    const categoria = document.getElementById('cfgCategoria2').value;
+    const cuit = document.getElementById('cfgCuit2').value;
+    const email = document.getElementById('cfgEmail2').value;
+    
+    const payload = {
+        condicionFiscal,
+        categoria: condicionFiscal === 'monotributo' ? categoria : 'C',
+        cuit,
+        email
+    };
+    
+    const btn = event?.target?.closest?.('.btn-cfg-save') || document.querySelector('.btn-cfg-save');
+    if (btn) btn.disabled = true;
+    
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+            // Actualizar variable global de condición fiscal
+            _condicionFiscal = condicionFiscal;
+            
+            const statusDiv = document.getElementById('cfgSaveStatus2');
+            if (statusDiv) {
+                statusDiv.style.display = 'block';
+                setTimeout(() => { statusDiv.style.display = 'none'; }, 3000);
+            }
+            console.log('✅ Configuración guardada:', payload);
+            
+            // Si el modal de lote está abierto, actualizar mensaje
+            const desde = document.getElementById('loteFechaDesde')?.value;
+            const hasta = document.getElementById('loteFechaHasta')?.value;
+            if (desde && hasta && _lotePrevio) {
+                const errorDiv = document.getElementById('loteError');
+                if (typeof verificarLimitesYContinuar === 'function') {
+                    verificarLimitesYContinuar(desde, hasta, errorDiv);
+                }
+            }
+        } else {
+            alert('Error: ' + (data.error || 'No se pudo guardar'));
+        }
+    } catch (err) {
+        console.error('Error al guardar:', err);
+        alert('Error al guardar la configuración');
+    } finally {
+        if (btn) btn.disabled = false;
+    }
+}
+
+// Función para cargar los datos del usuario
+async function cargarConfiguracion() {
+    try {
+        const res = await fetch('/api/me');
+        const { user } = await res.json();
+        
+        if (user?.settings) {
+            // Sincronizar variable global de condición fiscal
+            _condicionFiscal = user.settings.condicionFiscal || 'responsable_inscripto';
+            
+            // Cargar condición fiscal
+            const condicion = user.settings.condicionFiscal || 'responsable_inscripto';
+            const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+            if (condicionSelect) condicionSelect.value = condicion;
+            
+            // Cargar categoría
+            const categoria = user.settings.categoria || 'C';
+            const categoriaSelect = document.getElementById('cfgCategoria2');
+            if (categoriaSelect) categoriaSelect.value = categoria;
+            
+            // Cargar CUIT
+            const cuitInput = document.getElementById('cfgCuit2');
+            if (cuitInput && user.settings.cuit) cuitInput.value = user.settings.cuit;
+            
+            // Cargar email
+            const emailInput = document.getElementById('cfgEmail2');
+            if (emailInput && user.email) emailInput.value = user.email;
+            
+            // Aplicar visibilidad del campo categoría
+            toggleCategoriaField();
+        }
+    } catch (err) {
+        console.error('Error al cargar configuración:', err);
+    }
+}
+
+// Cancelar factura y emitir Nota de Crédito
+async function cancelarFactura(orderId) {
+    if (!confirm('¿Cancelar esta factura?\n\nSe emitirá una Nota de Crédito vinculada a la factura original.')) return;
+    
+    toast('Procesando cancelación y generando Nota de Crédito...', 'info');
+    
+    try {
+        const res = await fetch(`/api/orders/${orderId}/cancelar`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+            toast(`✅ Nota de Crédito emitida: ${data.nroNC}`, 'success');
+            setTimeout(() => cargarTodosComprobantes(paginaActual, busquedaActual), 1500);
+            setTimeout(() => _recargarDashConPeriodo(), 2000);
+        } else {
+            toast('❌ Error: ' + data.error, 'error');
+        }
+    } catch(e) {
+        toast('Error: ' + e.message, 'error');
+    }
+}
+
+// Forzar regeneración automática al cargar la página
+(function() {
+    const originalLoad = window.onload;
+    window.onload = function(e) {
+        if (originalLoad) originalLoad(e);
+        setTimeout(() => {
+            fetch('/api/stats/dashboard', { credentials: 'include', cache: 'no-cache' })
+                .then(r => r.json())
+                .then(data => renderComps(data.ultimas))
+                .catch(() => {});
+        }, 100);
+    };
+})();
+
+// ==================== EMITIR LOTE (FLUJO DE DOS PASOS) ====================
+
+let _pasoActualLote = 1;      // 1: selección, 2: confirmación
+let _lotePrevio = null;       // guardar datos del preview para el paso 2
+window._modoPruebaLote = true; // true = simulación, false = emisión real
+
+// Inicializar límites configurables (valores por defecto)
+window._limitesConfig = window._limitesConfig || { maxFacturas: 20, maxMonto: 1000000, maxDias: 90, activarFacturas: true, activarMonto: true, activarDias: true };
+
+// ========== FUNCIONES DE VISUALIZACIÓN DE PASOS ==========
+
+function mostrarPasoSeleccionLote() {
+    const pasoSeleccion = document.getElementById('pasoSeleccionLote');
+    const pasoConfirmacion = document.getElementById('pasoConfirmacionLote');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    const btnVolver = document.getElementById('btnVolverLote');
+    const btnEmitir = document.getElementById('btnEmitirLoteConfirmado');
+    
+    if (pasoSeleccion) pasoSeleccion.style.display = 'block';
+    if (pasoConfirmacion) pasoConfirmacion.style.display = 'none';
+    if (btnSiguiente) btnSiguiente.style.display = 'flex';
+    if (btnVolver) btnVolver.style.display = 'none';
+    if (btnEmitir) btnEmitir.style.display = 'none';
+}
+
+function mostrarPasoConfirmacionLote() {
+    const pasoSeleccion = document.getElementById('pasoSeleccionLote');
+    const pasoConfirmacion = document.getElementById('pasoConfirmacionLote');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    const btnVolver = document.getElementById('btnVolverLote');
+    const btnEmitir = document.getElementById('btnEmitirLoteConfirmado');
+    
+    if (pasoSeleccion) pasoSeleccion.style.display = 'none';
+    if (pasoConfirmacion) pasoConfirmacion.style.display = 'block';
+    if (btnSiguiente) btnSiguiente.style.display = 'none';
+    if (btnVolver) btnVolver.style.display = 'flex';
+    if (btnEmitir) btnEmitir.style.display = 'flex';
+    
+    cargarResumenConfirmacionLote();
+}
+
+// ========== ABRIR Y CERRAR MODAL ==========
+
+function abrirModalLote() {
+    _pasoActualLote = 1;
+    _lotePrevio = null;
+    
+    const desdeInput = document.getElementById('loteFechaDesde');
+    const hastaInput = document.getElementById('loteFechaHasta');
+    
+    if (desdeInput) desdeInput.value = '';
+    if (hastaInput) hastaInput.value = '';
+    
+    const errorDiv = document.getElementById('loteError');
+    const previewDiv = document.getElementById('lotePreview');
+    const seguridadDiv = document.getElementById('loteSeguridad');
+    
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    if (previewDiv) previewDiv.innerHTML = '';
+    if (seguridadDiv) {
+        seguridadDiv.style.display = 'none';
+        seguridadDiv.innerHTML = '';
+    }
+    
+    mostrarPasoSeleccionLote();
+    
+    const overlay = document.getElementById('modalLoteOverlay');
+    const modal = document.getElementById('modalLote');
+    
+    if (overlay) overlay.style.display = 'block';
+    if (modal) {
+        modal.style.display = 'block';
+        modal.style.opacity = '1';
+        modal.style.pointerEvents = 'auto';
+    }
+    
+    const ejecutarPreviewYValidar = async () => {
+        await previewEmitirLote();
+        const desde = desdeInput?.value;
+        const hasta = hastaInput?.value;
+        if (desde && hasta && errorDiv && _lotePrevio) {
+            verificarLimitesYContinuar(desde, hasta, errorDiv);
+        }
+    };
+    
+    if (desdeInput) {
+        desdeInput.removeEventListener('change', ejecutarPreviewYValidar);
+        desdeInput.addEventListener('change', ejecutarPreviewYValidar);
+    }
+    if (hastaInput) {
+        hastaInput.removeEventListener('change', ejecutarPreviewYValidar);
+        hastaInput.addEventListener('change', ejecutarPreviewYValidar);
+    }
+}
+
+function cerrarModalLote() {
+    const overlay = document.getElementById('modalLoteOverlay');
+    const modal = document.getElementById('modalLote');
+    
+    if (overlay) overlay.style.display = 'none';
+    if (modal) modal.style.display = 'none';
+    
+    _pasoActualLote = 1;
+    _lotePrevio = null;
+    
+    const errorDiv = document.getElementById('loteError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+}
+
+// ========== PREVIEW ==========
+
+async function previewEmitirLote() {
+    const desde = document.getElementById('loteFechaDesde').value;
+    const hasta = document.getElementById('loteFechaHasta').value;
+    const previewDiv = document.getElementById('lotePreview');
+    const errorDiv = document.getElementById('loteError');
+    
+    if (!desde || !hasta) {
+        if (previewDiv) previewDiv.innerHTML = '';
+        if (errorDiv) errorDiv.style.display = 'none';
+        _lotePrevio = null;
+        return;
+    }
+    
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    
+    try {
+        const res = await fetch('/api/orders/preview-lote', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ desde, hasta })
+        });
+        const data = await res.json();
+        
+        _lotePrevio = {
+            total: data.total,
+            montoTotal: data.montoTotal,
+            desde,
+            hasta,
+            esMesAnterior: data.esMesAnterior || false
+        };
+        
+        if (previewDiv) {
+            if (data.total === 0) {
+                previewDiv.innerHTML = `<div style="background: rgba(255,61,87,0.1); padding: 16px; border-radius: 12px; margin-top: 16px;">❌ No hay órdenes pendientes en este período</div>`;
+            } else {
+                let filas = '';
+                data.detalle.slice(0, 10).forEach((o, idx) => {
+                    const fechaOrden = o.fecha || (o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—');
+                    const externalId = o.externalId || o.id || `orden-${idx}`;
+                    filas += `<div style="display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05);">
+                        <span>#${externalId} - ${fechaOrden} - ${o.customerName}</span>
+                        <span>${formatCurrency(o.amount, o.currency)}</span>
+                    </div>`;
+                });
+                const masOrdenes = data.total > 10 ? `<div style="padding: 8px 0; text-align: center;">... y ${data.total - 10} órdenes más</div>` : '';
+                previewDiv.innerHTML = `<div style="background: var(--card-2); border-radius: 12px; margin-top: 16px; padding: 12px;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                        <span>📋 ÓRDENES A EMITIR (${data.total})</span>
+                        <span>${formatCurrency(data.montoTotal)}</span>
+                    </div>
+                    <div style="max-height: 200px; overflow-y: auto;">${filas}${masOrdenes}</div>
+                </div>`;
+            }
+        }
+        
+        const btnSiguiente = document.getElementById('btnSiguienteLote');
+        if (btnSiguiente) btnSiguiente.disabled = (data.total === 0);
+        
+        return data;
+        
+    } catch(e) {
+        console.error('Error en preview:', e);
+        if (previewDiv) previewDiv.innerHTML = '<div style="color: var(--red); padding: 12px;">❌ Error al cargar previsualización</div>';
+        _lotePrevio = null;
+        return null;
+    }
+}
+
+// ========== NAVEGACIÓN ENTRE PASOS ==========
+
+function siguientePasoLote() {
+    const desde = document.getElementById('loteFechaDesde').value;
+    const hasta = document.getElementById('loteFechaHasta').value;
+    const errorDiv = document.getElementById('loteError');
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.innerHTML = '';
+    }
+    if (btnSiguiente) {
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
+    }
+    
+    if (!desde || !hasta) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Completá ambas fechas';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (new Date(desde) > new Date(hasta)) {
+        if (errorDiv) {
+            errorDiv.innerText = 'La fecha "Desde" no puede ser mayor que "Hasta"';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    if (!_lotePrevio) {
+        toast('Generando previsualización...', 'info');
+        previewEmitirLote().then(() => {
+            verificarLimitesYContinuar(desde, hasta, errorDiv);
+        });
+        return;
+    }
+    
+    verificarLimitesYContinuar(desde, hasta, errorDiv);
+}
+
+function volverPasoSeleccionLote() {
+    _pasoActualLote = 1;
+    mostrarPasoSeleccionLote();
+}
+
+// ========== VALIDACIÓN DE LÍMITES ==========
+
+// Función para obtener mensaje según condición fiscal (siempre el correcto)
+function getMensajePorCondicionFiscal() {
+    // Usar _condicionFiscal en lugar de window._condicionFiscal
+    const condicionFiscal = typeof _condicionFiscal !== 'undefined' ? _condicionFiscal : 'responsable_inscripto';
+    
+    if (condicionFiscal === 'monotributo' || condicionFiscal === 'monotributista') {
+        return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
+                Verificá antes de continuar.`;
+    } else {
+        return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
+                Facturar períodos anteriores puede afectar el <strong>cómputo de IVA, Ganancias y percepciones de IIBB</strong>.<br>
+                Verificá tu situación fiscal antes de continuar.`;
+    }
+}
+
+function verificarLimitesYContinuar(desde, hasta, errorDiv) {
+    if (!errorDiv || errorDiv.id !== 'loteError') {
+        errorDiv = document.getElementById('loteError');
+    }
+    
+    const btnSiguiente = document.getElementById('btnSiguienteLote');
+    
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxDiasActivo = window._limitesConfig?.activarDias !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    const maxDias = window._limitesConfig?.maxDias || 90;
+    
+    const fechaDesde = new Date(desde);
+    const fechaHasta = new Date(hasta);
+    const hoy = new Date();
+    const mesActual = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    const esPeriodoAnterior = fechaHasta < mesActual;
+    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const excedeDias = maxDiasActivo && diffDays > maxDias;
+    const diasDesdePeriodo = Math.ceil((hoy - fechaHasta) / (1000 * 60 * 60 * 24));
+    const periodoMuyAntiguo = maxDiasActivo && diasDesdePeriodo > maxDias;
+    const excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
+    const bloquea = excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo;
+    
+    // Obtener el mensaje correcto según condición fiscal (SIEMPRE el mismo, haya o no bloqueo)
+    const mensajeFiscalCorrecto = getMensajePorCondicionFiscal();
+    
+    const advertenciaFiscal = `
+        <div style="background: rgba(255,179,0,0.08); border-radius: 10px; padding: 10px 12px; margin-bottom: 16px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span>⚠️</span>
+                <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                    <strong>Importante:</strong><br>
+                    ${mensajeFiscalCorrecto}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    // ========== CASO 1: ERROR BLOQUEANTE (rojo) ==========
+    if (bloquea) {
+        let erroresLista = '';
+        
+        if (excedeFacturas) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>La operación intenta emitir ${_lotePrevio.total} facturas</strong> (máximo: ${maxFacturas})</span>
+            </div>`;
+        }
+        if (excedeMonto) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El monto total alcanza ${formatCurrency(_lotePrevio.montoTotal)}</strong> (límite: ${formatCurrency(maxMonto)})</span>
+            </div>`;
+        }
+        if (excedeDias) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El período abarca ${diffDays} días</strong> (máximo: ${maxDias} días)</span>
+            </div>`;
+        }
+        if (periodoMuyAntiguo) {
+            erroresLista += `<div style="display: flex; align-items: center; gap: 8px; background: rgba(255,61,87,0.08); padding: 8px 12px; border-radius: 10px; border-left: 3px solid var(--red);">
+                <span>⚠️</span>
+                <span><strong>El período terminó hace ${diasDesdePeriodo} días</strong> (máximo: ${maxDias} días atrás)</span>
+            </div>`;
+        }
+        
+        let mensajeUnificado = `
+            <div style="background: rgba(255,61,87,0.05); border: 1px solid rgba(255,61,87,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; background: rgba(255,61,87,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">🛡️</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 16px; color: var(--red);">ADVERTENCIAS DE SEGURIDAD</div>
+                    </div>
+                </div>
+                ${advertenciaFiscal}
+                <div style="background: rgba(0,0,0,0.2); border-radius: 14px; padding: 14px; margin-bottom: 16px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 12px;">
+                        <span style="font-size: 18px;">🚫</span>
+                        <span style="font-weight: 700; font-size: 14px; color: var(--text-1);">No se puede continuar con la emisión por lote</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        ${erroresLista}
+                    </div>
+                </div>
+                <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 18px;">💡</span>
+                        <span style="font-weight: 700; font-size: 13px; color: var(--green);">¿Cómo solucionarlo?</span>
+                    </div>
+                    <div style="font-size: 12px; color: var(--text-2); line-height: 1.5; padding-left: 26px;">
+                        Para poder emitir este lote, solo tenés que aumentar los límites en:<br>
+                        <strong style="color: var(--orange-2);">→ Configuración → Límites para Emisión en Lote</strong>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
+                    <span>🔒</span>
+                    <span>Estamos cuidando tus intereses</span>
+                </div>
+            </div>
+        `;
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeUnificado;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'transparent';
+            errorDiv.style.border = 'none';
+            errorDiv.style.padding = '0';
+        }
+        
+        if (btnSiguiente) {
+            btnSiguiente.disabled = true;
+            btnSiguiente.style.opacity = '0.5';
+            btnSiguiente.style.cursor = 'not-allowed';
+        }
+        toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
+        return;
+    }
+    
+    // ========== CASO 2: SIN BLOQUEO (amarillo informativo) ==========
+    if (esPeriodoAnterior) {
+        let mensajeInformativo = `
+            <div style="background: rgba(255,179,0,0.05); border: 1px solid rgba(255,179,0,0.2); border-radius: 20px; padding: 20px; margin-top: 16px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 16px;">
+                    <div style="width: 44px; height: 44px; background: rgba(255,179,0,0.12); border-radius: 22px; display: flex; align-items: center; justify-content: center;">
+                        <span style="font-size: 24px;">🛡️</span>
+                    </div>
+                    <div>
+                        <div style="font-weight: 800; font-size: 16px; color: var(--yellow);">ADVERTENCIAS DE SEGURIDAD</div>
+                    </div>
+                </div>
+                ${advertenciaFiscal}
+                <div style="background: rgba(0,230,118,0.04); border: 1px solid rgba(0,230,118,0.12); border-radius: 14px; padding: 14px;">
+                    <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                        <span style="font-size: 18px;">✅</span>
+                        <span style="font-weight: 700; font-size: 13px; color: var(--green);">Podés continuar con la emisión</span>
+                    </div>
+                </div>
+                <div style="margin-top: 14px; font-size: 11px; color: var(--text-3); display: flex; align-items: center; gap: 6px; justify-content: flex-end;">
+                    <span>🔒</span>
+                    <span>Estamos cuidando tus intereses</span>
+                </div>
+            </div>
+        `;
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeInformativo;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'transparent';
+            errorDiv.style.border = 'none';
+            errorDiv.style.padding = '0';
+        }
+    } else {
+        if (errorDiv) {
+            errorDiv.style.display = 'none';
+            errorDiv.innerHTML = '';
+        }
+    }
+    
+    // ========== CONTINUAR AL PASO 2 ==========
+    if (btnSiguiente) {
+        btnSiguiente.disabled = false;
+        btnSiguiente.style.opacity = '1';
+        btnSiguiente.style.cursor = 'pointer';
+    }
+    
+    if (_lotePrevio.total === 0) {
+        if (errorDiv) {
+            errorDiv.innerText = 'No hay órdenes pendientes en este período';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    _pasoActualLote = 2;
+    mostrarPasoConfirmacionLote();
+}
+
+// ========== RESUMEN DE CONFIRMACIÓN ==========
+
+async function cargarResumenConfirmacionLote() {
+    const confirmacionDiv = document.getElementById('loteConfirmacionResumen');
+    if (!confirmacionDiv) return;
+    
+    if (!_lotePrevio) {
+        confirmacionDiv.innerHTML = '<div style="padding: 20px; text-align: center;">Cargando resumen...</div>';
+        return;
+    }
+    
+    const desde = document.getElementById('loteFechaDesde')?.value || '';
+    const hasta = document.getElementById('loteFechaHasta')?.value || '';
+    
+    const advertenciaImputacion = `
+        <div style="background: rgba(255,179,0,0.08); border-left: 3px solid var(--yellow); padding: 10px 12px; margin-top: 14px; border-radius: 8px;">
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <span style="font-size: 16px;">📅</span>
+                <span style="font-size: 12px; color: var(--text-2); line-height: 1.4;">
+                    ${getMensajePeriodoAnterior()}
+                </span>
+            </div>
+        </div>
+    `;
+    
+    confirmacionDiv.innerHTML = `
+        <div style="background: var(--card-2); border-radius: 12px; padding: 16px;">
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Período:</span>
+                <span style="font-weight: 600;">${desde} → ${hasta}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Facturas a emitir:</span>
+                <span style="font-weight: 700; font-size: 18px;">${_lotePrevio.total}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; margin-bottom: 12px;">
+                <span style="color: var(--text-3);">Monto total:</span>
+                <span style="font-weight: 700; font-size: 18px; color: var(--green);">${formatCurrency(_lotePrevio.montoTotal)}</span>
+            </div>
+            <div style="margin-top: 16px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; color: var(--text-3);">
+                📋 Esta acción emitirá CAE para TODAS las órdenes pendientes en el período seleccionado.
+            </div>
+            ${advertenciaImputacion}
+        </div>
+    `;
+}
+
+// ========== EMISIÓN CONFIRMADA ==========
+
+async function emitirLoteConfirmado() {
+    const desde = document.getElementById('loteFechaDesde')?.value;
+    const hasta = document.getElementById('loteFechaHasta')?.value;
+    const errorDiv = document.getElementById('loteError');
+    
+    if (!desde || !hasta) {
+        if (errorDiv) {
+            errorDiv.innerText = 'Completá ambas fechas';
+            errorDiv.style.display = 'block';
+        }
+        return;
+    }
+    
+    // Validación de límites
+    const maxFacturasActivo = window._limitesConfig?.activarFacturas !== false;
+    const maxMontoActivo = window._limitesConfig?.activarMonto !== false;
+    const maxDiasActivo = window._limitesConfig?.activarDias !== false;
+    const maxFacturas = window._limitesConfig?.maxFacturas || 20;
+    const maxMonto = window._limitesConfig?.maxMonto || 1000000;
+    const maxDias = window._limitesConfig?.maxDias || 90;
+    
+    const fechaDesde = new Date(desde);
+    const fechaHasta = new Date(hasta);
+    const diffDays = Math.ceil((fechaHasta - fechaDesde) / (1000 * 60 * 60 * 24));
+    const diasDesdePeriodo = Math.ceil((new Date() - fechaHasta) / (1000 * 60 * 60 * 24));
+    const excedeDias = maxDiasActivo && diffDays > maxDias;
+    const periodoMuyAntiguo = maxDiasActivo && diasDesdePeriodo > maxDias;
+    const excedeFacturas = maxFacturasActivo && _lotePrevio?.total > maxFacturas;
+    const excedeMonto = maxMontoActivo && _lotePrevio?.montoTotal > maxMonto;
+    
+    if (excedeFacturas || excedeMonto || excedeDias || periodoMuyAntiguo) {
+        let mensajeError = '⚠️ <strong>No se puede emitir el lote</strong><br><br>';
+        mensajeError += 'Los siguientes límites están superados:<br>';
+        if (excedeFacturas) mensajeError += `• <strong>Facturas:</strong> ${_lotePrevio.total} (máximo: ${maxFacturas})<br>`;
+        if (excedeMonto) mensajeError += `• <strong>Monto total:</strong> ${formatCurrency(_lotePrevio.montoTotal)} (máximo: ${formatCurrency(maxMonto)})<br>`;
+        if (excedeDias) mensajeError += `• <strong>Rango de días:</strong> ${diffDays} (máximo: ${maxDias})<br>`;
+        if (periodoMuyAntiguo) mensajeError += `• <strong>Período muy antiguo:</strong> hace ${diasDesdePeriodo} días (máximo: ${maxDias} días)<br>`;
+        mensajeError += '<br>📋 <strong>Para continuar, debes aumentar los límites en:</strong><br>';
+        mensajeError += '&nbsp;&nbsp;&nbsp;→ <strong>Configuración</strong> → <strong>Límites para Emisión en Lote</strong>';
+        
+        if (errorDiv) {
+            errorDiv.innerHTML = mensajeError;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '16px';
+            errorDiv.style.borderRadius = '12px';
+        }
+        toast('⚠️ Límites superados. Aumentalos en Configuración.', 'error');
+        return;
+    }
+    
+    // Emitir
+    const btn = document.getElementById('btnEmitirLoteConfirmado');
+    const originalText = btn?.innerHTML;
+    if (btn) {
+        btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">hourglass_empty</span> Procesando...';
+        btn.disabled = true;
+    }
+    
+    if (errorDiv) errorDiv.style.display = 'none';
+    
+    try {
+        let result;
+        if (window._modoPruebaLote === true) {
+            await new Promise(resolve => setTimeout(resolve, 1500));
+            result = { success: true, emitidos: _lotePrevio?.total || 0, modo: 'prueba' };
+            toast(`🧪 SIMULACIÓN: ${result.emitidos} comprobantes (no se emitieron realmente)`, 'info');
+            cerrarModalLote();
+        } else {
+            const response = await fetch('/api/emitir-lote', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ desde, hasta })
+            });
+            result = await response.json();
+            if (result.success) {
+                toast(`✅ ${result.emitidos} comprobantes emitidos en lote`, 'success');
+                cerrarModalLote();
+                location.reload();
+            } else {
+                throw new Error(result.error || 'Error al emitir el lote');
+            }
+        }
+    } catch (err) {
+        if (errorDiv) {
+            errorDiv.innerText = err.message;
+            errorDiv.style.display = 'block';
+            errorDiv.style.background = 'rgba(255,61,87,0.1)';
+            errorDiv.style.border = '1px solid rgba(255,61,87,0.3)';
+            errorDiv.style.padding = '12px';
+            errorDiv.style.borderRadius = '10px';
+        }
+        volverPasoSeleccionLote();
+    } finally {
+        if (btn) {
+            btn.innerHTML = originalText;
+            btn.disabled = false;
+        }
+    }
+}
+
+// ========== TOGGLE MODO PRUEBA ==========
+
+function toggleModoPruebaLote() {
+    window._modoPruebaLote = !window._modoPruebaLote;
+    const mensaje = window._modoPruebaLote 
+        ? '🧪 Modo PRUEBA activado - NO se emitirán facturas reales'
+        : '🔴 Modo REAL activado - Se emitirán facturas contra AFIP';
+    toast(mensaje, window._modoPruebaLote ? 'info' : 'warn');
+    console.log(`Modo lote: ${window._modoPruebaLote ? 'PRUEBA' : 'REAL'}`);
+}
+
+console.log(`🧪 Modo prueba inicial: ${window._modoPruebaLote ? 'ACTIVADO' : 'DESACTIVADO'}`);
+
+// ==================== LÍMITES CONFIGURABLES ====================
+
+// Cargar límites desde localStorage a inputs
+function cargarLimitesLote() {
+    try {
+        const guardados = localStorage.getItem('koi_limites_lote');
+        if (guardados) {
+            const limites = JSON.parse(guardados);
+            window._limitesConfig = limites;
+            
+            const inputFacturas = document.getElementById('cfgMaxFacturas');
+            const inputMonto = document.getElementById('cfgMaxMonto');
+            const inputDias = document.getElementById('cfgMaxDias');
+            const switchFacturas = document.getElementById('switchLimiteFacturas');
+            const switchMonto = document.getElementById('switchLimiteMonto');
+            const switchDias = document.getElementById('switchLimiteDias');
+            
+            if (inputFacturas) inputFacturas.value = limites.maxFacturas ?? 20;
+            if (inputMonto) inputMonto.value = limites.maxMonto ?? 1000000;
+            if (inputDias) inputDias.value = limites.maxDias ?? 90;
+            if (switchFacturas) switchFacturas.checked = limites.activarFacturas !== false;
+            if (switchMonto) switchMonto.checked = limites.activarMonto !== false;
+            if (switchDias) switchDias.checked = limites.activarDias !== false;
+            
+            if (typeof toggleLimiteFacturas === 'function') toggleLimiteFacturas(switchFacturas?.checked);
+            if (typeof toggleLimiteMonto === 'function') toggleLimiteMonto(switchMonto?.checked);
+            if (typeof toggleLimiteDias === 'function') toggleLimiteDias(switchDias?.checked);
+            
+            console.log('✅ Límites cargados:', window._limitesConfig);
+        } else {
+            window._limitesConfig = { 
+                maxFacturas: 20, 
+                maxMonto: 1000000, 
+                maxDias: 90,
+                activarFacturas: true,
+                activarMonto: true,
+                activarDias: true
+            };
+            if (document.getElementById('switchLimiteFacturas')) {
+                document.getElementById('switchLimiteFacturas').checked = true;
+                document.getElementById('switchLimiteMonto').checked = true;
+                document.getElementById('switchLimiteDias').checked = true;
+            }
+        }
+    } catch(e) {
+        console.warn('Error cargando límites:', e);
+    }
+}
+
+// Guardar límites (SIN TOAST - silencioso)
+function guardarLimitesLote() {
+    const inputFacturas = document.getElementById('cfgMaxFacturas');
+    const inputMonto = document.getElementById('cfgMaxMonto');
+    const inputDias = document.getElementById('cfgMaxDias');
+    const switchFacturas = document.getElementById('switchLimiteFacturas');
+    const switchMonto = document.getElementById('switchLimiteMonto');
+    const switchDias = document.getElementById('switchLimiteDias');
+    
+    const maxFacturas = parseInt(inputFacturas?.value) || 20;
+    const maxMonto = parseFloat(inputMonto?.value) || 1000000;
+    const maxDias = parseInt(inputDias?.value) || 90;
+    const activarFacturas = switchFacturas?.checked ?? true;
+    const activarMonto = switchMonto?.checked ?? true;
+    const activarDias = switchDias?.checked ?? true;
+    
+    if (activarFacturas && (maxFacturas < 1 || maxFacturas > 500)) {
+        toast('El máximo de facturas debe estar entre 1 y 500', 'error');
+        return;
+    }
+    if (activarMonto && maxMonto < 0) {
+        toast('El monto máximo no puede ser negativo', 'error');
+        return;
+    }
+    if (activarDias && (maxDias < 1 || maxDias > 365)) {
+        toast('Los días máximos deben estar entre 1 y 365', 'error');
+        return;
+    }
+    
+    window._limitesConfig = { maxFacturas, maxMonto, maxDias, activarFacturas, activarMonto, activarDias };
+    localStorage.setItem('koi_limites_lote', JSON.stringify(window._limitesConfig));
+    
+    console.log('✅ Límites guardados:', window._limitesConfig);
+}
+
+// Auto-guardado silencioso
+function initAutoGuardadoLimites() {
+    const inputs = ['cfgMaxFacturas', 'cfgMaxMonto', 'cfgMaxDias'];
+    inputs.forEach(id => {
+        const input = document.getElementById(id);
+        if (input) {
+            input.removeEventListener('input', guardarLimitesLote);
+            input.addEventListener('input', guardarLimitesLote);
+            input.removeEventListener('change', guardarLimitesLote);
+            input.addEventListener('change', guardarLimitesLote);
+        }
+    });
+    
+    const switches = ['switchLimiteFacturas', 'switchLimiteMonto', 'switchLimiteDias'];
+    switches.forEach(id => {
+        const sw = document.getElementById(id);
+        if (sw) {
+            sw.removeEventListener('change', guardarLimitesLote);
+            sw.addEventListener('change', guardarLimitesLote);
+        }
+    });
+    
+    console.log('✅ Auto-guardado silencioso de límites configurado');
+}
+
+// ========== TOGGLE DE LÍMITES ==========
+
+function toggleLimiteFacturas(activado) {
+    const campo = document.getElementById('campoMaxFacturas');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxFacturas');
+        if (input) input.disabled = !activado;
+    }
+}
+
+function toggleLimiteMonto(activado) {
+    const campo = document.getElementById('campoMaxMonto');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxMonto');
+        if (input) input.disabled = !activado;
+    }
+}
+
+function toggleLimiteDias(activado) {
+    const campo = document.getElementById('campoMaxDias');
+    if (campo) {
+        campo.style.opacity = activado ? '1' : '0.5';
+        const input = document.getElementById('cfgMaxDias');
+        if (input) input.disabled = !activado;
+    }
+}
+
+// Inicializar límites
+cargarLimitesLote();
+// ========== ONBOARDING POST-LOGIN (NUEVO - SIN ROMPER EXISTENTE) ==========
+
+// Función para verificar si el usuario tiene tiendas conectadas
+async function verificarTiendasConectadas() {
+    console.log('🔍 Verificando tiendas conectadas...');
+    try {
+        const res = await fetch('/api/integrations', { 
+            method: 'GET',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        
+        if (!res.ok) {
+            console.error('Error en /api/integrations:', res.status);
+            return false;
+        }
+        
+        const data = await res.json();
+        const integraciones = data.integrations || [];
+        console.log('📦 Integraciones encontradas:', integraciones.length);
+        return integraciones.length > 0;
+    } catch (err) {
+        console.error('❌ Error al verificar tiendas:', err);
+        return false;
+    }
+}
+
+// Función para mostrar onboarding (solo si no tiene tiendas)
+async function mostrarPantallaOnboardingSiNecesario() {
+    console.log('🔄 Verificando si mostrar onboarding...');
+    
+    const tieneTiendas = await verificarTiendasConectadas();
+    
+    if (!tieneTiendas) {
+        console.log('🚀 Usuario sin tiendas → Mostrando onboarding');
+        
+        // Ocultar todas las vistas
+        document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+        
+        // Mostrar vista negocio
+        const vistaNegocio = document.getElementById('vista-negocio');
+        if (vistaNegocio) vistaNegocio.style.display = 'block';
+        
+        // Mostrar versión onboarding, ocultar versión normal
+        const onboardingDiv = document.getElementById('onboardingNegocio');
+        const normalDiv = document.getElementById('negocioNormal');
+        
+        if (onboardingDiv) onboardingDiv.style.display = 'block';
+        if (normalDiv) normalDiv.style.display = 'none';
+        
+        // Configurar botón continuar (deshabilitado hasta conectar)
+        const btnContinuar = document.getElementById('btnContinuarOnboarding');
+        if (btnContinuar) {
+            btnContinuar.disabled = true;
+            btnContinuar.style.opacity = '0.4';
+            btnContinuar.onclick = () => {
+                console.log('➡️ Continuar a ARCA');
+                mostrarVista('arca');
+            };
+        }
+        
+        // Configurar botón más tarde
+        const btnMasTarde = document.getElementById('btnConfigurarMasTarde');
+        if (btnMasTarde) {
+            btnMasTarde.onclick = () => {
+                console.log('⏰ Configurar más tarde');
+                mostrarVista('dashboard');
+            };
+        }
+        
+        // Cargar nombre del usuario
+        try {
+            const res = await fetch('/api/me', { credentials: 'include' });
+            const data = await res.json();
+            const userNameSpan = document.getElementById('onboardingUserName');
+            if (userNameSpan && data.user) {
+                userNameSpan.textContent = data.user.nombre?.split(' ')[0] || data.user.email?.split('@')[0] || 'usuario';
+            }
+        } catch(e) {
+            console.error('Error cargando nombre:', e);
+        }
+        
+        // Escuchar conexiones exitosas para habilitar continuar
+        const observer = new MutationObserver((mutations) => {
+            mutations.forEach((mutation) => {
+                if (mutation.type === 'childList' || mutation.type === 'characterData') {
+                    const conectados = document.querySelectorAll('[id^="onboarding-desc-"]');
+                    let algunaConectada = false;
+                    conectados.forEach(desc => {
+                        if (desc.innerHTML.includes('✓ Conectado')) algunaConectada = true;
+                    });
+                    if (algunaConectada && btnContinuar) {
+                        btnContinuar.disabled = false;
+                        btnContinuar.style.opacity = '1';
+                        observer.disconnect();
+                    }
+                }
+            });
+        });
+        observer.observe(document.body, { childList: true, subtree: true, characterData: true });
+        
+    } else {
+        console.log('✅ Usuario ya tiene tiendas → No mostrar onboarding');
+    }
+}
+// ========== FUNCIÓN DE ONBOARDING AUTOMÁTICO ==========
+async function mostrarOnboardingSiNecesario() {
+    console.log('🔍 Verificando si mostrar onboarding...');
+    
+    try {
+        const res = await fetch('/api/integrations', { credentials: 'include' });
+        const data = await res.json();
+        const integraciones = data.integrations || [];
+        
+        if (integraciones.length === 0) {
+            console.log('🚀 Usuario sin tiendas → Mostrando onboarding');
+            
+            const onboardingDiv = document.getElementById('onboardingNegocio');
+            const normalDiv = document.getElementById('negocioNormal');
+            const vistaNegocio = document.getElementById('vista-negocio');
+            
+            // Ocultar todas las vistas
+            document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+            
+            if (vistaNegocio) vistaNegocio.style.display = 'block';
+            if (onboardingDiv) onboardingDiv.style.display = 'block';
+            if (normalDiv) normalDiv.style.display = 'none';
+            
+            // Cargar nombre del usuario
+            try {
+                const userRes = await fetch('/api/me', { credentials: 'include' });
+                const userData = await userRes.json();
+                const userNameSpan = document.getElementById('onboardingUserName');
+                if (userNameSpan && userData.user) {
+                    userNameSpan.textContent = userData.user.nombre?.split(' ')[0] || userData.user.email?.split('@')[0] || 'usuario';
+                }
+            } catch(e) {
+                console.error('Error cargando nombre:', e);
+            }
+        } else {
+            console.log('✅ Usuario con', integraciones.length, 'tienda(s), no mostrar onboarding');
+        }
+    } catch(err) {
+        console.error('Error verificando integraciones:', err);
+    }
+}
+// ========== TOGGLE CATEGORÍA  ==========
+function toggleCategoriaField() {
+    const condicionSelect = document.getElementById('cfgCondicionFiscal2');
+    const categoriaGroup = document.getElementById('categoriaGroup2');
+    
+    if (condicionSelect && categoriaGroup) {
+        const esMonotributo = condicionSelect.value === 'monotributo';
+        categoriaGroup.style.display = esMonotributo ? 'block' : 'none';
+    }
+}
+// ============================================================
+//  ARCA - KOI Comunicación (Unificada con cancelación)
+// ============================================================
+
+// Variable para saber si ya se guardó la fecha (solo una vez)
+let _fechaVinculacionGuardada = localStorage.getItem('koi_fecha_vinculacion_arca') !== null;
+
+async function cargarEstadoARCA() {
+    console.log('🔄 KOI: Cargando estado ARCA...');
+    
+    try {
+        const res = await fetch('/api/me/arca-status', { 
+            credentials: 'include',
+            cache: 'no-cache',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        const data = await res.json();
+        
+        console.log('📊 Estado ARCA recibido:', data);
+        
+        // 👇 GUARDAR FECHA DE VINCULACIÓN (localStorage + MongoDB)
+        if (data.ok && data.conectada && data.status === 'vinculado' && !_fechaVinculacionGuardada) {
+            const fechaVinculacion = new Date().toISOString();
+            
+            // 1. Guardar en localStorage (backup rápido)
+            localStorage.setItem('koi_fecha_vinculacion_arca', fechaVinculacion);
+            console.log('✅ Fecha guardada en localStorage:', new Date(fechaVinculacion).toLocaleString());
+            
+            // 2. Guardar en MongoDB (persistente)
+            try {
+                const updateRes = await fetch('/api/me/settings', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({ 
+                        fechaVinculacionARCA: fechaVinculacion 
+                    })
+                });
+                
+                if (updateRes.ok) {
+                    console.log('✅ Fecha guardada en MongoDB');
+                } else {
+                    const errorData = await updateRes.json();
+                    console.warn('⚠️ Error guardando en MongoDB:', errorData);
+                }
+            } catch(e) {
+                console.warn('⚠️ No se pudo guardar en MongoDB:', e.message);
+            }
+            
+            _fechaVinculacionGuardada = true;
+        }
+        
+        if (data.ok) {
+            const conectada = data.conectada;
+            const tieneCUIT = data.tieneCUIT;
+            const tieneClave = data.tieneClave;
+            const status = data.status;
+            const cuit = data.cuit || '';
+            
+            // Elementos DOM
+            const statusDot = document.getElementById('arcaStatusDot');
+            const statusText = document.getElementById('arcaStatusText');
+            const btnContainer = document.getElementById('arcaButtonContainer');
+            const cuitInput = document.getElementById('arcaCuit');
+            const claveInput = document.getElementById('arcaClave');
+            const mensajeDiv = document.getElementById('arcaMensaje');
+            const progressDiv = document.getElementById('arcaProgress');
+            
+            // Mostrar CUIT si existe
+            if (cuitInput && cuit) {
+                cuitInput.value = cuit;
+            }
+            
+            // 🔗 CASO 3: Vinculado (ARCA conectada)
+            if (conectada) {
+                console.log('✅ Estado: VINCULADO');
+                if (statusDot) statusDot.className = 'status-dot vinculado';
+                if (statusText) statusText.innerHTML = '<i class="fas fa-check-circle"></i> ARCA activa';
+                
+                if (btnContainer) {
+                    btnContainer.innerHTML = `
+                        <button class="btn-arca-sync" id="btnDesconectarArca" 
+                                style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #F87171;">
+                            <i class="fas fa-unlink"></i> Desconectar ARCA
+                        </button>
+                    `;
+                    const btn = document.getElementById('btnDesconectarArca');
+                    if (btn) btn.addEventListener('click', desconectarArca);
+                }
+                
+                if (cuitInput) {
+                    cuitInput.disabled = true;
+                }
+                if (claveInput) {
+                    claveInput.value = '';
+                    claveInput.disabled = true;
+                }
+                if (mensajeDiv) {
+                    mensajeDiv.style.display = 'flex';
+                    mensajeDiv.className = 'arca-mensaje success';
+                    mensajeDiv.innerHTML = `
+                        <i class="fas fa-rocket"></i>
+                        <div style="flex:1">
+                            <strong>🚀 ¡ARCA vinculada!</strong><br>
+                            Ahora podés emitir y enviar comprobantes automáticamente. Todo funciona solo.
+                        </div>
+                    `;
+                }
+                if (progressDiv) progressDiv.style.display = 'none';
+            }
+            // 🧠 CASO 2: Datos enviados pero aún no vinculado (PROCESANDO)
+            else if (tieneCUIT && tieneClave && status !== 'vinculado') {
+                console.log('⏳ Estado: PROCESANDO');
+                if (statusDot) statusDot.className = 'status-dot procesando';
+                if (statusText) statusText.innerHTML = '<i class="fas fa-clock"></i> En revisión';
+                
+                // Botón de cancelación habilitado + botón deshabilitado
+                if (btnContainer) {
+                    btnContainer.innerHTML = `
+                        <button class="btn-arca-sync" id="btnCancelarSolicitud" 
+                                style="background: rgba(255, 179, 0, 0.15); border: 1px solid rgba(255, 179, 0, 0.3); color: #F5A623; margin-bottom: 10px;">
+                            <i class="fas fa-times-circle"></i> Cancelar solicitud
+                        </button>
+                        <button class="btn-arca-sync" id="btnDatosEnviados" disabled
+                                style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: var(--text-3); opacity: 0.6;">
+                            <i class="fas fa-check-circle"></i> Datos enviados
+                        </button>
+                    `;
+                    const btn = document.getElementById('btnCancelarSolicitud');
+                    if (btn) btn.addEventListener('click', cancelarSolicitudARCA);
+                }
+                
+                if (cuitInput) cuitInput.disabled = true;
+                if (claveInput) claveInput.disabled = true;
+                if (mensajeDiv) {
+                    mensajeDiv.style.display = 'flex';
+                    mensajeDiv.className = 'arca-mensaje info';
+                    mensajeDiv.innerHTML = `
+                        <i class="fas fa-brain"></i>
+                        <div style="flex:1">
+                            <strong>🧠 KOI recibió tus datos</strong><br>
+                            Estamos validando tu información con ARCA. El proceso puede tomar hasta <strong>24 horas</strong>.<br>
+                            <span style="color: #F5A623; font-size: 12px; display: inline-block; margin-top: 8px;">
+                                <i class="fas fa-info-circle"></i> ¿Te equivocaste? Podés cancelar y volver a intentar.
+                            </span>
+                        </div>
+                        <div class="mensaje-spinner"></div>
+                    `;
+                }
+                if (progressDiv) progressDiv.style.display = 'none';
+            }
+            // 🐟 CASO 1: Sin datos - Invitación a conectar
+            else {
+                console.log('📝 Estado: PENDIENTE');
+                if (statusDot) statusDot.className = 'status-dot pendiente';
+                if (statusText) statusText.innerHTML = '<i class="fas fa-plug"></i> Listo para conectar';
+                
+                if (btnContainer) {
+                    btnContainer.innerHTML = `
+                        <button class="btn-arca-sync" id="btnArcaSync">
+                            <i class="fas fa-sync-alt"></i> Sincronizar con ARCA
+                        </button>
+                    `;
+                    const btn = document.getElementById('btnArcaSync');
+                    if (btn) btn.addEventListener('click', iniciarSyncArca);
+                }
+                
+                if (cuitInput) {
+                    cuitInput.disabled = false;
+                    cuitInput.value = '';
+                }
+                if (claveInput) {
+                    claveInput.disabled = false;
+                    claveInput.value = '';
+                }
+                if (mensajeDiv) {
+                    mensajeDiv.style.display = 'flex';
+                    mensajeDiv.className = 'arca-mensaje warning';
+                    mensajeDiv.innerHTML = `
+                        <i class="fas fa-fish"></i>
+                        <div style="flex:1">
+                            <strong>🐟 Conectá tu cuenta de ARCA</strong><br>
+                            Ingresá tu CUIT y Clave Fiscal. KOI se encarga de todo el proceso de vinculación.
+                        </div>
+                    `;
+                }
+                if (progressDiv) progressDiv.style.display = 'none';
+            }
+        }
+    } catch (error) {
+        console.error('❌ KOI Error:', error);
+        // Mostrar estado de error
+        const statusDot = document.getElementById('arcaStatusDot');
+        const statusText = document.getElementById('arcaStatusText');
+        if (statusDot) statusDot.className = 'status-dot offline';
+        if (statusText) statusText.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Error de conexión';
+    }
+}
+// ============================================================
+//  CANCELAR SOLICITUD ARCA (CASO 2 -> vuelve a CASO 1)
+// ============================================================
+
+async function cancelarSolicitudARCA() {
+    console.log('❌ Cancelando solicitud ARCA...');
+    
+    const confirmar = confirm('⚠️ ¿Cancelar la solicitud de vinculación?\n\nSe eliminarán tu CUIT y Clave Fiscal. Podrás volver a ingresarlos cuando quieras.');
+    
+    if (!confirmar) return;
+    
+    const btn = document.getElementById('btnCancelarSolicitud');
+    const textoOriginal = btn ? btn.innerHTML : '';
+    
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cancelando...';
+        }
+        
+        // Eliminar CUIT y Clave Fiscal
+        await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ cuit: '' })
+        });
+        
+        await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ arcaClave: '' })
+        });
+        
+        // También llamar al endpoint de desconexión por si acaso
+        await fetch('/api/me/desconectar-arca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        
+        console.log('✅ Solicitud cancelada correctamente');
+        
+        // Recargar estado (volverá al CASO 1)
+        await cargarEstadoARCA();
+        
+        // Mostrar mensaje de éxito
+        const mensajeDiv = document.getElementById('arcaMensaje');
+        if (mensajeDiv) {
+            mensajeDiv.style.display = 'flex';
+            mensajeDiv.className = 'arca-mensaje success';
+            mensajeDiv.innerHTML = `
+                <i class="fas fa-check-circle"></i>
+                <div style="flex:1">
+                    <strong>✅ Solicitud cancelada</strong><br>
+                    Podés volver a ingresar tus datos cuando quieras.
+                </div>
+            `;
+            setTimeout(() => {
+                cargarEstadoARCA();
+            }, 3000);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error al cancelar:', error);
+        const mensajeDiv = document.getElementById('arcaMensaje');
+        if (mensajeDiv) {
+            mensajeDiv.style.display = 'flex';
+            mensajeDiv.className = 'arca-mensaje error';
+            mensajeDiv.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <div style="flex:1">
+                    <strong>❌ Error al cancelar</strong><br>
+                    ${error.message}. Por favor intentá de nuevo.
+                </div>
+            `;
+        }
+        await cargarEstadoARCA();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+}
+
+// ============================================================
+//  DESCONECTAR ARCA (CASO 3 -> vuelve a CASO 1)
+// ============================================================
+
+async function desconectarArca() {
+    console.log('🔓 Desconectando ARCA...');
+    
+    const confirmar = confirm('⚠️ ¿Estás seguro que querés desconectar ARCA?\n\nSe eliminarán tu CUIT y Clave Fiscal guardados. Podrás volver a conectarte cuando quieras.');
+    
+    if (!confirmar) return;
+    
+    const btn = document.getElementById('btnDesconectarArca');
+    const textoOriginal = btn ? btn.innerHTML : '';
+    
+    try {
+        if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Desconectando...';
+        }
+        
+        const response = await fetch('/api/me/desconectar-arca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            console.log('✅ ARCA desconectada correctamente');
+            
+            // Recargar estado (volverá al CASO 1)
+            await cargarEstadoARCA();
+            
+            const mensajeDiv = document.getElementById('arcaMensaje');
+            if (mensajeDiv) {
+                mensajeDiv.style.display = 'flex';
+                mensajeDiv.className = 'arca-mensaje success';
+                mensajeDiv.innerHTML = `
+                    <i class="fas fa-check-circle"></i>
+                    <div style="flex:1">
+                        <strong>✅ ARCA desconectada</strong><br>
+                        Podés volver a conectar tu cuenta cuando quieras.
+                    </div>
+                `;
+            }
+        } else {
+            throw new Error(data.error || 'Error al desconectar');
+        }
+    } catch (error) {
+        console.error('❌ Error al desconectar ARCA:', error);
+        const mensajeDiv = document.getElementById('arcaMensaje');
+        if (mensajeDiv) {
+            mensajeDiv.style.display = 'flex';
+            mensajeDiv.className = 'arca-mensaje error';
+            mensajeDiv.innerHTML = `
+                <i class="fas fa-exclamation-circle"></i>
+                <div style="flex:1">
+                    <strong>❌ Error al desconectar</strong><br>
+                    ${error.message}. Por favor intentá de nuevo.
+                </div>
+            `;
+        }
+        await cargarEstadoARCA();
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = textoOriginal;
+        }
+    }
+}
+
+// ============================================================
+//  SINCRONIZAR / CONECTAR ARCA (CASO 1 -> pasa a CASO 2)
+// ============================================================
+
+async function iniciarSyncArca() {
+    const cuitInput = document.getElementById('arcaCuit');
+    const claveInput = document.getElementById('arcaClave');
+    const cuit = cuitInput?.value.trim();
+    const clave = claveInput?.value;
+    
+    if (!cuit) {
+        mostrarMensaje('Por favor ingresa tu CUIT', 'warning');
+        return;
+    }
+    
+    if (!clave) {
+        mostrarMensaje('Por favor ingresa tu Clave Fiscal', 'warning');
+        return;
+    }
+    
+    const cuitLimpio = cuit.replace(/\D/g, '');
+    if (cuitLimpio.length !== 11) {
+        mostrarMensaje('El CUIT debe tener 11 dígitos', 'warning');
+        return;
+    }
+    
+    const btnContainer = document.getElementById('arcaButtonContainer');
+    if (btnContainer) {
+        btnContainer.innerHTML = `
+            <button class="btn-arca-sync" disabled style="opacity: 0.6;">
+                <i class="fas fa-spinner fa-pulse"></i> Enviando datos...
+            </button>
+        `;
+    }
+    
+    try {
+        // Guardar CUIT
+        await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ cuit: cuitLimpio })
+        });
+        
+        // Guardar Clave Fiscal
+        await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ arcaClave: clave })
+        });
+        
+        mostrarMensaje('✅ Datos enviados correctamente. KOI comenzará el proceso de vinculación.', 'success');
+        
+        // Recargar estado (pasará a CASO 2 - Procesando)
+        setTimeout(() => {
+            cargarEstadoARCA();
+        }, 1000);
+        
+    } catch (error) {
+        console.error('Error:', error);
+        mostrarMensaje('❌ Error al enviar los datos. Por favor intentá de nuevo.', 'error');
+        cargarEstadoARCA();
+    }
+}
+
+// ============================================================
+//  MOSTRAR MENSAJE (helper)
+// ============================================================
+
+function mostrarMensaje(mensaje, tipo) {
+    const mensajeDiv = document.getElementById('arcaMensaje');
+    if (!mensajeDiv) {
+        if (typeof toast === 'function') {
+            toast(mensaje, tipo);
+        } else {
+            alert(mensaje);
+        }
+        return;
+    }
+    
+    mensajeDiv.style.display = 'flex';
+    mensajeDiv.className = `arca-mensaje ${tipo}`;
+    mensajeDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : (tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle')}"></i> ${mensaje}`;
+    
+    setTimeout(() => {
+        if (mensajeDiv.innerHTML.includes(mensaje)) {
+            cargarEstadoARCA();
+        }
+    }, 5000);
+}
+
+// ============================================================
+//  CONFIGURAR BOTÓN ARCA (gestión de eventos unificada)
+// ============================================================
+
+function configurarBotonArca() {
+    // Esta función ya no es necesaria porque los eventos se asignan
+    // directamente en cargarEstadoARCA() al crear los botones.
+    // Se mantiene por compatibilidad.
+    console.log('🔧 configurarBotonArca() llamado - los eventos se manejan en cargarEstadoARCA()');
+    return true;
+}
+
+// ============================================================
+//  INICIALIZACIÓN DE LA VISTA ARCA
+// ============================================================
+
+function initVistaArca() {
+    console.log('🔧 initVistaArca() ejecutándose');
+    
+    const vistaArca = document.getElementById('vista-arca');
+    if (!vistaArca) {
+        console.log('❌ No se encontró #vista-arca');
+        return;
+    }
+    
+    // Cargar estado inmediatamente si está visible
+    if (vistaArca.style.display !== 'none') {
+        console.log('👁️ Vista ARCA visible, cargando estado...');
+        cargarEstadoARCA();
+    } else {
+        console.log('👁️ Vista ARCA oculta, se cargará cuando se muestre');
+    }
+    
+    // Observar cambios de visibilidad
+    const observer = new MutationObserver(() => {
+        if (vistaArca.style.display !== 'none') {
+            console.log('👁️ Vista ARCA se hizo visible, cargando estado...');
+            cargarEstadoARCA();
+        }
+    });
+    
+    observer.observe(vistaArca, { attributes: true });
+    console.log('✅ Observer configurado');
+}
+
+// ============================================================
+//  INICIALIZACIÓN GLOBAL
+// ============================================================
+
+// Solo inicializar una vez
+let arcaInicializado = false;
+
+document.addEventListener('DOMContentLoaded', () => {
+    if (arcaInicializado) return;
+    arcaInicializado = true;
+    
+    console.log('🚀 DOM listo, inicializando ARCA...');
+    setTimeout(() => {
+        initVistaArca();
+        
+        // Detectar cambios de pestaña en el sidebar
+        const tabs = document.querySelectorAll('.nav-item');
+        tabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                setTimeout(() => {
+                    const vistaArca = document.getElementById('vista-arca');
+                    if (vistaArca && vistaArca.style.display !== 'none') {
+                        cargarEstadoARCA();
+                    }
+                }, 150);
+            });
+        });
+    }, 500);
+});
+// ============================================================
+//  ONBOARDING ARCA (VERSIÓN COMPLETA Y CORREGIDA)
+// ============================================================
+
+// Asegurar que el contenedor de botones existe
+function asegurarContenedorBotonesArca() {
+  let container = document.getElementById('onboardingArcaButtonContainer');
+  if (!container) {
+    console.log('📦 Creando contenedor de botones ARCA...');
+    const arcaCard = document.querySelector('#onboardingArca .arca-card');
+    if (arcaCard) {
+      container = document.createElement('div');
+      container.id = 'onboardingArcaButtonContainer';
+      container.style.marginTop = '16px';
+      
+      const mensajeDiv = document.getElementById('onboardingArcaMensaje');
+      if (mensajeDiv) {
+        arcaCard.insertBefore(container, mensajeDiv);
+      } else {
+        arcaCard.appendChild(container);
+      }
+      console.log('✅ Contenedor de botones creado');
+    }
   }
-  if (params.get('ml') === 'connected') {
-    toast('✅ Mercado Libre conectado correctamente', 'success');
-    history.replaceState({}, '', '/dashboard');
-    mostrarVista('negocio');
+  return container;
+}
+
+// Mostrar onboarding de ARCA (tiene tiendas, falta ARCA)
+function mostrarOnboardingArca() {
+  console.log('🔄 Mostrando onboarding ARCA...');
+  
+  const onboardingTiendas = document.getElementById('onboardingNegocio');
+  const onboardingArca = document.getElementById('onboardingArca');
+  const negocioNormal = document.getElementById('negocioNormal');
+  const vistaNegocio = document.getElementById('vista-negocio');
+  
+  // Ocultar todas las otras vistas
+  document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+  
+  // Mostrar SOLO la vista negocio con onboarding ARCA
+  if (vistaNegocio) vistaNegocio.style.display = 'block';
+  if (onboardingArca) onboardingArca.style.display = 'block';
+  if (onboardingTiendas) onboardingTiendas.style.display = 'none';
+  if (negocioNormal) negocioNormal.style.display = 'none';
+  
+  // Asegurar que el contenedor de botones existe
+  asegurarContenedorBotonesArca();
+  
+  // Scroll automático al onboarding ARCA
+  setTimeout(() => {
+    if (onboardingArca) {
+      onboardingArca.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+      console.log('📜 Scroll al onboarding ARCA');
+    }
+  }, 100);
+  
+  // Configurar eventos
+  configurarOnboardingArca();
+  
+  // Cargar estado actual
+  cargarEstadoOnboardingArca();
+}
+
+// Cargar estado actual del onboarding ARCA
+async function cargarEstadoOnboardingArca() {
+  try {
+    const res = await fetch('/api/me/arca-status', { 
+      credentials: 'include',
+      cache: 'no-cache'
+    });
+    const estado = await res.json();
+    
+    console.log('📊 Estado ARCA en onboarding:', estado);
+    
+    if (estado.ok && estado.conectada) {
+      mostrarEstadoCompletadoOnboardingArca();
+    } else if (estado.tieneCUIT && estado.tieneClave && estado.status !== 'vinculado') {
+      console.log('⏳ Onboarding ARCA: datos enviados, esperando vinculación manual');
+      
+      const cuitInput = document.getElementById('onboardingArcaCuit');
+      if (cuitInput && estado.cuit) {
+        cuitInput.value = estado.cuit;
+      }
+      
+      mostrarEstadoProcesandoOnboardingArca();
+    } else {
+      restaurarOnboardingArcaInicial();
+    }
+  } catch (error) {
+    console.error('Error cargando estado onboarding ARCA:', error);
   }
-  if (params.get('error') === 'ml_failed') {
-    toast('Error al conectar Mercado Libre', 'error');
-    history.replaceState({}, '', '/dashboard');
+}
+
+// Configurar eventos del onboarding ARCA
+function configurarOnboardingArca() {
+  console.log('🔧 Configurando eventos del onboarding ARCA...');
+  
+  asegurarContenedorBotonesArca();
+  
+  const btnContainer = document.getElementById('onboardingArcaButtonContainer');
+  const btnMasTarde = document.getElementById('btnOnboardingArcaMasTarde');
+  const btnContinuar = document.getElementById('btnOnboardingArcaContinuar');
+  
+  if (btnContainer) {
+    let syncBtn = document.getElementById('btnOnboardingArcaSync');
+    
+    if (!syncBtn) {
+      btnContainer.innerHTML = `
+        <button id="btnOnboardingArcaSync" class="btn-arca-sync" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+          <span class="material-icons" style="font-size: 16px;">sync</span>
+          Sincronizar con ARCA
+        </button>
+      `;
+      syncBtn = document.getElementById('btnOnboardingArcaSync');
+      console.log('✅ Botón sincronizar creado');
+    }
+    
+    if (syncBtn) {
+      const newSyncBtn = syncBtn.cloneNode(true);
+      syncBtn.parentNode.replaceChild(newSyncBtn, syncBtn);
+      
+      newSyncBtn.onclick = async function() {
+        console.log('🖱️ Botón ONBOARDING ARCA clickeado');
+        
+        const cuitInput = document.getElementById('onboardingArcaCuit');
+        const claveInput = document.getElementById('onboardingArcaClave');
+        
+        const cuit = cuitInput?.value.trim();
+        const clave = claveInput?.value;
+        
+        if (!cuit) {
+          mostrarMensajeOnboardingArca('Por favor ingresa tu CUIT', 'warning');
+          return;
+        }
+        
+        if (!clave) {
+          mostrarMensajeOnboardingArca('Por favor ingresa tu Clave Fiscal', 'warning');
+          return;
+        }
+        
+        const cuitLimpio = cuit.replace(/\D/g, '');
+        if (cuitLimpio.length !== 11) {
+          mostrarMensajeOnboardingArca('El CUIT debe tener 11 dígitos', 'warning');
+          return;
+        }
+        
+        this.disabled = true;
+        this.innerHTML = '<span class="material-icons" style="font-size:16px!important">hourglass_empty</span> Enviando...';
+        
+        try {
+          await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ cuit: cuitLimpio })
+          });
+          
+          await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ arcaClave: clave })
+          });
+          
+          console.log('✅ Datos guardados correctamente');
+          mostrarEstadoProcesandoOnboardingArca();
+          
+        } catch (error) {
+          console.error('Error:', error);
+          mostrarMensajeOnboardingArca('❌ Error al enviar los datos', 'error');
+          this.disabled = false;
+          this.innerHTML = '<span class="material-icons" style="font-size:16px!important">sync</span> Sincronizar con ARCA';
+        }
+      };
+      console.log('✅ Evento onclick asignado');
+    }
   }
   
-  // 👇 AGREGAR ESTA LÍNEA 👇
-  conectarBusquedaComprobantes();
-});
+  if (btnMasTarde) {
+    const newBtn = btnMasTarde.cloneNode(true);
+    btnMasTarde.parentNode.replaceChild(newBtn, btnMasTarde);
+    newBtn.onclick = () => mostrarVista('dashboard');
+    console.log('✅ Botón "Configurar más tarde" configurado');
+  }
+  
+  if (btnContinuar) {
+    btnContinuar.textContent = 'Continuar →';
+    const newBtn = btnContinuar.cloneNode(true);
+    btnContinuar.parentNode.replaceChild(newBtn, btnContinuar);
+    newBtn.onclick = () => mostrarVista('dashboard');
+    console.log('✅ Botón "Continuar" configurado');
+  }
+}
+
+// Mostrar estado "PROCESANDO" en el onboarding ARCA
+function mostrarEstadoProcesandoOnboardingArca() {
+  console.log('⏳ Mostrando estado PROCESANDO en onboarding ARCA');
+  
+  const cuitInput = document.getElementById('onboardingArcaCuit');
+  const claveInput = document.getElementById('onboardingArcaClave');
+  const btnContainer = document.getElementById('onboardingArcaButtonContainer');
+  const mensajeDiv = document.getElementById('onboardingArcaMensaje');
+  const btnContinuar = document.getElementById('btnOnboardingArcaContinuar');
+  
+  if (cuitInput) cuitInput.disabled = true;
+  if (claveInput) claveInput.disabled = true;
+  
+  if (btnContinuar) {
+    btnContinuar.disabled = true;
+    btnContinuar.style.opacity = '0.5';
+    btnContinuar.style.cursor = 'not-allowed';
+  }
+  
+  if (btnContainer) {
+    btnContainer.innerHTML = `
+      <button id="btnCancelarSolicitudOnboarding" class="btn-arca-sync" 
+              style="background: rgba(255, 179, 0, 0.15); border: 1px solid rgba(255, 179, 0, 0.3); color: #F5A623; margin-bottom: 10px; width: 100%; padding: 12px; border-radius: 8px; cursor: pointer; font-weight: 700;">
+        <i class="fas fa-times-circle"></i> Cancelar solicitud
+      </button>
+      <button id="btnDatosEnviadosOnboarding" class="btn-arca-sync" disabled
+              style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #888; opacity: 0.6; width: 100%; padding: 12px; border-radius: 8px;">
+        <i class="fas fa-check-circle"></i> Datos enviados
+      </button>
+    `;
+    
+    const cancelBtn = document.getElementById('btnCancelarSolicitudOnboarding');
+    if (cancelBtn) cancelBtn.onclick = () => cancelarSolicitudOnboardingArca();
+  }
+  
+  if (mensajeDiv) {
+    mensajeDiv.style.display = 'block';
+    mensajeDiv.className = 'arca-mensaje info';
+    mensajeDiv.innerHTML = `
+      <i class="fas fa-brain"></i>
+      <div style="flex:1">
+        <strong>🧠 KOI recibió tus datos</strong><br>
+        Estamos validando tu información con ARCA. El proceso puede tomar hasta <strong>24 horas</strong>.<br>
+        <span style="color: #F5A623; font-size: 12px; display: inline-block; margin-top: 8px;">
+          <i class="fas fa-info-circle"></i> ¿Te equivocaste? Podés <strong id="cancelarOnboardingLink" style="cursor:pointer;text-decoration:underline;">cancelar y volver a intentar</strong>.
+        </span>
+      </div>
+      <div class="mensaje-spinner"></div>
+    `;
+    
+    const cancelLink = document.getElementById('cancelarOnboardingLink');
+    if (cancelLink) cancelLink.onclick = () => cancelarSolicitudOnboardingArca();
+  }
+}
+
+// Mostrar estado "COMPLETADO" en el onboarding ARCA
+function mostrarEstadoCompletadoOnboardingArca() {
+  console.log('✅ Mostrando estado COMPLETADO en onboarding ARCA');
+  
+  const cuitInput = document.getElementById('onboardingArcaCuit');
+  const claveInput = document.getElementById('onboardingArcaClave');
+  const btnContainer = document.getElementById('onboardingArcaButtonContainer');
+  const mensajeDiv = document.getElementById('onboardingArcaMensaje');
+  const btnContinuar = document.getElementById('btnOnboardingArcaContinuar');
+  
+  if (cuitInput) cuitInput.disabled = true;
+  if (claveInput) claveInput.disabled = true;
+  if (btnContainer) btnContainer.innerHTML = '';
+  
+  if (btnContinuar) {
+    btnContinuar.disabled = false;
+    btnContinuar.style.opacity = '1';
+    btnContinuar.style.cursor = 'pointer';
+    btnContinuar.style.background = '#00e676';
+    btnContinuar.style.color = '#0a0e1a';
+    btnContinuar.textContent = 'Continuar →';
+  }
+  
+  if (mensajeDiv) {
+    mensajeDiv.style.display = 'block';
+    mensajeDiv.className = 'arca-mensaje success';
+    mensajeDiv.innerHTML = `
+      <i class="fas fa-check-circle"></i>
+      <div style="flex:1">
+        <strong>✅ ARCA vinculada correctamente</strong><br>
+        Tu cuenta ya está autorizada para emitir comprobantes electrónicos.<br>
+        ¡Ya podés comenzar a facturar!
+      </div>
+    `;
+  }
+}
+
+// Cancelar solicitud desde onboarding ARCA
+async function cancelarSolicitudOnboardingArca() {
+  console.log('❌ Cancelando solicitud ARCA desde onboarding...');
+  
+  const confirmar = confirm('⚠️ ¿Cancelar la solicitud de vinculación?\n\nSe eliminarán tu CUIT y Clave Fiscal. Podrás volver a ingresarlos cuando quieras.');
+  if (!confirmar) return;
+  
+  try {
+    const cancelBtn = document.getElementById('btnCancelarSolicitudOnboarding');
+    if (cancelBtn) {
+      cancelBtn.disabled = true;
+      cancelBtn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Cancelando...';
+    }
+    
+    await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ cuit: '' })
+    });
+    
+    await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ arcaClave: '' })
+    });
+    
+    await fetch('/api/me/desconectar-arca', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include'
+    });
+    
+    console.log('✅ Solicitud cancelada correctamente');
+    restaurarOnboardingArcaInicial();
+    
+  } catch (error) {
+    console.error('❌ Error al cancelar:', error);
+    mostrarMensajeOnboardingArca('❌ Error al cancelar la solicitud', 'error');
+  }
+}
+
+// Restaurar onboarding ARCA a estado inicial
+function restaurarOnboardingArcaInicial() {
+  console.log('🔄 Restaurando onboarding ARCA a estado inicial');
+  
+  const cuitInput = document.getElementById('onboardingArcaCuit');
+  const claveInput = document.getElementById('onboardingArcaClave');
+  const mensajeDiv = document.getElementById('onboardingArcaMensaje');
+  const btnContinuar = document.getElementById('btnOnboardingArcaContinuar');
+  
+  asegurarContenedorBotonesArca();
+  
+  const btnContainer = document.getElementById('onboardingArcaButtonContainer');
+  if (btnContainer) {
+    btnContainer.innerHTML = `
+      <button id="btnOnboardingArcaSync" class="btn-arca-sync" style="width: 100%; padding: 12px; background: linear-gradient(135deg, #a855f7, #7c3aed); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 8px;">
+        <span class="material-icons" style="font-size: 16px;">sync</span>
+        Sincronizar con ARCA
+      </button>
+    `;
+    
+    const newBtn = document.getElementById('btnOnboardingArcaSync');
+    if (newBtn) {
+      newBtn.onclick = async () => {
+        const cuit = cuitInput?.value.trim();
+        const clave = claveInput?.value;
+        
+        if (!cuit) {
+          mostrarMensajeOnboardingArca('Por favor ingresa tu CUIT', 'warning');
+          return;
+        }
+        
+        if (!clave) {
+          mostrarMensajeOnboardingArca('Por favor ingresa tu Clave Fiscal', 'warning');
+          return;
+        }
+        
+        const cuitLimpio = cuit.replace(/\D/g, '');
+        if (cuitLimpio.length !== 11) {
+          mostrarMensajeOnboardingArca('El CUIT debe tener 11 dígitos', 'warning');
+          return;
+        }
+        
+        newBtn.disabled = true;
+        newBtn.innerHTML = '<span class="material-icons" style="font-size:16px!important">hourglass_empty</span> Enviando...';
+        
+        try {
+          await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ cuit: cuitLimpio })
+          });
+          
+          await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ arcaClave: clave })
+          });
+          
+          mostrarEstadoProcesandoOnboardingArca();
+          
+        } catch (error) {
+          console.error('Error:', error);
+          mostrarMensajeOnboardingArca('❌ Error al enviar los datos', 'error');
+          newBtn.disabled = false;
+          newBtn.innerHTML = '<span class="material-icons" style="font-size:16px!important">sync</span> Sincronizar con ARCA';
+        }
+      };
+    }
+  }
+  
+  if (cuitInput) {
+    cuitInput.disabled = false;
+    cuitInput.value = '';
+  }
+  if (claveInput) {
+    claveInput.disabled = false;
+    claveInput.value = '';
+  }
+  
+  if (btnContinuar) {
+    btnContinuar.disabled = true;
+    btnContinuar.style.opacity = '0.5';
+    btnContinuar.style.cursor = 'not-allowed';
+    btnContinuar.style.background = '';
+    btnContinuar.style.color = '';
+    btnContinuar.textContent = 'Continuar →';
+  }
+  
+  if (mensajeDiv) {
+    mensajeDiv.style.display = 'none';
+    mensajeDiv.innerHTML = '';
+  }
+  
+  console.log('✅ Onboarding ARCA restaurado a estado inicial');
+}
+
+// Mostrar mensaje en onboarding ARCA
+function mostrarMensajeOnboardingArca(mensaje, tipo) {
+  const mensajeDiv = document.getElementById('onboardingArcaMensaje');
+  if (!mensajeDiv) return;
+  
+  const oldSpinner = mensajeDiv.querySelector('.mensaje-spinner');
+  if (oldSpinner) oldSpinner.remove();
+  
+  mensajeDiv.style.display = 'block';
+  mensajeDiv.className = `arca-mensaje ${tipo}`;
+  
+  if (tipo === 'info') {
+    mensajeDiv.innerHTML = `
+      <i class="fas fa-brain"></i>
+      <div style="flex:1">
+        <strong>🧠 KOI recibió tus datos</strong><br>
+        ${mensaje}<br>
+        <span style="color: #F5A623; font-size: 12px; display: inline-block; margin-top: 8px;">
+          <i class="fas fa-info-circle"></i> ¿Te equivocaste? Podés <strong id="cancelarOnboardingLink" style="cursor:pointer;text-decoration:underline;">cancelar y volver a intentar</strong>.
+        </span>
+      </div>
+      <div class="mensaje-spinner"></div>
+    `;
+    const cancelLink = document.getElementById('cancelarOnboardingLink');
+    if (cancelLink) cancelLink.onclick = () => cancelarSolicitudOnboardingArca();
+  } else {
+    mensajeDiv.innerHTML = `<i class="fas ${tipo === 'success' ? 'fa-check-circle' : (tipo === 'error' ? 'fa-exclamation-circle' : 'fa-info-circle')}"></i> ${mensaje}`;
+  }
+  
+  if (tipo !== 'info') {
+    setTimeout(() => {
+      if (mensajeDiv.innerHTML.includes(mensaje)) mensajeDiv.style.display = 'none';
+    }, 5000);
+  }
+}
+
+// Toggle visibilidad de clave en onboarding ARCA
+function toggleOnboardingClave() {
+  const input = document.getElementById('onboardingArcaClave');
+  const icon = document.getElementById('onboardingEyeIcon');
+  if (input.type === 'password') {
+    input.type = 'text';
+    icon.textContent = 'visibility_off';
+  } else {
+    input.type = 'password';
+    icon.textContent = 'visibility';
+  }
+}
+// ============================================================
+//  MOSTRAR ONBOARDING DE TIENDAS
+// ============================================================
+
+function mostrarOnboardingTiendas() {
+  console.log('🏪 Mostrando onboarding de TIENDAS');
+  
+  const vistaNegocio = document.getElementById('vista-negocio');
+  const onboardingTiendas = document.getElementById('onboardingNegocio');
+  const onboardingArca = document.getElementById('onboardingArca');
+  const negocioNormal = document.getElementById('negocioNormal');
+  
+  document.querySelectorAll('.content').forEach(v => v.style.display = 'none');
+  
+  if (vistaNegocio) vistaNegocio.style.display = 'block';
+  if (onboardingTiendas) onboardingTiendas.style.display = 'block';
+  if (onboardingArca) onboardingArca.style.display = 'none';
+  if (negocioNormal) negocioNormal.style.display = 'none';
+  
+  actualizarNombreUsuarioOnboarding();
+}
+
+// ============================================================
+//  ACTUALIZAR NOMBRE DE USUARIO EN ONBOARDING
+// ============================================================
+
+async function actualizarNombreUsuarioOnboarding() {
+  try {
+    const userRes = await fetch('/api/me', { credentials: 'include' });
+    const userData = await userRes.json();
+    const userNameSpan = document.getElementById('onboardingUserName');
+    if (userNameSpan && userData.user) {
+      userNameSpan.textContent = userData.user.nombre?.split(' ')[0] || userData.user.email?.split('@')[0] || 'usuario';
+    }
+  } catch(e) {
+    console.error('Error cargando nombre:', e);
+  }
+}
+
+// ============================================================
+//  MOSTRAR VISTA NORMAL DE MI NEGOCIO
+// ============================================================
+
+async function mostrarVistaNormalNegocio() {
+    console.log('🏪 Mostrando vista normal de Mi Negocio');
+    
+    const vistaNegocio = document.getElementById('vista-negocio');
+    const onboardingTiendas = document.getElementById('onboardingNegocio');
+    const onboardingArca = document.getElementById('onboardingArca');
+    const negocioNormal = document.getElementById('negocioNormal');
+    
+    if (!vistaNegocio) return;
+    
+    vistaNegocio.style.display = 'block';
+    
+    if (onboardingTiendas) onboardingTiendas.style.display = 'none';
+    if (onboardingArca) onboardingArca.style.display = 'none';
+    if (negocioNormal) negocioNormal.style.display = 'block';
+    
+    // 👇 AGREGAR ESTA LÍNEA - Genera las cards con logos oficiales
+    generarCardsPlataformas();
+    
+    await cargarIntegraciones();
+}
+
+// ============================================================
+//  FUNCIÓN PRINCIPAL DE DECISIÓN
+// ============================================================
+
+async function mostrarPantallaInicial() {
+  console.log('🎯 === MOSTRAR PANTALLA INICIAL ===');
+  
+  try {
+    console.log('📡 1. Consultando /api/integrations...');
+    const resIntegraciones = await fetch('/api/integrations', { 
+      credentials: 'include',
+      cache: 'no-cache'
+    });
+    
+    const dataIntegraciones = await resIntegraciones.json();
+    const integraciones = dataIntegraciones.integrations || [];
+    const tieneTiendas = integraciones.length > 0;
+    
+    console.log('📊 Tiendas encontradas:', integraciones.length);
+    
+    if (!tieneTiendas) {
+      console.log('🎯 [CASO 1] Sin tiendas → Mostrando onboarding de TIENDAS');
+      mostrarOnboardingTiendas();
+    } else {
+      console.log('📡 2. Consultando /api/me/arca-status...');
+      const resARCA = await fetch('/api/me/arca-status', { 
+        credentials: 'include',
+        cache: 'no-cache'
+      });
+      
+      const estadoARCA = await resARCA.json();
+      const arcaConectada = estadoARCA.ok && estadoARCA.conectada;
+      
+      console.log('📊 ARCA conectada:', arcaConectada);
+      
+      if (!arcaConectada) {
+        console.log('🎯 [CASO 2A] Tiene tiendas + ARCA pendiente → Mostrando onboarding de ARCA');
+        mostrarOnboardingArca();
+      } else {
+        console.log('🎯 [CASO 3] Todo conectado (tiendas + ARCA) → Verificando estado del plan');
+        
+        // Verificar si ya pasó por onboarding de plan
+        const yaPasoPlan = localStorage.getItem('koi_onboarding_plan_completado') === 'true';
+        
+        if (!yaPasoPlan) {
+          console.log('🎯 [CASO 3A] Plan no elegido → Mostrando onboarding de MI PLAN');
+          mostrarOnboardingPlan();
+        } else {
+          console.log('🎯 [CASO 3B] Plan ya elegido → Mostrando Dashboard');
+          mostrarVista('dashboard');
+        }
+      }
+    }
+    
+  } catch (error) {
+    console.error('❌ Error en mostrarPantallaInicial:', error);
+    mostrarVista('dashboard');
+  }
+}
+// ==========================================
+// GENERADOR DE CARDS CON LOGOS OFICIALES
+// ==========================================
+
+function generarCardsPlataformas() {
+    const container = document.getElementById('negPlataformas');
+    if (!container) {
+        console.error('❌ No se encuentra #negPlataformas');
+        return;
+    }
+    
+    container.innerHTML = '';
+    container.style.display = 'grid';
+    container.style.gap = '20px';
+    container.style.gridTemplateColumns = 'repeat(auto-fill, minmax(280px, 1fr))';
+
+    const platforms = [
+        { 
+            id: 'mercadolibre', 
+            name: 'Mercado Libre', 
+            badge: 'OAuth',
+            logoUrl: 'https://logotyp.us/file/mercadolibre.svg',
+            bgColor: '#FFE600'
+        },
+        { 
+            id: 'woocommerce', 
+            name: 'WooCommerce', 
+            badge: 'OAuth',
+            logoUrl: 'https://cdn.worldvectorlogo.com/logos/woocommerce.svg',
+            bgColor: '#7F54B3'
+        },
+        { 
+            id: 'tiendanube', 
+            name: 'Tienda Nube', 
+            badge: 'Token',
+            svg: `<svg width="44" height="44" viewBox="0 0 44 44" fill="none" xmlns="http://www.w3.org/2000/svg">
+                    <rect width="44" height="44" rx="12" fill="#1EAAF1"/>
+                    <g transform="translate(14, 14) scale(1.1)">
+                        <path d="M10.25 2.24a5.79 5.79 0 0 0-4 1.63 4.48 4.48 0 1 0 0 8.26 5.76 5.76 0 1 0 4-9.89zm0 10.24A4.49 4.49 0 0 1 5.76 8H4.48a5.74 5.74 0 0 0 .89 3.07 3.29 3.29 0 0 1-.88.13 3.2 3.2 0 0 1 0-6.4A3.2 3.2 0 0 1 7.69 8H9a4.42 4.42 0 0 0-1.63-3.43 4.48 4.48 0 1 1 2.88 7.91z" fill="white"/>
+                    </g>
+                </svg>`
+        },
+        { 
+            id: 'empretienda', 
+            name: 'Empretienda', 
+            badge: 'Token',
+            svg: `<svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="12" fill="#00C37A"/>
+                    <path d="M10 22h24" stroke="white" stroke-width="2.2" stroke-linecap="round"/>
+                    <path d="M22 10L10 22h24L22 10z" fill="white" opacity=".9"/>
+                    <rect x="17" y="22" width="10" height="12" rx="2" fill="white"/>
+                    <rect x="20" y="27" width="4" height="7" rx="1" fill="#00C37A"/>
+                </svg>`
+        },
+        { 
+            id: 'rappi', 
+            name: 'Rappi', 
+            badge: 'Token',
+            svg: `<svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="12" fill="#FF441F"/>
+                    <rect x="10" y="16" width="24" height="20" rx="4" fill="white"/>
+                    <path d="M15 13a7 7 0 0 1 14 0" stroke="white" stroke-width="2.4" stroke-linecap="round" fill="none"/>
+                    <path d="M17 22v8M17 22h5a2.5 2.5 0 0 1 0 5h-5m5 0l3 3" stroke="#FF441F" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>`
+        },
+        { 
+            id: 'vtex', 
+            name: 'VTEX', 
+            badge: 'Token',
+            svg: `<svg width="44" height="44" viewBox="0 0 44 44" fill="none">
+                    <rect width="44" height="44" rx="12" fill="#F71963"/>
+                    <path d="M5 13l5.5 13L16 13" stroke="white" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+                    <path d="M18 13h7M21.5 13v13" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                    <path d="M27 13h7M27 19.5h5M27 26h7" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                    <path d="M36 13l5 13M41 13l-5 13" stroke="white" stroke-width="2.4" stroke-linecap="round"/>
+                </svg>`
+        }
+    ];
+
+    platforms.forEach(p => {
+        const card = document.createElement('div');
+        card.className = 'neg-card';
+        card.id = `card-${p.id}`;
+        card.setAttribute('data-plataforma', p.id);
+
+        let logoHtml = '';
+        if (p.logoUrl) {
+            logoHtml = `<img src="${p.logoUrl}" 
+                         alt="${p.name}" 
+                         style="width:44px; height:44px; object-fit:contain; background:${p.bgColor || 'transparent'}; border-radius:12px; padding:${p.id === 'mercadolibre' ? '4px' : '0'};"
+                         onerror="this.style.display='none'; this.parentElement.innerHTML='${p.svg || `<div style='width:44px; height:44px; background:#333; border-radius:12px; display:flex; align-items:center; justify-content:center; color:white; font-size:18px;'>${p.name.charAt(0)}</div>`}'">`;
+        } else {
+            logoHtml = p.svg;
+        }
+
+        card.innerHTML = `
+            <div class="neg-card-top">
+                <div class="neg-card-logo">
+                    ${logoHtml}
+                </div>
+                <div class="neg-card-toggle-wrap">
+                    <label class="neg-toggle">
+                        <input type="checkbox" id="toggle-${p.id}" onchange="toggleIntegracion('${p.id}', this.checked)">
+                        <span class="neg-toggle-track"></span>
+                    </label>
+                </div>
+            </div>
+            <div class="neg-card-info">
+                <div class="neg-card-name">${p.name}</div>
+                <div class="neg-card-desc" id="desc-${p.id}">Sin conectar</div>
+            </div>
+            <div class="neg-card-footer">
+                <span class="neg-card-badge neg-badge-${p.badge === 'OAuth' ? 'oauth' : 'token'}">${p.badge}</span>
+                <button class="neg-card-btn" onclick="abrirConexion('${p.id}')">Configurar</button>
+            </div>
+        `;
+        container.appendChild(card);
+    });
+    
+    console.log(`✅ ${platforms.length} cards generadas con logos oficiales`);
+}
+
+// ============================================================
+//  ONBOARDING PLAN (MI PLAN) - FUNCIONES
+// ============================================================
+
+// ============================================================
+//  OBTENER FECHA DE VINCULACIÓN ARCA (desde backend real)
+// ============================================================
+
+let _fechaLogMostrado = false;
+
+async function obtenerFechaVinculacionARCA() {
+    // 1. Verificar si ya tenemos fecha en localStorage (cache rápido)
+    let fechaARCA = localStorage.getItem('koi_fecha_vinculacion_arca');
+    
+    // 2. Si no hay en localStorage, consultar al backend
+    if (!fechaARCA) {
+        try {
+            console.log('🔍 Consultando fecha real de vinculación ARCA al backend...');
+            const res = await fetch('/api/me/arca-status', { 
+                credentials: 'include',
+                cache: 'no-cache',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+            const data = await res.json();
+            
+            if (data.fechaVinculacion) {
+                fechaARCA = data.fechaVinculacion;
+                localStorage.setItem('koi_fecha_vinculacion_arca', fechaARCA);
+                console.log('✅ Fecha real obtenida del backend:', new Date(fechaARCA).toLocaleString());
+                _fechaLogMostrado = true;
+            } else {
+                console.log('⚠️ El backend no tiene fecha de vinculación ARCA');
+                return null;
+            }
+        } catch(e) {
+            console.warn('⚠️ Error consultando backend:', e.message);
+            fechaARCA = new Date().toISOString();
+            console.log('📅 Usando fecha local (fallback):', new Date(fechaARCA).toLocaleString());
+        }
+    } else {
+        // 👇 Solo mostrar el log una vez, no cada segundo
+        if (!_fechaLogMostrado) {
+            console.log('📅 Fecha desde localStorage:', new Date(fechaARCA).toLocaleString());
+            _fechaLogMostrado = true;
+        }
+    }
+    
+    return fechaARCA ? new Date(fechaARCA) : null;
+}
+
+// ============================================================
+//  MOSTRAR ONBOARDING PLAN (VERSIÓN UNIFICADA)
+//  - Muestra diseño ACTIVO o EXPIRADO según fecha
+//  - Los estilos están en index.css
+// ============================================================
+
+function mostrarOnboardingPlan() {
+    console.log('💳 Mostrando onboarding de MI PLAN');
+    
+    const vistaOnboardingPlan = document.getElementById('vista-onboarding-plan');
+    if (!vistaOnboardingPlan) return;
+    
+    // Ocultar otras vistas pero mantener sidebar
+    document.querySelectorAll('.content').forEach(v => {
+        if (v.id !== 'vista-onboarding-plan') {
+            v.style.display = 'none';
+        }
+    });
+    
+    // Asegurar que el sidebar sea visible
+    const sidebar = document.querySelector('.sidebar');
+    if (sidebar) sidebar.style.display = '';
+    
+    // Inyectar HTML unificado (sin estilos inline)
+    vistaOnboardingPlan.innerHTML = `
+        <div class="plan-unified-container">
+            <div class="koi-unified-header">
+                <div class="koi-unified-icon">K</div>
+            </div>
+
+            <div class="status-unified-card" id="statusCard">
+                <div class="status-unified-title" id="statusTitle">Cargando...</div>
+                <div class="status-unified-sub" id="statusSub">Verificando tu período de cortesía...</div>
+            </div>
+
+            <div class="timers-unified-section" id="timersSection">
+                <div class="timer-unified-item">
+                    <span class="timer-unified-label">⏱️ Tiempo restante de tu período de cortesía:</span>
+                    <span class="timer-unified-value" id="countdownTimer">--d --h --m</span>
+                </div>
+                <div class="timer-unified-item offer-timer">
+                    <span class="timer-unified-label">⚡ Tiempo para asegurar 60 días:</span>
+                    <span class="timer-unified-value" id="offerCountdown">--d --h --m</span>
+                </div>
+            </div>
+
+            <div class="breakdown-unified-box" id="breakdownBox">
+                <div class="breakdown-unified-row">
+                    <div>
+                        <div class="breakdown-unified-label">30 días de cortesía</div>
+                        <div class="breakdown-unified-sub">✅ ya disponibles · por ser parte de KOI</div>
+                    </div>
+                    <div class="breakdown-unified-price">$0</div>
+                </div>
+                <div class="plus-unified-icon">+</div>
+                <div class="breakdown-unified-row">
+                    <div>
+                        <div class="breakdown-unified-label">30 días extra</div>
+                        <div class="breakdown-unified-sub">⚡ si suscribís dentro de los próximos 7 días</div>
+                    </div>
+                    <div class="breakdown-unified-price">$0</div>
+                </div>
+                <div class="divider-unified-dashed"></div>
+                <div class="total-unified-row">
+                    <div>
+                        <div class="total-unified-label">📋 TOTAL</div>
+                        <div class="total-unified-sub">Primer pago recién en 2 meses</div>
+                    </div>
+                    <div class="total-unified-price">60 DÍAS → $0</div>
+                </div>
+                <div class="acumulation-unified-note">
+                    ✨ Los 30 días extra se suman AUTOMÁTICAMENTE al finalizar tus 30 días base
+                </div>
+            </div>
+
+            <div class="price-unified-card">
+                <div class="price-unified-top-bar"></div>
+                <div class="price-unified-inner">
+                    <div class="price-unified-eyebrow">PLAN ÚNICO · MENSUAL</div>
+                    <div class="price-unified-amount">
+                        <span class="price-unified-cur">$</span>
+                        <span class="price-unified-num">40.000</span>
+                        <span class="price-unified-period">/ mes</span>
+                    </div>
+                    <div class="price-unified-note">Sin permanencia · Cancelás cuando querés</div>
+                    <div class="price-unified-divider"></div>
+                    <div class="price-unified-features">
+                        <div class="price-unified-feature">
+                            <div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div>
+                            <span class="price-unified-feature-text">Facturas ilimitadas (A, B y C)</span>
+                        </div>
+                        <div class="price-unified-feature">
+                            <div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div>
+                            <span class="price-unified-feature-text">Facturación automática o manual</span>
+                        </div>
+                        <div class="price-unified-feature">
+                            <div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div>
+                            <span class="price-unified-feature-text">Envío automático de comprobantes</span>
+                        </div>
+                        <div class="price-unified-feature">
+                            <div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div>
+                            <span class="price-unified-feature-text">Multi-integración simultánea</span>
+                        </div>
+                        <div class="price-unified-feature">
+                            <div class="price-unified-check"><svg viewBox="0 0 12 12" fill="none"><path d="M2 6L5 9L10 3" stroke="#22C55E" stroke-width="2" stroke-linecap="round"/></svg></div>
+                            <span class="price-unified-feature-text">Soporte por WhatsApp</span>
+                        </div>
+                    </div>
+                    <button class="price-unified-btn" id="btnSuscripcionMercadoPago">
+                        <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L15 9 9 16M2 9h12" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+                        Suscribirme ahora →
+                    </button>
+                    <div class="price-unified-footnote">Débito automático · Mercado Pago</div>
+                </div>
+            </div>
+
+            <div class="terms-unified-text">
+                Al suscribirte, aceptás nuestros <a href="#">Términos y Condiciones</a> y <a href="#">Política de Privacidad</a>
+            </div>
+
+            <div class="policy-unified-card">
+                <div class="policy-unified-header"><span>🔒</span><strong>Política de cancelación</strong></div>
+                <div class="policy-unified-item"><div class="policy-dot-green-unified"></div><div class="policy-text-unified"><strong>Durante los 60 días de cortesía:</strong> si cancelás, <span class="highlight-red-unified">perdés el acceso INMEDIATAMENTE</span>.</div></div>
+                <div class="policy-unified-item"><div class="policy-dot-orange-unified"></div><div class="policy-text-unified"><strong>Una vez que empezás a pagar:</strong> si cancelás, <span class="highlight-green-unified">seguís usando KOI hasta que termine el mes que ya pagaste</span>.</div></div>
+                <div class="example-unified-box"><p>💡 <strong>Ejemplo:</strong> Si cancelás el día 45 de tus 60 días de cortesía, perdés el acceso al instante.<br>En cambio, si ya pagaste un mes y cancelás, seguís facturando hasta que termine ese mes.</p></div>
+            </div>
+        </div>
+    `;
+    
+    // Mostrar la vista
+    vistaOnboardingPlan.style.display = 'block';
+    
+    // Actualizar UI según estado (activo/expirado)
+    actualizarUIUnificada();
+    
+    // Configurar botón
+    configurarBotonesPlan();
+}
+
+async function actualizarUIUnificada() {
+    const fechaVinculacion = await obtenerFechaVinculacionARCA();
+    const suscripcionActiva = await verificarEstadoSuscripcion();
+    
+    const titleEl = document.getElementById('statusTitle');
+    const subEl = document.getElementById('statusSub');
+    const statusCard = document.getElementById('statusCard');
+    const timersSection = document.getElementById('timersSection');
+    const breakdownBox = document.getElementById('breakdownBox');
+    const countdownEl = document.getElementById('countdownTimer');
+    const offerCountdownEl = document.getElementById('offerCountdown');
+    const priceCard = document.querySelector('.price-unified-card');
+    const subscribeBtn = document.getElementById('btnSuscripcionMercadoPago');
+    const container = document.querySelector('.plan-unified-container');
+    
+    if (!titleEl || !subEl) return;
+    
+    // ========== CASO 1: SUSCRIPCIÓN ACTIVA (ya pagó) ==========
+    if (suscripcionActiva) {
+        titleEl.innerHTML = '✅ ¡Suscripción activa!';
+        subEl.innerHTML = 'Tu cuenta está al día. Seguí facturando sin límites.';
+        if (statusCard) statusCard.className = 'status-unified-card status-active';
+        if (timersSection) timersSection.style.display = 'none';
+        if (breakdownBox) breakdownBox.style.display = 'none';
+        if (countdownEl) countdownEl.textContent = '--d --h --m';
+        if (priceCard) {
+            priceCard.classList.remove('price-expired');
+            priceCard.style.border = '1px solid rgba(0,230,118,0.2)';
+            priceCard.style.boxShadow = '';
+        }
+        if (container) container.classList.remove('plan-expired');
+        if (subscribeBtn) {
+            subscribeBtn.innerHTML = '✅ Suscripción activa';
+            subscribeBtn.disabled = true;
+            subscribeBtn.style.opacity = '0.6';
+            subscribeBtn.style.cursor = 'default';
+            subscribeBtn.style.animation = '';
+        }
+        return;
+    }
+    
+    // ========== CASO 2: Sin fecha de vinculación ==========
+    if (!fechaVinculacion) {
+        titleEl.textContent = '⚠️ Período de prueba no disponible';
+        subEl.textContent = 'Vinculá ARCA para comenzar tu prueba gratuita de 30 días.';
+        if (statusCard) statusCard.className = 'status-unified-card status-warning';
+        if (timersSection) timersSection.style.display = 'none';
+        if (breakdownBox) breakdownBox.style.display = 'none';
+        if (priceCard) priceCard.classList.add('price-expired');
+        if (container) container.classList.add('plan-expired');
+        if (subscribeBtn) {
+            subscribeBtn.innerHTML = '🔌 Conectar ARCA primero →';
+            subscribeBtn.style.background = 'linear-gradient(135deg, #F97316, #FB923C)';
+            subscribeBtn.style.opacity = '0.7';
+            subscribeBtn.disabled = true;
+            subscribeBtn.style.animation = '';
+        }
+        return;
+    }
+    
+    // ========== Calcular estado de cortesía ==========
+    const hoy = new Date();
+    const finCortesia = new Date(fechaVinculacion);
+    finCortesia.setDate(finCortesia.getDate() + 30);
+    const expirado = finCortesia <= hoy;
+    const diasRestantes = Math.ceil((finCortesia - hoy) / (1000 * 60 * 60 * 24));
+    
+    const finOferta = new Date(fechaVinculacion);
+    finOferta.setDate(finOferta.getDate() + 7);
+    const ofertaActiva = finOferta > hoy;
+    
+    // ========== CASO 3: CORTESÍA EXPIRADA ==========
+    if (expirado) {
+        titleEl.innerHTML = '⚠️ Tu período de prueba finalizó';
+        subEl.innerHTML = 'Suscribite para seguir facturando sin interrupciones.';
+        if (statusCard) statusCard.className = 'status-unified-card status-expired';
+        
+        if (timersSection) timersSection.style.display = 'none';
+        if (breakdownBox) breakdownBox.style.display = 'none';
+        
+        if (countdownEl) countdownEl.textContent = '0d 0h 0m';
+        
+        if (priceCard) {
+            priceCard.classList.add('price-expired');
+            priceCard.style.border = '2px solid rgba(255,61,87,0.4)';
+            priceCard.style.boxShadow = '0 8px 32px rgba(255,61,87,0.15)';
+        }
+        
+        if (subscribeBtn) {
+            subscribeBtn.innerHTML = 'Suscribirme ahora →';
+            subscribeBtn.style.background = 'linear-gradient(135deg, #F97316, #FB923C)';
+            subscribeBtn.style.animation = 'pulse-warning 1.5s infinite';
+            subscribeBtn.disabled = false;
+            subscribeBtn.style.opacity = '1';
+            subscribeBtn.style.cursor = 'pointer';
+        }
+        
+        if (container) container.classList.add('plan-expired');
+        
+    // ========== CASO 4: CORTESÍA ACTIVA ==========
+    } else {
+        titleEl.innerHTML = '🎉 Estás en período de prueba';
+        subEl.innerHTML = `Disfrutá de KOI sin cargo por <strong style="color:#00e676">${diasRestantes} días</strong>.`;
+        if (statusCard) statusCard.className = 'status-unified-card status-active';
+        
+        if (timersSection) timersSection.style.display = 'block';
+        if (breakdownBox) breakdownBox.style.display = 'block';
+        
+        if (priceCard) {
+            priceCard.classList.remove('price-expired');
+            priceCard.style.border = '';
+            priceCard.style.boxShadow = '';
+        }
+        if (container) container.classList.remove('plan-expired');
+        
+        if (subscribeBtn) {
+            subscribeBtn.innerHTML = '<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><path d="M9 2L15 9 9 16M2 9h12" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg> Suscribirme ahora →';
+            subscribeBtn.style.animation = '';
+            subscribeBtn.disabled = false;
+            subscribeBtn.style.opacity = '1';
+            subscribeBtn.style.cursor = 'pointer';
+        }
+        
+        // Actualizar contador de cortesía
+        if (countdownEl) {
+            const diff = finCortesia - hoy;
+            const dias = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const horas = Math.floor((diff % 86400000) / 3600000);
+            const minutos = Math.floor((diff % 3600000) / 60000);
+            countdownEl.textContent = `${dias}d ${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
+        }
+        
+        // Actualizar contador de oferta
+        if (offerCountdownEl && ofertaActiva) {
+            const diffOferta = finOferta - hoy;
+            const diasOferta = Math.floor(diffOferta / (1000 * 60 * 60 * 24));
+            const horasOferta = Math.floor((diffOferta % 86400000) / 3600000);
+            const minutosOferta = Math.floor((diffOferta % 3600000) / 60000);
+            offerCountdownEl.textContent = `${diasOferta}d ${horasOferta.toString().padStart(2, '0')}h ${minutosOferta.toString().padStart(2, '0')}m`;
+        }
+        
+        // Ocultar oferta si ya expiró
+        const offerTimerDiv = document.querySelector('.timer-unified-item.offer-timer');
+        if (offerTimerDiv && !ofertaActiva) {
+            offerTimerDiv.style.display = 'none';
+        } else if (offerTimerDiv && ofertaActiva) {
+            offerTimerDiv.style.display = 'flex';
+        }
+    }
+}
+// ============================================================
+//  CONFIGURAR BOTONES DEL ONBOARDING (Mercado Pago REAL)
+// ============================================================
+
+function configurarBotonesPlan() {
+    const btnSuscripcion = document.getElementById('btnSuscripcionMercadoPago');
+    
+    if (!btnSuscripcion) {
+        console.warn('⚠️ Botón de suscripción no encontrado');
+        return;
+    }
+    
+    // Limpiar eventos anteriores clonando el botón
+    const newBtn = btnSuscripcion.cloneNode(true);
+    btnSuscripcion.parentNode.replaceChild(newBtn, btnSuscripcion);
+    
+    newBtn.onclick = async function(e) {
+        e.preventDefault();
+        console.log('💳 Iniciando suscripción con Mercado Pago');
+        
+        // Guardar estado de carga
+        const originalText = this.innerHTML;
+        
+        // Mostrar loading
+        this.innerHTML = '<span style="animation:spin 0.8s linear infinite; display:inline-block;">🔄</span> Procesando...';
+        this.disabled = true;
+        
+        try {
+            // Crear preferencia de pago en backend
+            const response = await fetch('/api/suscripcion/crear', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    monto: 40000,
+                    moneda: 'ARS'
+                })
+            });
+            
+            const data = await response.json();
+            
+            if (!response.ok) {
+                throw new Error(data.error || 'Error al crear la suscripción');
+            }
+            
+            if (data.init_point) {
+                // Guardar que el onboarding está completado
+                localStorage.setItem('koi_onboarding_plan_completado', 'true');
+                
+                // Mostrar toast de éxito
+                if (typeof toast === 'function') {
+                    toast('🎁 Redirigiendo a Mercado Pago...', 'success');
+                }
+                
+                // Redirigir a Mercado Pago
+                window.location.href = data.init_point;
+            } else {
+                throw new Error('No se recibió el link de pago');
+            }
+            
+        } catch (error) {
+            console.error('❌ Error en suscripción:', error);
+            
+            if (typeof toast === 'function') {
+                toast('❌ Error: ' + error.message, 'error');
+            } else {
+                alert('Error: ' + error.message);
+            }
+            
+            // Restaurar botón
+            this.innerHTML = originalText;
+            this.disabled = false;
+        }
+    };
+    
+    console.log('✅ Botón de suscripción a Mercado Pago configurado');
+}
+
+function guardarOnboardingPlanCompletado() {
+    localStorage.setItem('koi_onboarding_plan_completado', 'true');
+    console.log('✅ Onboarding de plan marcado como completado');
+}
+
+// ============================================================
+//  VERIFICAR ESTADO DE SUSCRIPCIÓN AL CARGAR
+// ============================================================
+
+async function verificarEstadoSuscripcion() {
+    try {
+        const res = await fetch('/api/suscripcion/estado', { credentials: 'include' });
+        const data = await res.json();
+        
+        if (data.activa) {
+            localStorage.setItem('koi_onboarding_plan_completado', 'true');
+            console.log('✅ Suscripción activa detectada');
+            return true;
+        } else {
+            console.log('⚠️ Sin suscripción activa');
+            return false;
+        }
+    } catch (error) {
+        console.error('Error verificando suscripción:', error);
+        return false;
+    }
+}
+// ============================================================
+//  MOSTRAR VISTA DE SUSCRIPCIÓN ACTIVA (VERSIÓN CORRECTA)
+// ============================================================
+
+function mostrarSuscripcionActiva() {
+    console.log('💳 Mostrando vista de Suscripción Activa');
+    
+    document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
+    document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+    
+    let vistaSuscripcion = document.getElementById('vista-suscripcion');
+    if (!vistaSuscripcion) {
+        vistaSuscripcion = document.createElement('div');
+        vistaSuscripcion.id = 'vista-suscripcion';
+        vistaSuscripcion.className = 'content';
+        document.querySelector('.main').appendChild(vistaSuscripcion);
+    }
+    
+    vistaSuscripcion.style.display = 'block';
+    document.getElementById('nav-estado').classList.add('active');
+    
+    // Mostrar loading
+    vistaSuscripcion.innerHTML = `
+        <div style="display:flex;justify-content:center;align-items:center;padding:60px">
+            <div class="susc-spinner"></div>
+            <span style="margin-left:12px;color:var(--text-2)">Cargando suscripción...</span>
+        </div>
+    `;
+    
+    // Esperar a que el DOM se actualice
+    setTimeout(() => {
+        cargarDatosSuscripcion();
+    }, 50);
+}
+
+// ============================================================
+//  CARGAR DATOS DE SUSCRIPCIÓN - VERSIÓN CORRECTA CON GRID
+// ============================================================
+
+async function cargarDatosSuscripcion() {
+    try {
+        console.log('✅ [VERSIÓN CORRECTA CON GRID]');
+        const vistaSuscripcion = document.getElementById('vista-suscripcion');
+        
+        if (!vistaSuscripcion || vistaSuscripcion.style.display !== 'block') {
+            console.log('Vista no visible');
+            return;
+        }
+        
+        // Loader inicial
+        vistaSuscripcion.innerHTML = `
+            <div style="display:flex;justify-content:center;align-items:center;padding:60px">
+                <div class="susc-spinner"></div>
+                <span>Cargando...</span>
+            </div>`;
+        
+        // Peticiones en paralelo
+        const [userRes, ordersRes] = await Promise.all([
+            fetch('/api/me', { credentials: 'include' }),
+            fetch('/api/orders?limit=10&status=invoiced', { credentials: 'include' }).catch(() => null)
+        ]);
+
+        const userData = await userRes.json();
+        const user = userData.user;
+        const settings = user?.settings || {};
+        
+        const formatDate = (d) => d ? new Date(d).toLocaleDateString('es-AR').replace(/\//g, ' / ') : '—';
+        
+        // Procesar órdenes para el historial
+        let facturasEmitidas = 0;
+        let historialHTML = '';
+        let totalPagado = 0;
+        let cantidadPagos = 0;
+
+        if (ordersRes) {
+            const ordersData = await ordersRes.json();
+            if (ordersData.pagination) facturasEmitidas = ordersData.pagination.total || 0;
+            
+            const ordenes = ordersData.orders || [];
+            cantidadPagos = ordenes.length;
+
+            if (cantidadPagos === 0) {
+                historialHTML = `<tr><td colspan="4" style="text-align:center; padding:20px;">No tenés pagos registrados aún.</td></tr>`;
+            } else {
+                ordenes.forEach(order => {
+                    const montoFormateado = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(order.total);
+                    totalPagado += order.total;
+                    
+                    historialHTML += `
+                        <tr>
+                            <td>${formatDate(order.createdAt)}</td>
+                            <td>${montoFormateado}</td>
+                            <td><span class="chip-paid"><span class="chip-dot"></span> Pagado</span></td>
+                            <td><a href="#" class="btn-ver-comprobante" data-id="${order._id}">📄 Ver</a></td>
+                        </tr>`;
+                });
+            }
+        } else {
+            facturasEmitidas = 1207;
+            historialHTML = `<tr><td colspan="4" style="text-align:center; padding:20px;">Error al cargar el historial.</td></tr>`;
+        }
+        
+        const totalFormateado = new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS', maximumFractionDigits: 0 }).format(totalPagado);
+
+        // Inyección del HTML CON ESTRUCTURA DE DOS COLUMNAS
+        vistaSuscripcion.innerHTML = `
+            <div class="suscripcion-container">
+                <div class="suscripcion-header">
+                    <h1>MI SUSCRIPCIÓN</h1>
+                    <p>Gestioná tu plan y revisá tu historial de pagos</p>
+                </div>
+                <div class="suscripcion-grid">
+                    
+                    <!-- COLUMNA IZQUIERDA -->
+                    <div class="suscripcion-col-left">
+                        <div class="suscripcion-card status-card">
+                            <div class="status-top">
+                                <div class="badge-active"><span class="dot-live"></span> Suscripción activa</div>
+                                <div class="plan-badge">PRO</div>
+                            </div>
+                            <div class="plan-price-sub">$40.000 / mes · renovación automática</div>
+                            <div class="detail-box">
+                                <div class="detail-row"><span>📅 Próximo pago</span><span>${formatDate(settings.proximoPago)}</span></div>
+                                <div class="detail-row"><span>💳 Método de pago</span><span>Mastercard •••• 0604</span></div>
+                                <div class="detail-row"><span>📅 Activo desde</span><span>${formatDate(settings.fechaUltimoPago || user.creadoEn)}</span></div>
+                                <div class="detail-row"><span>📄 Facturas emitidas</span><span class="green">${facturasEmitidas.toLocaleString()}</span></div>
+                            </div>
+                            <div class="suscripcion-actions">
+                                <button class="btn-suscripcion download" id="btnDescargarComprobante">📄 Descargar comprobante</button>
+                                <button class="btn-suscripcion cancel" id="btnCancelarSuscripcion">❌ Cancelar suscripción</button>
+                            </div>
+                        </div>
+                        
+                        <div class="suscripcion-card">
+                            <div class="sec-label">💳 Método de pago</div>
+                            <div class="card-face-wrap">
+                                <div class="card-face"><div class="card-chip"></div><div class="card-mc"><span></span><span></span></div></div>
+                                <div><div class="card-number">Mastercard •••• 0604</div><div class="card-meta">Vence 11/26 · ${(user.nombre || 'Usuario').toUpperCase()}</div></div>
+                            </div>
+                            <button class="btn-suscripcion ghost" id="btnCambiarMetodo">🔄 Cambiar método de pago</button>
+                        </div>
+                    </div>
+                    
+                    <!-- COLUMNA DERECHA -->
+                    <div class="suscripcion-col-right">
+                        <div class="suscripcion-card historial-card">
+                            <div class="sec-label">📋 Historial de pagos</div>
+                            <div class="history-table-wrapper">
+                                <table class="history-table">
+                                    <thead><tr><th>FECHA</th><th>MONTO</th><th>ESTADO</th><th></th></tr></thead>
+                                    <tbody>
+                                        ${historialHTML}
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="table-footer">Total: ${totalFormateado} · ${cantidadPagos} pagos</div>
+                        </div>
+                        
+                        <div class="suscripcion-card support-card">
+                            <div class="sec-label">🛟 ¿Necesitás ayuda?</div>
+                            <div class="support-links">
+                                <a href="mailto:hola@koi-factura.lat" class="support-link">📧 hola@koi-factura.lat</a>
+                                <a href="#" class="support-link" id="btnWhatsApp">💬 Soporte por WhatsApp</a>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        `;
+        
+        // Forzar estilos del grid
+        const grid = document.querySelector('.suscripcion-grid');
+        if (grid) {
+            grid.style.display = 'grid';
+            grid.style.gridTemplateColumns = '1fr 1fr';
+            grid.style.gap = '24px';
+        }
+        
+        // Event Listeners
+        document.getElementById('btnDescargarComprobante')?.addEventListener('click', descargarComprobante);
+        document.getElementById('btnCancelarSuscripcion')?.addEventListener('click', cancelarSuscripcion);
+        document.getElementById('btnCambiarMetodo')?.addEventListener('click', cambiarMetodoPago);
+        
+        // Listeners para los botones "Ver" del historial
+        document.querySelectorAll('.btn-ver-comprobante').forEach(enlace => {
+            enlace.addEventListener('click', (e) => {
+                e.preventDefault();
+                const orderId = e.target.getAttribute('data-id');
+                if (orderId) {
+                    window.open(`/api/orders/${orderId}/pdf`, '_blank');
+                }
+            });
+        });
+        
+        console.log('✅ Grid de dos columnas inyectado correctamente');
+        
+    } catch(error) {
+        console.error('Error general en cargarDatosSuscripcion:', error);
+    }
+}
+
+// ============================================================
+//  FUNCIONES AUXILIARES
+// ============================================================
+
+function formatSuscripcionDate(dateString) {
+    if (!dateString) return '—';
+    const date = new Date(dateString);
+    return date.toLocaleDateString('es-AR', { 
+        day: '2-digit', 
+        month: '2-digit', 
+        year: 'numeric' 
+    }).replace(/\//g, ' / ');
+}
+
+function renderPaymentHistoryRows(history) {
+    if (!history.length) {
+        return `<tr><td colspan="5" style="text-align:center;padding:32px;color:var(--text-3)">No hay pagos registrados</td></tr>`;
+    }
+    
+    return history.map(p => `
+        <tr>
+            <td>${p.date}</td>
+            <td class="num">$${p.amount.toLocaleString()}</td>
+            <td class="muted">${p.method}</td>
+            <td><span class="chip-paid"><span class="chip-dot"></span> Pagado</span></td>
+            <td><a href="#" class="receipt-link" onclick="verComprobantePago('${p.date}'); return false;"><i class="ti ti-file-text"></i> Ver</a></td>
+        </tr>
+    `).join('');
+}
+
+async function descargarComprobante() {
+    if (typeof toast === 'function') {
+        toast('📄 Generando comprobante...', 'info');
+    }
+    // Redirigir al PDF del último comprobante
+    setTimeout(() => {
+        window.open('/api/orders/ultimo/pdf', '_blank');
+    }, 500);
+}
+
+async function cancelarSuscripcion() {
+    const confirmar = confirm('¿Estás seguro que querés cancelar tu suscripción?\n\nSe mantendrá activa hasta el fin del período actual.');
+    
+    if (!confirmar) return;
+    
+    if (typeof toast === 'function') {
+        toast('Procesando cancelación...', 'info');
+    }
+    
+    try {
+        const response = await fetch('/api/suscripcion/cancelar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include'
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            if (typeof toast === 'function') {
+                toast('✅ Suscripción cancelada. Seguirás activo hasta fin de mes.', 'success');
+            }
+            // Actualizar estado local
+            localStorage.setItem('koi_onboarding_plan_completado', 'false');
+            localStorage.setItem('koi_suscripcion_activa', 'false');
+            setTimeout(() => location.reload(), 2000);
+        } else {
+            if (typeof toast === 'function') {
+                toast('❌ Error: ' + data.error, 'error');
+            }
+        }
+    } catch (error) {
+        console.error('Error cancelando:', error);
+        if (typeof toast === 'function') {
+            toast('Error al cancelar: ' + error.message, 'error');
+        }
+    }
+}
+
+async function cambiarMetodoPago() {
+    if (typeof toast === 'function') {
+        toast('🔄 Redirigiendo a Mercado Pago para actualizar tu método de pago...', 'info');
+    }
+    setTimeout(() => {
+        window.open('https://www.mercadopago.com.ar', '_blank');
+    }, 500);
+}
+
+function verComprobantePago(fecha) {
+    if (typeof toast === 'function') {
+        toast(`📄 Descargando comprobante del ${fecha}...`, 'info');
+    }
+    window.open('/api/orders/ultimo/pdf', '_blank');
+}
+// ==========================================
+// FUNCIONES PARA VISTA CONFIGURACIÓN (NUEVAS)
+// ==========================================
+
+// Guardar perfil (reemplaza la función existente)
+window.guardarPerfil = async function() {
+  const statusDiv = document.getElementById('cfgSaveStatus');
+  if (statusDiv) {
+    statusDiv.classList.add('visible');
+    setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+  }
+  
+  const perfil = {
+    nombre: document.getElementById('cfgNombre')?.value || '',
+    condicionFiscal: document.getElementById('cfgCondicionFiscal')?.value || '',
+    categoria: document.getElementById('cfgCategoria')?.value || '',
+    cuit: document.getElementById('cfgCuit')?.value || '',
+    email: document.getElementById('cfgEmail')?.value || ''
+  };
+  
+  console.log('Perfil guardado:', perfil);
+  
+  try {
+    const res = await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        nombre: perfil.nombre,
+        condicionFiscal: perfil.condicionFiscal,
+        categoria: perfil.categoria,
+        cuit: perfil.cuit,
+        email: perfil.email
+      })
+    });
+    
+    if (res.ok) {
+      if (typeof toast === 'function') toast('✅ Perfil guardado', 'success');
+    } else {
+      console.warn('Error al guardar en backend');
+    }
+  } catch(e) {
+    console.warn('Error:', e.message);
+  }
+};
+
+// Guardar switches (reemplaza la función existente)
+window.guardarSwitch = async function(tipo, valor) {
+  const statusDiv = document.getElementById('cfgAutoStatus');
+  if (statusDiv) {
+    statusDiv.classList.add('visible');
+    setTimeout(() => statusDiv.classList.remove('visible'), 1500);
+  }
+  
+  console.log(`${tipo} guardado: ${valor}`);
+  
+  try {
+    const payload = tipo === 'factAuto' ? { factAuto: valor } : { envioAuto: valor };
+    const res = await fetch('/api/me/settings', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(payload)
+    });
+    
+    if (res.ok && typeof toast === 'function') {
+      toast(`${tipo === 'factAuto' ? 'Facturación automática' : 'Envío automático'} ${valor ? 'activado' : 'desactivado'}`, valor ? 'success' : 'warn');
+    }
+  } catch(e) {
+    console.warn('Error:', e.message);
+  }
+};
+
+// Toggle límite facturas
+window.toggleLimiteFacturas = function(checked) {
+  const input = document.getElementById('cfgMaxFacturas');
+  if (input) input.disabled = !checked;
+};
+
+// Toggle límite monto
+window.toggleLimiteMonto = function(checked) {
+  const input = document.getElementById('cfgMaxMonto');
+  if (input) input.disabled = !checked;
+};
+
+// Toggle límite días
+window.toggleLimiteDias = function(checked) {
+  const input = document.getElementById('cfgMaxDias');
+  if (input) input.disabled = !checked;
+};
+
+// Mostrar/ocultar categoría monotributo
+function toggleCategoriaField() {
+  const condicionSelect = document.getElementById('cfgCondicionFiscal');
+  const categoriaGroup = document.getElementById('categoriaGroup');
+  
+  if (condicionSelect && categoriaGroup) {
+    categoriaGroup.style.display = condicionSelect.value === 'monotributo' ? 'flex' : 'none';
+  }
+}
+
+// Inicializar eventos de configuración
+function initConfigEvents() {
+  const condicionSelect = document.getElementById('cfgCondicionFiscal');
+  if (condicionSelect) {
+    condicionSelect.removeEventListener('change', toggleCategoriaField);
+    condicionSelect.addEventListener('change', toggleCategoriaField);
+    toggleCategoriaField();
+  }
+}
+
+// Llamar a initConfigEvents cuando se carga la vista
+if (document.getElementById('vista-config')) {
+  setTimeout(initConfigEvents, 100);
+}
+
+// Al final de tu archivo .js, asegurate de exportarla globalmente:
+window.cargarDatosSuscripcion = cargarDatosSuscripcion;
+

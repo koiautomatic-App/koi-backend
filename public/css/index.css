@@ -632,39 +632,167 @@
     @keyframes cfgSpin { to { transform:rotate(360deg); } }
 
     /* ── VISTA ARCA ─────────────────────────────────────── */
-    .arca-card {
-      background:var(--card); border:1px solid var(--border);
-      border-radius:var(--r-xl); padding:24px 28px;
-      border-top:2px solid #a855f7;
-      max-width:560px;
-    }
-    .arca-card-header {
-      display:flex; align-items:center; gap:14px; margin-bottom:0;
-    }
-    .arca-icon {
-      flex-shrink:0; width:44px; height:44px;
-      display:flex; align-items:center; justify-content:center;
-    }
-    .arca-status {
-      margin-left:auto; display:flex; align-items:center; gap:6px;
-      font-size:11px; font-weight:600; color:var(--text-2);
-    }
-    .arca-divider { height:1px; background:var(--border); margin:20px 0; }
+.arca-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-xl);
+  padding: 28px 32px;
+  border-top: 3px solid #e8622a;
+  width: 100%;
+  transition: all 0.2s ease;
+  margin-top: 24px;
+}
 
-    .btn-arca-sync {
-      display:inline-flex; align-items:center; gap:8px;
-      padding:11px 20px; border-radius:var(--r-sm); border:none;
-      background:linear-gradient(135deg,#a855f7,#7c3aed);
-      color:#fff; font-family:var(--font-ui); font-weight:700;
-      font-size:13px; cursor:pointer; transition:all .18s;
-      box-shadow:0 4px 16px rgba(168,85,247,.3); margin-top:16px;
-    }
-    .btn-arca-sync:hover { filter:brightness(1.1); transform:translateY(-1px); box-shadow:0 6px 22px rgba(168,85,247,.45); }
-    .btn-arca-sync:disabled { opacity:.5; pointer-events:none; }
+.arca-card:hover {
+  border-color: rgba(232,98,42,0.3);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.3);
+}
 
-    .dash-period-bar {
-      margin-bottom:18px;
-    }
+.arca-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
+.arca-header-left {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex: 1;
+}
+
+.arca-icon {
+  flex-shrink: 0;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Hacer que el SVG herede colores naranja */
+.arca-icon svg rect {
+  fill: rgba(232,98,42,0.12) !important;
+}
+
+.arca-icon svg path,
+.arca-icon svg circle {
+  stroke: #e8622a !important;
+}
+
+.arca-icon svg circle:last-child {
+  fill: #e8622a !important;
+}
+
+.arca-titles h3 {
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-1);
+  margin: 0 0 4px 0;
+}
+
+.arca-titles p {
+  font-size: 11px;
+  color: var(--text-3);
+  margin: 0;
+}
+
+.arca-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-2);
+  background: var(--card-2);
+  padding: 6px 14px;
+  border-radius: 40px;
+  flex-shrink: 0;
+}
+
+.arca-divider {
+  height: 1px;
+  background: var(--border);
+  margin: 24px 0;
+}
+
+.btn-arca-sync {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 20px;
+  border-radius: var(--r-sm);
+  border: none;
+  background: linear-gradient(135deg, #e8622a, #f5a623);
+  color: #fff;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 4px 16px rgba(232,98,42,.35);
+  margin-top: 20px;
+}
+
+.btn-arca-sync:hover {
+  background: linear-gradient(135deg, #f0732e, #f9b030);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 24px rgba(232,98,42,.55);
+}
+
+.btn-arca-sync:active {
+  transform: scale(0.98);
+}
+
+.btn-arca-sync:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Botón Desconectar ARCA */
+#btnDesconectarArca {
+  background: rgba(239, 68, 68, 0.15) !important;
+  border: 1px solid rgba(239, 68, 68, 0.3) !important;
+  color: #F87171 !important;
+  box-shadow: none !important;
+}
+
+#btnDesconectarArca:hover {
+  background: rgba(239, 68, 68, 0.25) !important;
+  border-color: rgba(239, 68, 68, 0.5) !important;
+  color: #ff6b7a !important;
+}
+
+/* Botón Cancelar Solicitud */
+#btnCancelarSolicitud {
+  background: rgba(255, 179, 0, 0.15) !important;
+  border: 1px solid rgba(255, 179, 0, 0.3) !important;
+  color: #F5A623 !important;
+  box-shadow: none !important;
+  margin-bottom: 10px;
+}
+
+#btnCancelarSolicitud:hover {
+  background: rgba(255, 179, 0, 0.25) !important;
+  border-color: rgba(255, 179, 0, 0.5) !important;
+}
+
+/* Botón Datos Enviados */
+#btnDatosEnviados {
+  background: rgba(255,255,255,0.05) !important;
+  border: 1px solid rgba(255,255,255,0.1) !important;
+  color: var(--text-3) !important;
+  opacity: 0.6;
+}
+
+.dash-period-bar {
+  margin-bottom: 18px;
+}
     /* ── VISTA MI NEGOCIO ──────────────────────────────── */
     .neg-section-label {
       font-size:9px; font-weight:700; letter-spacing:2.5px;
@@ -1412,3 +1540,2361 @@
       .koi-cta-area { padding:20px 20px; }
       .susc-btn-mp { font-size:14px; padding:13px 18px; }
     }
+   /* Botón de cancelar / Nota de Crédito */
+.act-btn.act-danger {
+    color: #ff3d57;
+    border-color: rgba(255,61,87,0.2);
+}
+
+.act-btn.act-danger:hover {
+    background: rgba(255,61,87,0.1);
+    border-color: rgba(255,61,87,0.4);
+}
+/* Botón deshabilitado genérico */
+.act-btn:disabled,
+.act-btn.act-disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+/* Botón de cancelar siempre visible pero diferente estilo cuando está deshabilitado */
+.act-btn.act-danger:disabled {
+    color: #ff3d57;
+    border-color: rgba(255,61,87,0.1);
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+.metrics-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+/* Opcional: para pantallas más grandes, que se vea bien */
+@media (min-width: 768px) {
+  .metrics-row {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+/* Botón de email después de enviado - solo colores */
+.act-btn.act-btn-sent,
+.act-btn:disabled {
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.3);
+  color: var(--green);
+  cursor: default;
+  opacity: 1;
+}
+
+.act-btn.act-btn-sent:hover,
+.act-btn:disabled:hover {
+  background: var(--green-soft);
+  border-color: rgba(0, 230, 118, 0.3);
+  color: var(--green);
+  transform: none;
+}
+/* KOI Logo - mismo estilo que landing */
+.koi-logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.koi-logo-mark {
+  width: 36px;
+  height: 36px;
+  border-radius: 9px;
+  background: linear-gradient(135deg, #1a1a24, #111118);
+  border: 0.5px solid rgba(249,115,22,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 900;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  color: #F97316;
+}
+
+.koi-logo-name {
+  font-weight: 800;
+  font-size: 16px;
+  color: #F9FAFB;
+  letter-spacing: -0.3px;
+}
+
+.koi-logo-name span {
+  color: #F97316;
+}
+
+.koi-logo-sub {
+  font-size: 9px;
+  font-weight: 500;
+  color: #6B7280;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+}
+/* Botón Emitir Lote */
+.btn-emitir-lote {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 6px rgba(232, 98, 42, 0.2);
+}
+
+.btn-emitir-lote:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(232, 98, 42, 0.3);
+  background: linear-gradient(135deg, #d4511f 0%, #e89518 100%);
+}
+
+.btn-emitir-lote .material-icons {
+  font-size: 16px;
+}
+/* MODAL EMITIR LOTE - VERSIÓN CORREGIDA */
+#modalLoteOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+}
+
+#modalLoteOverlay[style*="display: block"],
+#modalLoteOverlay[style*="display:block"] {
+  display: block !important;
+}
+
+#modalLote {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--card, #1a1a2e);
+  border-radius: 24px;
+  width: 90%;
+  max-width: 480px;
+  z-index: 10000;
+  display: none;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote[style*="display: block"],
+#modalLote[style*="display:block"] {
+  display: block !important;
+}
+
+#modalLote .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .modal-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 700;
+  font-size: 16px;
+  color: var(--text-1, white);
+}
+
+#modalLote .modal-body {
+  padding: 24px;
+}
+
+#modalLote .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .cfg-field {
+  margin-bottom: 16px;
+}
+
+#modalLote .cfg-field:last-child {
+  margin-bottom: 0;
+}
+
+#modalLote .cfg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-3, #888);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#modalLote .cfg-input {
+  width: 100%;
+  background: var(--card-2, #17172a);
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--text-1, white);
+  font-size: 13px;
+}
+
+#modalLote .btn-cancel {
+  background: transparent;
+  border: 1px solid var(--border, rgba(255,255,255,0.1));
+  border-radius: 40px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--text-2, #aaa);
+  cursor: pointer;
+}
+
+#modalLote .btn-registrar {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+}
+/* MODAL EMITIR LOTE - VERSIÓN CORREGIDA */
+#modalLoteOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+}
+
+#modalLote {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1a1a2e;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 480px;
+  z-index: 10000;
+  display: none;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .modal-body {
+  padding: 24px;
+}
+
+#modalLote .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .cfg-field {
+  margin-bottom: 16px;
+}
+
+#modalLote .cfg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#modalLote .cfg-input {
+  width: 100%;
+  background: #17172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #f0f0fa;
+  font-size: 13px;
+}
+
+#modalLote .btn-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 40px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+#modalLote .btn-registrar {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+}
+/* MODAL EMITIR LOTE - FIJAR VISIBILIDAD */
+#modalLoteOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+}
+
+#modalLote {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #1a1a2e;
+  border-radius: 24px;
+  width: 90%;
+  max-width: 480px;
+  z-index: 10000;
+  display: none;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+#modalLote .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20px 24px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .modal-body {
+  padding: 24px;
+}
+
+#modalLote .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#modalLote .cfg-field {
+  margin-bottom: 16px;
+}
+
+#modalLote .cfg-label {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #888;
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+#modalLote .cfg-input {
+  width: 100%;
+  background: #17172a;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: #f0f0fa;
+  font-size: 13px;
+}
+
+#modalLote .btn-cancel {
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 40px;
+  padding: 8px 20px;
+  font-weight: 600;
+  font-size: 13px;
+  color: #aaa;
+  cursor: pointer;
+}
+
+#modalLote .btn-registrar {
+  background: linear-gradient(135deg, #e8622a 0%, #f5a623 100%);
+  border: none;
+  border-radius: 40px;
+  padding: 8px 20px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  font-size: 13px;
+  color: white;
+  cursor: pointer;
+}
+/* Estado Anulada para facturas */
+.estado-chip.anulado {
+  background: rgba(255, 61, 87, 0.12);
+  color: #ff3d57;
+  border: 1px solid rgba(255, 61, 87, 0.25);
+  box-shadow: 0 0 4px rgba(255, 61, 87, 0.2);
+}
+
+.estado-chip.anulado::before {
+  content: "⚠️ ";
+  font-size: 10px;
+}
+/* ============================================ */
+/* MODAL EMITIR LOTE - ÚNICO Y RESPONSIVE */
+/* ============================================ */
+
+#modalLoteOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
+  z-index: 9999;
+  display: none;
+}
+
+#modalLote {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: var(--card, #1a1a2e);
+  border-radius: 24px;
+  width: 90%;
+  max-width: 550px;
+  max-height: 85vh;
+  z-index: 10000;
+  display: none;
+  flex-direction: column;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+#modalLote .modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 18px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+#modalLote .modal-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+  max-height: calc(85vh - 120px);
+}
+
+#modalLote .modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  flex-shrink: 0;
+}
+
+#modalLote .modal-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+/* Preview con scroll */
+#modalLote .preview-ordenes {
+  max-height: 200px;
+  overflow-y: auto;
+  margin-top: 12px;
+}
+
+/* ============================================ */
+/* RESPONSIVE */
+/* ============================================ */
+
+/* Tablet y móviles grandes (<= 768px) */
+@media (max-width: 768px) {
+  #modalLote {
+    width: 95%;
+    max-width: 95%;
+    max-height: 90vh;
+    border-radius: 20px;
+  }
+  
+  #modalLote .modal-header {
+    padding: 14px 16px;
+  }
+  
+  #modalLote .modal-header .modal-title {
+    font-size: 14px;
+  }
+  
+  #modalLote .modal-body {
+    padding: 16px;
+    max-height: calc(90vh - 100px);
+  }
+  
+  #modalLote .modal-footer {
+    padding: 12px 16px;
+  }
+}
+
+/* Móviles (<= 600px) */
+@media (max-width: 600px) {
+  #modalLote {
+    width: 95%;
+    max-width: 95%;
+    border-radius: 16px;
+  }
+  
+  #modalLote .modal-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  #modalLote .modal-footer {
+    flex-wrap: wrap;
+  }
+  
+  #modalLote .modal-footer button {
+    flex: 1;
+    justify-content: center;
+  }
+  
+  /* Preview en móvil */
+  #modalLote .preview-fila {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .preview-fila > div:first-child {
+    width: 100%;
+    justify-content: space-between;
+  }
+}
+
+/* Móviles muy pequeños (<= 400px) */
+@media (max-width: 400px) {
+  #modalLote .modal-body {
+    padding: 12px;
+  }
+  
+  .preview-ordenes {
+    max-height: 150px;
+  }
+  
+  .preview-fila {
+    flex-direction: column;
+    align-items: flex-start !important;
+    gap: 4px;
+  }
+  
+  .preview-fila > div:first-child {
+    width: 100%;
+  }
+  
+  .preview-fila > div:last-child {
+    align-self: flex-end;
+  }
+}
+
+/* Botones responsivos */
+@media (max-width: 480px) {
+  .btn-cancel, 
+  .btn-registrar, 
+  .btn-emitir-lote {
+    padding: 8px 16px;
+    font-size: 12px;
+  }
+  
+  .btn-cancel .material-icons,
+  .btn-registrar .material-icons,
+  .btn-emitir-lote .material-icons {
+    font-size: 14px !important;
+  }
+}
+/* Mensaje de estado ARCA */
+.arca-mensaje {
+    padding: 12px 16px;
+    border-radius: 10px;
+    font-size: 0.8rem;
+    margin-top: 8px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.arca-mensaje i {
+    font-size: 1rem;
+}
+
+.arca-mensaje.info {
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.2);
+    color: #60A5FA;
+}
+
+.arca-mensaje.warning {
+    background: rgba(251, 191, 36, 0.1);
+    border: 1px solid rgba(251, 191, 36, 0.2);
+    color: #FBBF24;
+}
+
+.arca-mensaje.success {
+    background: rgba(0, 230, 118, 0.1);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    color: #00E676;
+}
+
+.arca-mensaje.error {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.2);
+    color: #F87171;
+}
+
+/* Diferentes estados del dot */
+.status-dot.vinculado {
+    background: #00E676;
+    box-shadow: 0 0 6px #00E676;
+}
+
+.status-dot.pendiente {
+    background: #FBBF24;
+    box-shadow: 0 0 6px #FBBF24;
+}
+
+.status-dot.validando {
+    background: #60A5FA;
+    box-shadow: 0 0 6px #60A5FA;
+    animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 0.5; transform: scale(0.8); }
+    50% { opacity: 1; transform: scale(1.2); }
+    100% { opacity: 0.5; transform: scale(0.8); }
+}
+/* ============================================================
+   ONBOARDING ARCA - Mismo estilo que onboarding de tiendas
+   ============================================================ */
+
+/* Contenedor principal del onboarding ARCA */
+#onboardingArca {
+    max-width: 1000px;
+    margin: 0 auto;
+    padding: 40px 20px;
+}
+
+/* Header con badges de estado */
+.onboarding-header-badges {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+}
+
+.onboarding-badge {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    border-radius: 40px;
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.onboarding-badge-success {
+    background: rgba(0, 230, 118, 0.12);
+    color: #00e676;
+}
+
+.onboarding-badge-warning {
+    background: rgba(255, 61, 87, 0.12);
+    color: #ff3d57;
+}
+
+.onboarding-badge i,
+.onboarding-badge .material-icons {
+    font-size: 18px;
+}
+
+/* Títulos del onboarding ARCA */
+#onboardingArca h1 {
+    font-size: 32px;
+    font-weight: 700;
+    margin-bottom: 12px;
+    color: var(--text-1);
+    text-align: center;
+}
+
+#onboardingArca .onboarding-subtitle {
+    font-size: 16px;
+    color: var(--text-2);
+    text-align: center;
+    margin-bottom: 8px;
+}
+
+#onboardingArca .onboarding-description {
+    font-size: 14px;
+    color: var(--text-3);
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+/* Card ARCA estilizada igual que las cards del onboarding */
+#onboardingArca .arca-card {
+    max-width: 500px;
+    margin: 0 auto;
+    background: var(--card);
+    border-radius: 24px;
+    padding: 24px;
+    border: 1px solid var(--border);
+    box-shadow: var(--sh-card);
+}
+
+#onboardingArca .arca-card-header {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+#onboardingArca .arca-icon {
+    width: 64px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Footer del onboarding ARCA */
+.onboarding-footer {
+    margin-top: 48px;
+    padding-top: 32px;
+    border-top: 1px solid rgba(255,255,255,0.08);
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.onboarding-footer .btn-secondary {
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 40px;
+    padding: 12px 28px;
+    color: var(--text-2);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+}
+
+.onboarding-footer .btn-secondary:hover {
+    background: rgba(255,255,255,0.05);
+    border-color: rgba(255,255,255,0.3);
+}
+
+.onboarding-footer .btn-primary {
+    background: #00e676;
+    border: none;
+    border-radius: 40px;
+    padding: 12px 32px;
+    color: #0a0e1a;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.onboarding-footer .btn-primary:disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.onboarding-footer .btn-primary:not(:disabled):hover {
+    background: #00c853;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0,230,118,0.3);
+}
+
+.onboarding-footer .btn-primary:active {
+    transform: translateY(0);
+}
+
+/* Estilos para los inputs dentro del onboarding ARCA */
+#onboardingArca .cfg-fields {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+#onboardingArca .cfg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+#onboardingArca .cfg-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-3);
+}
+
+#onboardingArca .cfg-input {
+    width: 100%;
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: var(--r-sm);
+    color: var(--text-1);
+    font-family: var(--font-ui);
+    font-size: 13px;
+    padding: 10px 14px;
+    outline: none;
+    transition: border-color .18s, box-shadow .18s;
+}
+
+#onboardingArca .cfg-input:focus {
+    border-color: rgba(168,85,247,0.4);
+    box-shadow: 0 0 0 3px rgba(168,85,247,0.08);
+}
+
+#onboardingArca .cfg-input:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+/* Botón de sincronización ARCA */
+#onboardingArca .btn-arca-sync {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 20px;
+    border-radius: var(--r-sm);
+    border: none;
+    background: linear-gradient(135deg, #a855f7, #7c3aed);
+    color: #fff;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .18s;
+    box-shadow: 0 4px 16px rgba(168,85,247,0.3);
+    margin-top: 16px;
+}
+
+#onboardingArca .btn-arca-sync:hover:not(:disabled) {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 22px rgba(168,85,247,0.45);
+}
+
+#onboardingArca .btn-arca-sync:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+/* Botón de cancelar solicitud */
+#onboardingArca .btn-cancelar-solicitud {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 12px 20px;
+    border-radius: var(--r-sm);
+    background: rgba(255, 179, 0, 0.15);
+    border: 1px solid rgba(255, 179, 0, 0.3);
+    color: #F5A623;
+    font-family: var(--font-ui);
+    font-weight: 700;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all .18s;
+    margin-bottom: 10px;
+}
+
+#onboardingArca .btn-cancelar-solicitud:hover {
+    background: rgba(255, 179, 0, 0.25);
+    border-color: rgba(255, 179, 0, 0.5);
+}
+
+/* Mensajes ARCA dentro del onboarding */
+#onboardingArca .arca-mensaje {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 12px;
+    line-height: 1.4;
+    margin-top: 16px;
+}
+
+#onboardingArca .arca-mensaje i {
+    font-size: 18px;
+    flex-shrink: 0;
+}
+
+#onboardingArca .arca-mensaje.info {
+    background: rgba(168, 85, 247, 0.08);
+    border: 1px solid rgba(168, 85, 247, 0.2);
+    color: #a855f7;
+}
+
+#onboardingArca .arca-mensaje.success {
+    background: rgba(0, 230, 118, 0.08);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    color: #00e676;
+}
+
+#onboardingArca .arca-mensaje.warning {
+    background: rgba(255, 179, 0, 0.08);
+    border: 1px solid rgba(255, 179, 0, 0.2);
+    color: #f5a623;
+}
+
+#onboardingArca .arca-mensaje.error {
+    background: rgba(255, 61, 87, 0.08);
+    border: 1px solid rgba(255, 61, 87, 0.2);
+    color: #ff3d57;
+}
+
+/* Spinner dentro del mensaje */
+.mensaje-spinner {
+    width: 20px;
+    height: 20px;
+    border: 2px solid rgba(168, 85, 247, 0.2);
+    border-top-color: #a855f7;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+/* Responsive para onboarding ARCA */
+@media (max-width: 720px) {
+    #onboardingArca {
+        padding: 20px 16px;
+    }
+    
+    #onboardingArca h1 {
+        font-size: 24px;
+    }
+    
+    #onboardingArca .onboarding-subtitle {
+        font-size: 14px;
+    }
+    
+    #onboardingArca .onboarding-description {
+        font-size: 12px;
+        margin-bottom: 24px;
+    }
+    
+    #onboardingArca .arca-card {
+        padding: 18px;
+    }
+    
+    .onboarding-header-badges {
+        gap: 8px;
+    }
+    
+    .onboarding-badge {
+        padding: 6px 12px;
+        font-size: 11px;
+    }
+    
+    .onboarding-footer {
+        flex-direction: column;
+        gap: 12px;
+        align-items: center;
+    }
+    
+    .onboarding-footer .btn-secondary,
+    .onboarding-footer .btn-primary {
+        width: 100%;
+        max-width: 250px;
+        text-align: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .onboarding-header-badges {
+        flex-direction: column;
+        align-items: center;
+    }
+}
+/* ==========================================
+   ONBOARDING PLAN UNIFICADO (ACTIVO + EXPIRADO)
+   Clases complementarias para el nuevo JavaScript
+   ========================================== */
+
+/* Contenedor unificado */
+#vista-onboarding-plan .plan-unified-container {
+    max-width: 850px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px;
+}
+
+/* Header unificado (reutiliza .koi-icon existente pero con clase específica) */
+#vista-onboarding-plan .koi-unified-header {
+    text-align: center;
+    margin-bottom: 28px;
+}
+
+#vista-onboarding-plan .koi-unified-icon {
+    width: 80px;
+    height: 80px;
+    background: #0a0e1a;
+    border: 2px solid #E86A2C;
+    border-radius: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto;
+    font-size: 40px;
+    font-weight: 800;
+    color: #E86A2C;
+}
+
+/* Status card unificada */
+#vista-onboarding-plan .status-unified-card {
+    border-radius: 20px;
+    padding: 24px 28px;
+    margin-bottom: 32px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+#vista-onboarding-plan .status-active {
+    background: rgba(0, 230, 118, 0.08);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+}
+
+#vista-onboarding-plan .status-expired {
+    background: rgba(232, 98, 42, 0.08);
+    border: 1px solid rgba(232, 98, 42, 0.2);
+}
+
+#vista-onboarding-plan .status-warning {
+    background: rgba(255, 61, 87, 0.08);
+    border: 1px solid rgba(255, 61, 87, 0.2);
+}
+
+#vista-onboarding-plan .status-unified-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 8px;
+}
+
+#vista-onboarding-plan .status-active .status-unified-title {
+    color: #00e676;
+}
+
+#vista-onboarding-plan .status-expired .status-unified-title {
+    color: #f0f0fa;
+}
+
+#vista-onboarding-plan .status-unified-sub {
+    font-size: 14px;
+    color: #8888aa;
+}
+
+/* Timers unificados */
+#vista-onboarding-plan .timers-unified-section {
+    margin-bottom: 24px;
+}
+
+#vista-onboarding-plan .timer-unified-item {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 14px;
+    padding: 14px 20px;
+    margin-bottom: 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#vista-onboarding-plan .timer-unified-item.offer-timer {
+    background: rgba(232, 106, 44, 0.08);
+    border: 1px solid rgba(232, 106, 44, 0.2);
+}
+
+#vista-onboarding-plan .timer-unified-label {
+    font-size: 13px;
+    color: #8888aa;
+}
+
+#vista-onboarding-plan .timer-unified-value {
+    font-size: 16px;
+    font-weight: 700;
+    font-family: monospace;
+    color: #00e676;
+}
+
+#vista-onboarding-plan .offer-timer .timer-unified-value {
+    color: #E86A2C;
+}
+
+/* Breakdown unificado */
+#vista-onboarding-plan .breakdown-unified-box {
+    background: rgba(0, 0, 0, 0.3);
+    border-radius: 18px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+#vista-onboarding-plan .breakdown-unified-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+#vista-onboarding-plan .breakdown-unified-label {
+    font-size: 15px;
+    font-weight: 600;
+    color: white;
+}
+
+#vista-onboarding-plan .breakdown-unified-sub {
+    font-size: 11px;
+    color: #8888aa;
+    margin-top: 2px;
+}
+
+#vista-onboarding-plan .breakdown-unified-price {
+    font-size: 16px;
+    font-weight: 700;
+    color: #00e676;
+}
+
+#vista-onboarding-plan .plus-unified-icon {
+    text-align: center;
+    font-size: 16px;
+    color: #8888aa;
+    margin: 8px 0;
+}
+
+#vista-onboarding-plan .divider-unified-dashed {
+    border-top: 1px dashed rgba(0, 230, 118, 0.3);
+    margin: 12px 0;
+    padding-top: 10px;
+}
+
+#vista-onboarding-plan .total-unified-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#vista-onboarding-plan .total-unified-label {
+    font-size: 16px;
+    font-weight: 800;
+    color: white;
+}
+
+#vista-onboarding-plan .total-unified-sub {
+    font-size: 10px;
+    color: #8888aa;
+}
+
+#vista-onboarding-plan .total-unified-price {
+    font-size: 20px;
+    font-weight: 800;
+    color: #00e676;
+}
+
+#vista-onboarding-plan .acumulation-unified-note {
+    margin-top: 12px;
+    font-size: 10px;
+    color: #8888aa;
+    text-align: center;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    padding-top: 10px;
+}
+
+/* Price card unificada (reutiliza estilos existentes pero con clase específica) */
+#vista-onboarding-plan .price-unified-card {
+    background: #0D0D16;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+    border-radius: 24px;
+    overflow: hidden;
+    margin-bottom: 16px;
+}
+
+#vista-onboarding-plan .price-unified-top-bar {
+    height: 4px;
+    background: linear-gradient(90deg, #F97316, #22C55E);
+}
+
+#vista-onboarding-plan .price-unified-inner {
+    padding: 40px;
+}
+
+#vista-onboarding-plan .price-unified-eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #F97316;
+    margin-bottom: 16px;
+}
+
+#vista-onboarding-plan .price-unified-amount {
+    display: flex;
+    align-items: flex-start;
+    gap: 4px;
+    margin-bottom: 8px;
+}
+
+#vista-onboarding-plan .price-unified-cur {
+    font-size: 28px;
+    font-weight: 700;
+    color: #F97316;
+    margin-top: 10px;
+}
+
+#vista-onboarding-plan .price-unified-num {
+    font-size: 64px;
+    font-weight: 900;
+    color: white;
+    letter-spacing: -0.03em;
+}
+
+#vista-onboarding-plan .price-unified-period {
+    font-size: 18px;
+    color: #6B7280;
+    align-self: flex-end;
+    margin-bottom: 10px;
+    margin-left: 4px;
+}
+
+#vista-onboarding-plan .price-unified-note {
+    font-size: 13px;
+    color: #22C55E;
+    font-weight: 500;
+    margin-bottom: 24px;
+}
+
+#vista-onboarding-plan .price-unified-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.06);
+    margin-bottom: 24px;
+}
+
+#vista-onboarding-plan .price-unified-features {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 32px;
+}
+
+#vista-onboarding-plan .price-unified-feature {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+#vista-onboarding-plan .price-unified-check {
+    width: 20px;
+    height: 20px;
+    background: rgba(34, 197, 94, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#vista-onboarding-plan .price-unified-check svg {
+    width: 11px;
+    height: 11px;
+}
+
+#vista-onboarding-plan .price-unified-feature-text {
+    font-size: 15px;
+    color: #D1D5DB;
+}
+
+#vista-onboarding-plan .price-unified-btn {
+    width: 100%;
+    background: linear-gradient(90deg, #F97316, #FB923C);
+    border: none;
+    border-radius: 12px;
+    padding: 18px;
+    font-size: 16px;
+    font-weight: 700;
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    transition: all 0.2s ease;
+}
+
+#vista-onboarding-plan .price-unified-btn:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+#vista-onboarding-plan .price-unified-footnote {
+    text-align: center;
+    font-size: 12px;
+    color: #4B5563;
+    margin-top: 16px;
+}
+
+/* Términos unificados */
+#vista-onboarding-plan .terms-unified-text {
+    text-align: center;
+    font-size: 12px;
+    color: #4B5563;
+    margin-bottom: 24px;
+}
+
+#vista-onboarding-plan .terms-unified-text a {
+    color: #F97316;
+    text-decoration: none;
+}
+
+/* Política de cancelación unificada */
+#vista-onboarding-plan .policy-unified-card {
+    background: rgba(255, 179, 0, 0.04);
+    border: 1px solid rgba(255, 179, 0, 0.1);
+    border-radius: 20px;
+    padding: 24px;
+}
+
+#vista-onboarding-plan .policy-unified-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 16px;
+}
+
+#vista-onboarding-plan .policy-unified-header strong {
+    font-size: 15px;
+    color: white;
+}
+
+#vista-onboarding-plan .policy-unified-item {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 12px;
+    padding-left: 28px;
+}
+
+#vista-onboarding-plan .policy-dot-green-unified {
+    width: 6px;
+    height: 6px;
+    background: #00e676;
+    border-radius: 50%;
+    margin-top: 5px;
+}
+
+#vista-onboarding-plan .policy-dot-orange-unified {
+    width: 6px;
+    height: 6px;
+    background: #E86A2C;
+    border-radius: 50%;
+    margin-top: 5px;
+}
+
+#vista-onboarding-plan .policy-text-unified {
+    font-size: 13px;
+    color: #aaa;
+    line-height: 1.45;
+}
+
+#vista-onboarding-plan .highlight-red-unified {
+    color: #ff6b7a;
+}
+
+#vista-onboarding-plan .highlight-green-unified {
+    color: #00e676;
+}
+
+#vista-onboarding-plan .example-unified-box {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 12px;
+    padding: 12px;
+    margin-top: 12px;
+}
+
+#vista-onboarding-plan .example-unified-box p {
+    font-size: 11px;
+    color: #888;
+}
+
+/* Responsive unificado */
+@media (max-width: 900px) {
+    #vista-onboarding-plan .price-unified-inner {
+        padding: 28px;
+    }
+    #vista-onboarding-plan .price-unified-num {
+        font-size: 52px;
+    }
+    #vista-onboarding-plan .koi-unified-icon {
+        width: 64px;
+        height: 64px;
+        font-size: 32px;
+    }
+}
+
+@media (max-width: 640px) {
+    #vista-onboarding-plan .price-unified-inner {
+        padding: 20px;
+    }
+    #vista-onboarding-plan .price-unified-num {
+        font-size: 44px;
+    }
+    #vista-onboarding-plan .status-unified-card {
+        padding: 18px 20px;
+    }
+    #vista-onboarding-plan .status-unified-title {
+        font-size: 16px;
+    }
+    #vista-onboarding-plan .timer-unified-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+    }
+}
+/* Hacer que los estilos del onboarding también apliquen a Mi Plan */
+#vista-onboarding-plan .plan-unified-container,
+#susc-inactiva .plan-unified-container {
+    max-width: 850px;
+    margin: 0 auto;
+    width: 100%;
+    padding: 20px;
+}
+
+/* Agrupar todos los selectores relevantes */
+[class*="plan-unified-container"] .koi-unified-icon,
+[class*="status-unified-card"],
+[class*="price-unified-card"] {
+    /* Los estilos ya están definidos, solo necesitamos que el selector incluya #susc-inactiva */
+}
+
+/* O usar una clase compartida */
+.onboarding-content {
+    /* mover todos los estilos a esta clase */
+}
+
+#vista-onboarding-plan .onboarding-content,
+#susc-inactiva .onboarding-content {
+    /* mismos estilos */
+}
+/* ==========================================
+   ESTILOS PARA PLAN EXPIRADO (adicionales)
+   ========================================== */
+
+/* Borde y sombra especial para tarjeta expirada */
+#vista-onboarding-plan .price-unified-card.price-expired {
+    border: 2px solid rgba(255, 61, 87, 0.5) !important;
+    box-shadow: 0 8px 32px rgba(255, 61, 87, 0.2) !important;
+    animation: borderPulseExpired 2s infinite !important;
+}
+
+@keyframes borderPulseExpired {
+    0% { border-color: rgba(255, 61, 87, 0.3); box-shadow: 0 4px 16px rgba(255, 61, 87, 0.1); }
+    50% { border-color: rgba(255, 61, 87, 0.7); box-shadow: 0 8px 32px rgba(255, 61, 87, 0.3); }
+    100% { border-color: rgba(255, 61, 87, 0.3); box-shadow: 0 4px 16px rgba(255, 61, 87, 0.1); }
+}
+
+/* Botón con animación de advertencia para expirado */
+#vista-onboarding-plan .price-unified-card.price-expired .price-unified-btn {
+    background: linear-gradient(90deg, #F97316, #FB923C) !important;
+    animation: pulseWarning 1.5s infinite !important;
+    position: relative;
+    overflow: hidden;
+}
+
+#vista-onboarding-plan .price-unified-card.price-expired .price-unified-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.3), transparent);
+    animation: btnShine 2s infinite;
+}
+
+@keyframes pulseWarning {
+    0% { opacity: 0.85; transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+    50% { opacity: 1; transform: scale(1.02); box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
+    100% { opacity: 0.85; transform: scale(1); box-shadow: 0 0 0 0 rgba(249, 115, 22, 0); }
+}
+
+@keyframes btnShine {
+    0% { left: -100%; }
+    20% { left: 100%; }
+    100% { left: 100%; }
+}
+
+/* Badge de "Expirado" opcional en la tarjeta */
+.price-unified-card.price-expired {
+    position: relative;
+}
+
+.price-unified-card.price-expired::after {
+    content: "⚠️ EXPIRADO";
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    background: rgba(255, 61, 87, 0.9);
+    color: white;
+    font-size: 10px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 20px;
+    letter-spacing: 0.5px;
+    z-index: 10;
+}
+
+/* Contenedor general expirado - opcional */
+.plan-unified-container.plan-expired .price-unified-card {
+    border: 2px solid rgba(255, 61, 87, 0.5) !important;
+}
+
+/* Si la tarjeta de estado está expirada, que también tenga efecto */
+.status-unified-card.status-expired {
+    border: 1px solid rgba(255, 61, 87, 0.3) !important;
+    background: rgba(255, 61, 87, 0.05) !important;
+}
+
+.status-unified-card.status-expired .status-unified-title {
+    color: #ff6b7a !important;
+}
+
+/* Responsive */
+@media (max-width: 640px) {
+    .price-unified-card.price-expired::after {
+        top: 8px;
+        right: 8px;
+        font-size: 8px;
+        padding: 2px 8px;
+    }
+}
+/* ==========================================
+   SUSCRIPCIÓN ACTIVA - DISEÑO DE DOS COLUMNAS
+   ========================================== */
+
+/* Contenedor principal */
+.suscripcion-container {
+    max-width: 100%;
+    width: 100%;
+    margin: 0 auto;
+    padding: 20px 32px;
+}
+
+/* HEADER */
+.suscripcion-header {
+    text-align: center;
+    margin-bottom: 32px;
+}
+
+.suscripcion-header h1 {
+    font-size: 32px;
+    font-weight: 700;
+    color: var(--text-1);
+    margin-bottom: 8px;
+    letter-spacing: -0.3px;
+}
+
+.suscripcion-header p {
+    font-size: 14px;
+    color: var(--text-2);
+    margin: 0;
+}
+
+.suscripcion-header::after {
+    content: '';
+    display: block;
+    width: 50px;
+    height: 2px;
+    background: var(--green);
+    margin: 16px auto 0;
+    opacity: 0.5;
+}
+
+/* Grid de dos columnas */
+.suscripcion-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    align-items: stretch;
+    width: 100%;
+}
+
+/* Columnas */
+.suscripcion-col-left,
+.suscripcion-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+}
+
+/* Columna derecha altura completa */
+.suscripcion-col-right {
+    height: 100%;
+}
+
+/* Cards base */
+.suscripcion-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: var(--r-xl);
+    padding: 24px;
+    transition: all 0.3s ease;
+    width: 100%;
+    box-sizing: border-box;
+}
+
+.suscripcion-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(0, 230, 118, 0.25);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+}
+
+/* Status card destacada */
+.status-card {
+    border-top: 3px solid var(--green);
+}
+
+/* Status top - para alinear badge PRO a la derecha */
+.status-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    width: 100%;
+}
+
+/* Badge activo */
+.badge-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: var(--green-soft);
+    padding: 5px 12px;
+    border-radius: 999px;
+    font-size: 12px;
+    color: var(--green);
+}
+
+.dot-live {
+    width: 7px;
+    height: 7px;
+    background: var(--green);
+    border-radius: 50%;
+    animation: pulse-live 2s infinite;
+}
+
+@keyframes pulse-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+
+/* Plan badge - alineado a la derecha */
+.plan-badge {
+    background: rgba(232, 98, 42, 0.1);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    color: var(--orange-2);
+    margin-left: auto;
+    flex-shrink: 0;
+}
+
+/* Precio y plan */
+.plan-price-sub {
+    font-size: 13px;
+    color: var(--text-2);
+    margin-bottom: 16px;
+}
+
+.green {
+    color: var(--green);
+}
+
+/* Detail box */
+.detail-box {
+    background: var(--card-2);
+    border-radius: 14px;
+    padding: 16px;
+    margin: 16px 0;
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row span:first-child {
+    color: var(--text-2);
+    font-size: 12px;
+}
+
+.detail-row span:last-child {
+    color: var(--text-1);
+    font-weight: 600;
+    font-size: 13px;
+}
+
+/* Botones */
+.suscripcion-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 18px;
+}
+
+.btn-suscripcion {
+    border-radius: 10px;
+    padding: 10px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    border: none;
+    font-family: var(--font-ui);
+    text-align: center;
+}
+
+.btn-suscripcion.download {
+    background: var(--green-soft);
+    border: 1px solid rgba(0, 230, 118, 0.2);
+    color: var(--green);
+}
+
+.btn-suscripcion.download:hover {
+    background: var(--green);
+    color: #080810;
+    transform: translateY(-2px);
+}
+
+.btn-suscripcion.cancel {
+    background: rgba(255, 61, 87, 0.1);
+    border: 1px solid rgba(255, 61, 87, 0.2);
+    color: var(--red);
+}
+
+.btn-suscripcion.cancel:hover {
+    background: rgba(255, 61, 87, 0.2);
+    transform: translateY(-2px);
+}
+
+.btn-suscripcion.ghost {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    color: var(--text-1);
+    width: 100%;
+    margin-top: 16px;
+}
+
+.btn-suscripcion.ghost:hover {
+    border-color: var(--orange-2);
+    color: var(--orange-2);
+    transform: translateY(-2px);
+}
+
+/* Sección label */
+.sec-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-3);
+    margin-bottom: 16px;
+}
+
+/* HISTORIAL DE PAGOS */
+.historial-card {
+    display: flex;
+    flex-direction: column;
+    height: 380px;
+    min-height: 380px;
+    max-height: 380px;
+    overflow: hidden;
+}
+
+.history-table-wrapper {
+    overflow-y: auto;
+    flex: 1;
+    min-height: 0;
+    margin-bottom: 12px;
+}
+
+/* Scrollbar naranja - solo visible en hover */
+.history-table-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+.history-table-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+.history-table-wrapper::-webkit-scrollbar-thumb {
+    background: transparent;
+}
+.history-table-wrapper:hover::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #e8622a, #f5a623);
+    border-radius: 2px;
+}
+.history-table-wrapper::-webkit-scrollbar-button {
+    display: none;
+}
+
+/* Tabla */
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.history-table th {
+    text-align: left;
+    padding: 8px;
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1px;
+}
+
+.history-table td {
+    padding: 8px;
+    color: var(--text-1);
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+}
+
+.history-table tbody tr:hover td {
+    background: rgba(0, 230, 118, 0.03);
+}
+
+.chip-paid {
+    background: var(--green-soft);
+    padding: 4px 10px;
+    border-radius: 20px;
+    color: var(--green);
+    font-size: 11px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.chip-dot {
+    width: 5px;
+    height: 5px;
+    background: var(--green);
+    border-radius: 50%;
+}
+
+.receipt-link {
+    color: var(--orange-2);
+    text-decoration: none;
+    font-size: 12px;
+}
+
+.receipt-link:hover {
+    text-decoration: underline;
+}
+
+.table-footer {
+    flex-shrink: 0;
+    margin-top: auto;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--text-2);
+    text-align: right;
+}
+
+/* MÉTODO DE PAGO */
+.card-face-wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.card-face {
+    width: 56px;
+    height: 36px;
+    background: linear-gradient(135deg, #1a1a30, #252545);
+    border-radius: 8px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+.card-chip {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    width: 11px;
+    height: 9px;
+    background: var(--orange-2);
+    border-radius: 2px;
+    opacity: 0.5;
+}
+
+.card-mc {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+}
+
+.card-mc span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.card-mc span:first-child {
+    background: #eb001b;
+}
+
+.card-mc span:last-child {
+    background: #f79e1b;
+    margin-left: -4px;
+}
+
+.card-number {
+    font-weight: 700;
+    font-size: 14px;
+    color: var(--text-1);
+}
+
+.card-meta {
+    font-size: 11px;
+    color: var(--text-2);
+    margin-top: 4px;
+}
+
+/* SOPORTE */
+.support-card {
+    margin-top: auto;
+}
+
+.support-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.support-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 14px;
+    background: var(--card-2);
+    border-radius: 12px;
+    text-decoration: none;
+    color: var(--text-2);
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.support-link:hover {
+    background: var(--green-soft);
+    color: var(--green);
+    transform: translateX(3px);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .suscripcion-container {
+        padding: 12px 16px;
+    }
+    
+    .suscripcion-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+    
+    .suscripcion-header h1 {
+        font-size: 24px;
+    }
+    
+    .historial-card {
+        height: auto;
+        min-height: 320px;
+    }
+}
+/* ==========================================
+   FIX: VISTA SUSCRIPCIÓN ACTIVA - DOS COLUMNAS
+   ========================================== */
+
+/* Grid contenedor */
+.suscripcion-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    width: 100%;
+}
+
+/* Columnas */
+.suscripcion-col-left,
+.suscripcion-col-right {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+    width: 100%;
+}
+
+/* Columna derecha que ocupe toda la altura */
+.suscripcion-col-right {
+    height: 100%;
+}
+
+/* Asegurar que las cards ocupen todo el ancho de su columna */
+.suscripcion-col-left .suscripcion-card,
+.suscripcion-col-right .suscripcion-card {
+    width: 100%;
+    box-sizing: border-box;
+}
+
+/* Responsive: una columna en móvil */
+@media (max-width: 768px) {
+    .suscripcion-grid {
+        grid-template-columns: 1fr;
+        gap: 20px;
+    }
+}
+/* ==========================================
+   ESTILOS PARA CONFIGURACIÓN KOI (NARANJA)
+   ========================================== */
+
+/* Switch row mejorado */
+.cfg-switch-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--card-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  padding: 14px 18px;
+  margin-top: 8px;
+  gap: 20px;
+}
+
+.cfg-switch-left {
+  flex: 1;
+  min-width: 0;
+}
+
+.cfg-switch-right {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+/* Input inline dentro del switch */
+.cfg-inline-input {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 4px 8px;
+}
+
+.cfg-inline-input .cfg-input {
+  width: auto;
+  padding: 4px 8px;
+  background: transparent;
+  border: none;
+  text-align: center;
+  font-size: 12px;
+}
+
+.cfg-inline-input .cfg-input:focus {
+  box-shadow: none;
+}
+
+.cfg-inline-input .cfg-hint {
+  margin-top: 0;
+  font-size: 10px;
+  white-space: nowrap;
+}
+
+/* Switch KOI naranja */
+.koi-toggle {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+.koi-toggle input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+
+.koi-toggle-track {
+  position: absolute;
+  inset: 0;
+  background: var(--card);
+  border: 1px solid var(--border-2);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background .2s, border-color .2s;
+}
+
+.koi-toggle-track::after {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 2px;
+  top: 2px;
+  background: var(--text-3);
+  border-radius: 50%;
+  transition: transform .2s, background .2s;
+}
+
+.koi-toggle input:checked + .koi-toggle-track {
+  background: var(--orange-soft);
+  border-color: rgba(232,98,42,.4);
+}
+
+.koi-toggle input:checked + .koi-toggle-track::after {
+  transform: translateX(20px);
+  background: var(--orange);
+  box-shadow: 0 0 8px rgba(232,98,42,.6);
+}
+
+/* ==========================================
+   ESPACIADO ENTRE CARDS Y CAMPOS
+   ========================================== */
+
+.cfg-vista-card {
+  margin-bottom: 24px;
+}
+
+.cfg-vista-card:last-child {
+  margin-bottom: 0;
+}
+
+.cfg-fields {
+  gap: 20px;
+}
+
+/* ==========================================
+   BOTÓN GUARDAR - NARANJA KOI
+   ========================================== */
+
+.btn-cfg-save {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 13px 20px;
+  border-radius: var(--r-sm);
+  margin-top: 18px;
+  background: linear-gradient(135deg, #e8622a, #f5a623);
+  border: none;
+  color: #fff;
+  font-family: var(--font-ui);
+  font-weight: 700;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.btn-cfg-save:hover {
+  background: linear-gradient(135deg, #f0732e, #f9b030);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 16px rgba(232,98,42,.35);
+}
+
+.btn-cfg-save:active {
+  transform: scale(.98);
+}
+
+/* ==========================================
+   BOTONES DE LOGO - NARANJA KOI
+   ========================================== */
+
+/* Botón Subir Logo */
+#btnSubirLogo {
+  background: linear-gradient(135deg, #e8622a, #f5a623) !important;
+  border: none !important;
+  color: white !important;
+  font-weight: 600 !important;
+  box-shadow: 0 2px 8px rgba(232,98,42,.25) !important;
+  transition: all 0.2s ease !important;
+}
+
+#btnSubirLogo:hover {
+  background: linear-gradient(135deg, #f0732e, #f9b030) !important;
+  box-shadow: 0 4px 12px rgba(232,98,42,.35) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* Botón Eliminar Logo */
+#btnEliminarLogo {
+  background: rgba(232,98,42,0.1) !important;
+  border: 1px solid rgba(232,98,42,0.3) !important;
+  color: #f5a623 !important;
+  font-weight: 600 !important;
+  transition: all 0.2s ease !important;
+}
+
+#btnEliminarLogo:hover {
+  background: rgba(232,98,42,0.2) !important;
+  border-color: rgba(232,98,42,0.5) !important;
+  transform: translateY(-1px) !important;
+}
+
+/* ==========================================
+   SECCIÓN LOGO - ESTILO NARANJA
+   ========================================== */
+
+.cfg-sec-title .material-icons {
+  color: #e8622a !important;
+}
+
+#currentLogoContainer {
+  background: rgba(232,98,42,0.05) !important;
+  border: 1px solid rgba(232,98,42,0.2) !important;
+  border-radius: 12px !important;
+  transition: all 0.2s ease !important;
+}
+
+#currentLogoContainer:hover {
+  border-color: rgba(232,98,42,0.4) !important;
+  background: rgba(232,98,42,0.08) !important;
+}
+
+#noLogoText {
+  color: #f5a623 !important;
+}
+
+#noLogoText .material-icons {
+  color: #f5a623 !important;
+}
+
+/* ==========================================
+   INPUTS - FOCUS NARANJA
+   ========================================== */
+
+.cfg-input:focus {
+  border-color: rgba(232,98,42,.4) !important;
+  box-shadow: 0 0 0 3px rgba(232,98,42,.08) !important;
+  outline: none !important;
+}
+
+select.cfg-input:focus {
+  border-color: rgba(232,98,42,.4) !important;
+  box-shadow: 0 0 0 3px rgba(232,98,42,.08) !important;
+}
+
+/* ==========================================
+   MENSAJE DE GUARDADO NARANJA
+   ========================================== */
+
+.cfg-save-ok {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 14px;
+  border-radius: var(--r-sm);
+  background: rgba(232,98,42,0.1);
+  border: 1px solid rgba(232,98,42,.2);
+  color: #f5a623;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cfg-save-ok.visible {
+  display: flex;
+}
+
+/* ==========================================
+   RESPONSIVE
+   ========================================== */
+
+@media (max-width: 680px) {
+  .cfg-switch-row {
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .cfg-switch-right {
+    width: 100%;
+    justify-content: space-between;
+  }
+  .cfg-inline-input .cfg-input {
+    width: 90px;
+  }
+}

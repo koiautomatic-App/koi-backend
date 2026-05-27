@@ -1,4 +1,3 @@
-cat > routes/api/suscripcion.js << 'EOF'
 const express = require('express');
 const router = express.Router();
 const { requireAuthAPI } = require('../../middleware/auth');
@@ -15,4 +14,3 @@ router.get('/estado', requireAuthAPI, verificarEstado);
 router.post('/webhook', webhookSuscripcion);
 
 module.exports = router;
-EOF

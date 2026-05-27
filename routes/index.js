@@ -1,4 +1,4 @@
-// routes/index.js
+// routes/index.js - VERSIÓN CON DEBUG
 const express = require('express');
 const path = require('path');
 const router = express.Router();
@@ -35,54 +35,70 @@ router.get('/health', (req, res) => {
 // PÁGINAS HTML
 // ============================================================
 
-// Helper para verificar si el usuario está logueado
+// Helper para verificar si el usuario está logueado - CON DEBUG
 const isLoggedIn = (req) => {
   try {
     const token = req.cookies?.koi_token;
+    console.log(`🔍 [${req.url}] Token presente:`, token ? 'SÍ' : 'NO');
+    
     if (!token) return false;
+    
     const jwt = require('jsonwebtoken');
     const config = require('../config');
-    jwt.verify(token, config.JWT_SECRET);
+    const decoded = jwt.verify(token, config.JWT_SECRET);
+    console.log(`🔍 [${req.url}] Token válido para:`, decoded.email);
     return true;
   } catch (e) {
+    console.error(`❌ [${req.url}] Error token:`, e.message);
     return false;
   }
 };
 
 // Landing page
 router.get('/', (req, res) => {
+  console.log(`🚪 GET / - isLoggedIn: ${isLoggedIn(req)}`);
   if (isLoggedIn(req)) {
+    console.log('↪️ Redirigiendo a /dashboard');
     return res.redirect('/dashboard');
   }
+  console.log('📄 Mostrando landing page');
   res.sendFile(path.join(__dirname, '../public', 'index.html'));
 });
 
 // Login
 router.get('/login', (req, res) => {
+  console.log(`🚪 GET /login - isLoggedIn: ${isLoggedIn(req)}`);
   if (isLoggedIn(req)) {
+    console.log('↪️ Redirigiendo a /dashboard');
     return res.redirect('/dashboard');
   }
+  console.log('📄 Mostrando login page');
   res.sendFile(path.join(__dirname, '../public', 'login.html'));
 });
 
-// Dashboard (requiere autenticación)
+// Dashboard
 router.get('/dashboard', (req, res) => {
+  console.log(`🚪 GET /dashboard - isLoggedIn: ${isLoggedIn(req)}`);
   if (!isLoggedIn(req)) {
+    console.log('↪️ Redirigiendo a /login');
     return res.redirect('/login');
   }
+  console.log('📄 Mostrando dashboard');
   res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate, private');
   res.sendFile(path.join(__dirname, '../public', 'dashboard.html'));
 });
 
-// Admin panel (requiere autenticación + admin check en frontend)
+// Admin panel
 router.get('/admin', (req, res) => {
+  console.log(`🚪 GET /admin - isLoggedIn: ${isLoggedIn(req)}`);
   if (!isLoggedIn(req)) {
+    console.log('↪️ Redirigiendo a /login');
     return res.redirect('/login');
   }
   res.sendFile(path.join(__dirname, '../public', 'admin.html'));
 });
 
-// Google OAuth callback (ya está en authRoutes, pero aseguramos)
+// Google OAuth callback
 router.get('/auth/google', (req, res) => {
   res.redirect('/auth/google');
 });

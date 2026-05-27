@@ -1,4 +1,3 @@
-cat > services/integrations/normalizers/mercadolibre.js << 'EOF'
 const normalizeMercadoLibre = (raw) => {
   let docNumber = '';
   let firstName = '';
@@ -60,4 +59,3 @@ const normalizeMercadoLibre = (raw) => {
 };
 
 module.exports = normalizeMercadoLibre;
-EOF

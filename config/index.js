@@ -1,5 +1,11 @@
 require('dotenv').config();
 
+// Helper para SSL_OP_LEGACY (evita error en afip-tls.js)
+const crypto = require('crypto');
+const SSL_OP_LEGACY = typeof crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT !== 'undefined'
+  ? crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT
+  : 0x00000004;
+
 module.exports = {
   PORT: process.env.PORT || 10000,
   BASE_URL: (process.env.BASE_URL || `http://localhost:${process.env.PORT || 10000}`).replace(/\/$/, ''),
@@ -31,6 +37,9 @@ module.exports = {
   CLOUDINARY_API_SECRET: process.env.CLOUDINARY_API_SECRET,
   
   MP_ACCESS_TOKEN: process.env.MP_ACCESS_TOKEN,
+  
+  // 👇 NUEVA PROPIEDAD AGREGADA
+  SSL_OP_LEGACY: SSL_OP_LEGACY,
   
   validateEnv: () => {
     const required = ['MONGO_URI', 'JWT_SECRET'];

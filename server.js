@@ -4,7 +4,6 @@ const app = require('./app');
 const config = require('./config');
 const connectDB = require('./config/database');
 const { initPassport } = require('./config/passport');
-const setupRoutes = require('./routes');
 const { startKeepAlive } = require('./utils/keepAlive');
 const { httpsAgent } = require('./utils/afip-tls');
 const logger = require('./utils/logger');
@@ -18,8 +17,16 @@ initPassport();
 // Conectar a MongoDB
 connectDB();
 
-// Configurar rutas
-setupRoutes(app);
+// Configurar rutas - Con verificación de tipo
+const setupRoutes = require('./routes');
+if (typeof setupRoutes === 'function') {
+  setupRoutes(app);
+} else if (typeof setupRoutes === 'object' && setupRoutes.router) {
+  app.use('/', setupRoutes.router);
+} else {
+  logger.warn('⚠️ setupRoutes no es una función, intentando usar como router');
+  app.use('/', setupRoutes);
+}
 
 // Health check
 app.get('/health', (req, res) => {

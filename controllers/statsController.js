@@ -19,7 +19,7 @@ const obtenerDashboardStats = async (req, res) => {
       fechaHasta.setHours(23, 59, 59, 999);
     }
     
-    // 1. TOTAL FACTURADO
+    // 1. TOTAL FACTURADO (solo facturas emitidas)
     const matchFacturado = {
       userId: userId,
       $or: [{ status: 'invoiced' }, { caeNumber: { $exists: true, $ne: null } }]
@@ -62,7 +62,7 @@ const obtenerDashboardStats = async (req, res) => {
       status: { $ne: 'invoiced' }
     });
     
-    // 4. GRÁFICO DE INGRESOS (últimos 30 días por defecto)
+    // 4. GRÁFICO DE INGRESOS - TODAS LAS ÓRDENES (sin filtrar por facturación)
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
     
@@ -76,24 +76,33 @@ const obtenerDashboardStats = async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
+    // ✅ Limitar a la fecha actual (no días futuros)
+    const hoy = new Date();
+    hoy.setHours(23, 59, 59, 999);
+    if (graficoHasta > hoy) {
+      graficoHasta = hoy;
+    }
+    
+    // ✅ Usar createdAt (fecha de la orden) en lugar de fechaEmision
+    // ✅ Incluir TODAS las órdenes con monto positivo
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
           userId: userId,
-          $or: [{ status: 'invoiced' }, { caeNumber: { $exists: true } }],
-          fechaEmision: { $gte: graficoDesde, $lte: graficoHasta }
+          amount: { $gt: 0 },  // Solo ingresos positivos
+          createdAt: { $gte: graficoDesde, $lte: graficoHasta }
         }
       },
       {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$fechaEmision' } },
+          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
           total: { $sum: '$amount' }
         }
       },
       { $sort: { _id: 1 } }
     ]);
     
-    // Generar array de días entre fechas
+    // Generar array de días entre fechas (solo hasta hoy)
     const chartDias = [];
     const chartVentas = [];
     const ventasMap = new Map();
@@ -107,11 +116,14 @@ const obtenerDashboardStats = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    // 5. ÚLTIMAS 50 VENTAS
-    const ultimas = await Order.find({ userId: userId })
-      .sort({ fechaEmision: -1, createdAt: -1 })
+    // 5. ÚLTIMAS 50 VENTAS (todas las órdenes)
+    const ultimas = await Order.find({ 
+      userId: userId,
+      amount: { $gt: 0 }
+    })
+      .sort({ createdAt: -1 })
       .limit(50)
-      .select('customerName amount currency createdAt fechaEmision caeNumber nroFormatted customerEmail concepto items status')
+      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status')
       .lean();
     
     const ultimasConConcepto = ultimas.map(v => ({
@@ -126,7 +138,7 @@ const obtenerDashboardStats = async (req, res) => {
           userId: userId,
           $or: [{ amount: { $lt: 0 } }, { nroFormatted: { $regex: /^NC/i } }],
           ...(fechaDesde || fechaHasta ? {
-            fechaEmision: {
+            createdAt: {
               ...(fechaDesde && { $gte: fechaDesde }),
               ...(fechaHasta && { $lte: fechaHasta })
             }

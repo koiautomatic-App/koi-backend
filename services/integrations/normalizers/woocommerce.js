@@ -1,6 +1,12 @@
 const { cleanDoc, resolveDoc } = require('../../../utils/constants');
 
 const normalizeWooCommerce = (raw) => {
+  // 👇 SOLO PROCESAR ÓRDENES COMPLETADAS
+  if (raw.status !== 'completed') {
+    console.log(`⏭️ Orden ${raw.id} ignorada - Estado: ${raw.status} (solo completed)`);
+    return null;
+  }
+  
   const b = raw.billing || {};
   const doc = cleanDoc(b.dni || b.identification || b.cpf || '');
   const items = (raw.line_items || []).map(i => ({
@@ -22,7 +28,8 @@ const normalizeWooCommerce = (raw) => {
     currency: raw.currency || 'ARS',
     concepto: concepto,
     items: items,
-    orderDate: raw.date_created ? new Date(raw.date_created) : undefined
+    orderDate: raw.date_created ? new Date(raw.date_created) : undefined,
+    wooStatus: raw.status  // 👈 Guardar el estado original
   };
 };
 

@@ -80,9 +80,11 @@ const login = async (req, res) => {
   }
 };
 
+// 👇 MODIFICAR ESTA FUNCIÓN
 const logout = (req, res) => {
   res.clearCookie('koi_token');
-  res.json({ ok: true });
+  // Redirigir a login en lugar de devolver JSON
+  res.redirect('/login');
 };
 
 module.exports = { register, login, logout };

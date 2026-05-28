@@ -17,8 +17,8 @@ router.get('/logout', logout);
 // ============================================================
 router.get('/google',
   passport.authenticate('google', { 
-    scope: ['profile', 'email'],
-    prompt: 'select_account'
+    scope: ['profile', 'email']
+    // ✅ Eliminado 'prompt: select_account' - ahora usará la última sesión
   })
 );
 

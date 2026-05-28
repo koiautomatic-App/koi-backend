@@ -1,10 +1,14 @@
 // controllers/statsController.js
 const Order = require('../models/Order');
+const mongoose = require('mongoose');
 
 const obtenerDashboardStats = async (req, res) => {
   try {
     const userId = req.userId;
     const { desde, hasta } = req.query;
+    
+    // Convertir userId a ObjectId para asegurar consistencia
+    const userIdObj = new mongoose.Types.ObjectId(userId);
     
     // Parsear fechas
     let fechaDesde = null;
@@ -19,15 +23,19 @@ const obtenerDashboardStats = async (req, res) => {
       fechaHasta.setHours(23, 59, 59, 999);
     }
     
-    // 1. TOTAL FACTURADO (solo facturas emitidas)
+    // ============================================================
+    // 1. TOTAL FACTURADO - Usando el mismo filtro que funciona en /api/orders
+    // ============================================================
     const matchFacturado = {
-      userId: userId,
-      $or: [{ status: 'invoiced' }, { caeNumber: { $exists: true, $ne: null } }]
+      userId: userIdObj,
+      status: 'invoiced'  // Simplificado - solo facturadas
     };
+    
+    // Aplicar filtro de fechas si existe
     if (fechaDesde || fechaHasta) {
-      matchFacturado.fechaEmision = {};
-      if (fechaDesde) matchFacturado.fechaEmision.$gte = fechaDesde;
-      if (fechaHasta) matchFacturado.fechaEmision.$lte = fechaHasta;
+      matchFacturado.createdAt = {};
+      if (fechaDesde) matchFacturado.createdAt.$gte = fechaDesde;
+      if (fechaHasta) matchFacturado.createdAt.$lte = fechaHasta;
     }
     
     const totalResult = await Order.aggregate([
@@ -38,7 +46,9 @@ const obtenerDashboardStats = async (req, res) => {
     const totalFacturado = totalResult[0]?.total || 0;
     const totalFacturas = totalResult[0]?.count || 0;
     
-    // 2. EMITIDO HOY
+    // ============================================================
+    // 2. EMITIDO HOY - Órdenes facturadas hoy
+    // ============================================================
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
     const hoyFin = new Date();
@@ -47,22 +57,26 @@ const obtenerDashboardStats = async (req, res) => {
     const hoyResult = await Order.aggregate([
       {
         $match: {
-          userId: userId,
-          $or: [{ status: 'invoiced' }, { caeNumber: { $exists: true } }],
-          fechaEmision: { $gte: hoyInicio, $lte: hoyFin }
+          userId: userIdObj,
+          status: 'invoiced',
+          createdAt: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
       { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
     ]);
     
-    // 3. PENDIENTES CAE
+    // ============================================================
+    // 3. PENDIENTES CAE - Órdenes sin facturar
+    // ============================================================
     const pendientesCAE = await Order.countDocuments({
-      userId: userId,
-      caeNumber: { $exists: false },
-      status: { $ne: 'invoiced' }
+      userId: userIdObj,
+      status: { $ne: 'invoiced' },
+      amount: { $gt: 0 }
     });
     
-    // 4. GRÁFICO DE INGRESOS - TODAS LAS ÓRDENES (sin filtrar por facturación)
+    // ============================================================
+    // 4. GRÁFICO DE INGRESOS - TODAS las ventas (facturadas + pendientes)
+    // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
     
@@ -76,20 +90,19 @@ const obtenerDashboardStats = async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    // ✅ Limitar a la fecha actual (no días futuros)
+    // Limitar a la fecha actual (no días futuros)
     const hoy = new Date();
     hoy.setHours(23, 59, 59, 999);
     if (graficoHasta > hoy) {
       graficoHasta = hoy;
     }
     
-    // ✅ Usar createdAt (fecha de la orden) en lugar de fechaEmision
-    // ✅ Incluir TODAS las órdenes con monto positivo
+    // ✅ TODAS las órdenes con monto positivo (sin importar status)
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
-          userId: userId,
-          amount: { $gt: 0 },  // Solo ingresos positivos
+          userId: userIdObj,
+          amount: { $gt: 0 },
           createdAt: { $gte: graficoDesde, $lte: graficoHasta }
         }
       },
@@ -102,7 +115,7 @@ const obtenerDashboardStats = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
-    // Generar array de días entre fechas (solo hasta hoy)
+    // Generar array de días
     const chartDias = [];
     const chartVentas = [];
     const ventasMap = new Map();
@@ -116,9 +129,11 @@ const obtenerDashboardStats = async (req, res) => {
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
+    // ============================================================
     // 5. ÚLTIMAS 50 VENTAS (todas las órdenes)
+    // ============================================================
     const ultimas = await Order.find({ 
-      userId: userId,
+      userId: userIdObj,
       amount: { $gt: 0 }
     })
       .sort({ createdAt: -1 })
@@ -131,18 +146,14 @@ const obtenerDashboardStats = async (req, res) => {
       conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
     }));
     
+    // ============================================================
     // 6. NOTAS DE CRÉDITO
+    // ============================================================
     const notasCreditoAgg = await Order.aggregate([
       {
         $match: {
-          userId: userId,
-          $or: [{ amount: { $lt: 0 } }, { nroFormatted: { $regex: /^NC/i } }],
-          ...(fechaDesde || fechaHasta ? {
-            createdAt: {
-              ...(fechaDesde && { $gte: fechaDesde }),
-              ...(fechaHasta && { $lte: fechaHasta })
-            }
-          } : {})
+          userId: userIdObj,
+          amount: { $lt: 0 }
         }
       },
       {
@@ -159,7 +170,9 @@ const obtenerDashboardStats = async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
-    // Respuesta completa
+    // ============================================================
+    // RESPUESTA COMPLETA
+    // ============================================================
     res.json({
       ok: true,
       totalFacturado,

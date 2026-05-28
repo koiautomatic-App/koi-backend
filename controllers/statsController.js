@@ -20,12 +20,16 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO (solo completadas)
+    // 1. TOTAL FACTURADO (solo órdenes completadas en WooCommerce)
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
       status: 'invoiced',
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
+      // 👇 FILTRAR POR RAWPAYLOAD.STATUS (no orderStatus)
+      $or: [
+        { 'rawPayload.status': 'completed' },
+        { platform: { $ne: 'woocommerce' } }  // Para otras plataformas, no filtrar
+      ]
     };
     
     if (fechaDesde || fechaHasta) {
@@ -55,7 +59,10 @@ const obtenerDashboardStats = async (req, res) => {
         $match: {
           userId: userIdObj,
           status: 'invoiced',
-          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] },
+          $or: [
+            { 'rawPayload.status': 'completed' },
+            { platform: { $ne: 'woocommerce' } }
+          ],
           createdAt: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -69,11 +76,14 @@ const obtenerDashboardStats = async (req, res) => {
       userId: userIdObj,
       status: { $ne: 'invoiced' },
       amount: { $gt: 0 },
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
+      $or: [
+        { 'rawPayload.status': 'completed' },
+        { platform: { $ne: 'woocommerce' } }
+      ]
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS
+    // 4. GRÁFICO DE INGRESOS (solo completadas)
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -98,7 +108,11 @@ const obtenerDashboardStats = async (req, res) => {
           userId: userIdObj,
           amount: { $gt: 0 },
           createdAt: { $gte: graficoDesde, $lte: graficoHasta },
-          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
+          // 👇 SOLO ÓRDENES COMPLETADAS EN WOOCOMMERCE
+          $or: [
+            { 'rawPayload.status': 'completed' },
+            { platform: { $ne: 'woocommerce' } }
+          ]
         }
       },
       {
@@ -137,16 +151,19 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS
+    // 5. ÚLTIMAS 50 VENTAS (solo completadas)
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
       amount: { $gt: 0 },
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
+      $or: [
+        { 'rawPayload.status': 'completed' },
+        { platform: { $ne: 'woocommerce' } }
+      ]
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status orderStatus')
+      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status rawPayload platform')
       .lean();
     
     const ultimasConConcepto = ultimas.map(v => ({
@@ -155,15 +172,13 @@ const obtenerDashboardStats = async (req, res) => {
     }));
     
     // ============================================================
-    // 6. NOTAS DE CRÉDITO (NO excluir canceladas)
+    // 6. NOTAS DE CRÉDITO
     // ============================================================
     const notasCreditoAgg = await Order.aggregate([
       {
         $match: {
           userId: userIdObj,
           amount: { $lt: 0 }
-          // ✅ NOTAS DE CRÉDITO: Sin filtro de orderStatus
-          // Porque son documentos válidos independientemente del estado de la orden original
         }
       },
       {

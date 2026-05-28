@@ -22,11 +22,12 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO
+    // 1. TOTAL FACTURADO (solo órdenes completadas)
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
-      status: 'invoiced'
+      status: 'invoiced',
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
     };
     
     if (fechaDesde || fechaHasta) {
@@ -56,6 +57,7 @@ const obtenerDashboardStats = async (req, res) => {
         $match: {
           userId: userIdObj,
           status: 'invoiced',
+          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }, // 👈 EXCLUIR CANCELADAS
           createdAt: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -63,16 +65,17 @@ const obtenerDashboardStats = async (req, res) => {
     ]);
     
     // ============================================================
-    // 3. PENDIENTES CAE
+    // 3. PENDIENTES CAE (excluyendo canceladas)
     // ============================================================
     const pendientesCAE = await Order.countDocuments({
       userId: userIdObj,
       status: { $ne: 'invoiced' },
-      amount: { $gt: 0 }
+      amount: { $gt: 0 },
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS - CON ZONA HORARIA CORREGIDA
+    // 4. GRÁFICO DE INGRESOS (excluyendo órdenes canceladas)
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -92,13 +95,14 @@ const obtenerDashboardStats = async (req, res) => {
     hoy.setHours(23, 59, 59, 999);
     if (graficoHasta > hoy) graficoHasta = hoy;
     
-    // ✅ USAR ZONA HORARIA DE ARGENTINA (UTC-3)
+    // ✅ EXCLUIR ÓRDENES CANCELADAS DEL GRÁFICO
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
           userId: userIdObj,
           amount: { $gt: 0 },
-          createdAt: { $gte: graficoDesde, $lte: graficoHasta }
+          createdAt: { $gte: graficoDesde, $lte: graficoHasta },
+          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
         }
       },
       {
@@ -108,7 +112,7 @@ const obtenerDashboardStats = async (req, res) => {
             $dateToString: {
               format: '%Y-%m-%d',
               date: '$createdAt',
-              timezone: 'America/Argentina/Buenos_Aires'  // 👈 FORZAR ZONA ARGENTINA
+              timezone: 'America/Argentina/Buenos_Aires'
             }
           }
         }
@@ -131,7 +135,6 @@ const obtenerDashboardStats = async (req, res) => {
     let currentDate = new Date(graficoDesde);
     while (currentDate <= graficoHasta) {
       const key = currentDate.toISOString().split('T')[0];
-      // Formatear la fecha para mostrar (día/mes)
       const diaStr = currentDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
       chartDias.push(diaStr);
       chartVentas.push(ventasMap.get(key) || 0);
@@ -139,15 +142,16 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS
+    // 5. ÚLTIMAS 50 VENTAS (excluyendo canceladas)
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
-      amount: { $gt: 0 }
+      amount: { $gt: 0 },
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status')
+      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status orderStatus')
       .lean();
     
     const ultimasConConcepto = ultimas.map(v => ({
@@ -162,7 +166,8 @@ const obtenerDashboardStats = async (req, res) => {
       {
         $match: {
           userId: userIdObj,
-          amount: { $lt: 0 }
+          amount: { $lt: 0 },
+          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
         }
       },
       {

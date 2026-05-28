@@ -7,31 +7,28 @@ const obtenerDashboardStats = async (req, res) => {
     const userId = req.userId;
     const { desde, hasta } = req.query;
     
-    // Convertir userId a ObjectId para asegurar consistencia
+    // Convertir userId a ObjectId
     const userIdObj = new mongoose.Types.ObjectId(userId);
     
-    // Parsear fechas
+    // Parsear fechas (asegurando zona horaria Argentina)
     let fechaDesde = null;
     let fechaHasta = null;
     
     if (desde) {
-      fechaDesde = new Date(desde);
-      fechaDesde.setHours(0, 0, 0, 0);
+      fechaDesde = new Date(desde + 'T00:00:00-03:00'); // Forzar zona Argentina
     }
     if (hasta) {
-      fechaHasta = new Date(hasta);
-      fechaHasta.setHours(23, 59, 59, 999);
+      fechaHasta = new Date(hasta + 'T23:59:59-03:00'); // Forzar zona Argentina
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO - Usando el mismo filtro que funciona en /api/orders
+    // 1. TOTAL FACTURADO
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
-      status: 'invoiced'  // Simplificado - solo facturadas
+      status: 'invoiced'
     };
     
-    // Aplicar filtro de fechas si existe
     if (fechaDesde || fechaHasta) {
       matchFacturado.createdAt = {};
       if (fechaDesde) matchFacturado.createdAt.$gte = fechaDesde;
@@ -47,7 +44,7 @@ const obtenerDashboardStats = async (req, res) => {
     const totalFacturas = totalResult[0]?.count || 0;
     
     // ============================================================
-    // 2. EMITIDO HOY - Órdenes facturadas hoy
+    // 2. EMITIDO HOY
     // ============================================================
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
@@ -66,7 +63,7 @@ const obtenerDashboardStats = async (req, res) => {
     ]);
     
     // ============================================================
-    // 3. PENDIENTES CAE - Órdenes sin facturar
+    // 3. PENDIENTES CAE
     // ============================================================
     const pendientesCAE = await Order.countDocuments({
       userId: userIdObj,
@@ -75,7 +72,7 @@ const obtenerDashboardStats = async (req, res) => {
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS - TODAS las ventas (facturadas + pendientes)
+    // 4. GRÁFICO DE INGRESOS - CON ZONA HORARIA CORREGIDA
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -90,14 +87,12 @@ const obtenerDashboardStats = async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    // Limitar a la fecha actual (no días futuros)
+    // Limitar a la fecha actual
     const hoy = new Date();
     hoy.setHours(23, 59, 59, 999);
-    if (graficoHasta > hoy) {
-      graficoHasta = hoy;
-    }
+    if (graficoHasta > hoy) graficoHasta = hoy;
     
-    // ✅ TODAS las órdenes con monto positivo (sin importar status)
+    // ✅ USAR ZONA HORARIA DE ARGENTINA (UTC-3)
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
@@ -107,8 +102,20 @@ const obtenerDashboardStats = async (req, res) => {
         }
       },
       {
+        $project: {
+          amount: 1,
+          fechaLocal: {
+            $dateToString: {
+              format: '%Y-%m-%d',
+              date: '$createdAt',
+              timezone: 'America/Argentina/Buenos_Aires'  // 👈 FORZAR ZONA ARGENTINA
+            }
+          }
+        }
+      },
+      {
         $group: {
-          _id: { $dateToString: { format: '%Y-%m-%d', date: '$createdAt' } },
+          _id: '$fechaLocal',
           total: { $sum: '$amount' }
         }
       },
@@ -124,13 +131,15 @@ const obtenerDashboardStats = async (req, res) => {
     let currentDate = new Date(graficoDesde);
     while (currentDate <= graficoHasta) {
       const key = currentDate.toISOString().split('T')[0];
-      chartDias.push(currentDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' }));
+      // Formatear la fecha para mostrar (día/mes)
+      const diaStr = currentDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit' });
+      chartDias.push(diaStr);
       chartVentas.push(ventasMap.get(key) || 0);
       currentDate.setDate(currentDate.getDate() + 1);
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS (todas las órdenes)
+    // 5. ÚLTIMAS 50 VENTAS
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
@@ -170,9 +179,7 @@ const obtenerDashboardStats = async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
-    // ============================================================
-    // RESPUESTA COMPLETA
-    // ============================================================
+    // Respuesta
     res.json({
       ok: true,
       totalFacturado,

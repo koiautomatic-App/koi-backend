@@ -7,27 +7,25 @@ const obtenerDashboardStats = async (req, res) => {
     const userId = req.userId;
     const { desde, hasta } = req.query;
     
-    // Convertir userId a ObjectId
     const userIdObj = new mongoose.Types.ObjectId(userId);
     
-    // Parsear fechas (asegurando zona horaria Argentina)
     let fechaDesde = null;
     let fechaHasta = null;
     
     if (desde) {
-      fechaDesde = new Date(desde + 'T00:00:00-03:00'); // Forzar zona Argentina
+      fechaDesde = new Date(desde + 'T00:00:00-03:00');
     }
     if (hasta) {
-      fechaHasta = new Date(hasta + 'T23:59:59-03:00'); // Forzar zona Argentina
+      fechaHasta = new Date(hasta + 'T23:59:59-03:00');
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO (solo órdenes completadas)
+    // 1. TOTAL FACTURADO (solo completadas)
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
       status: 'invoiced',
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
     };
     
     if (fechaDesde || fechaHasta) {
@@ -57,7 +55,7 @@ const obtenerDashboardStats = async (req, res) => {
         $match: {
           userId: userIdObj,
           status: 'invoiced',
-          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }, // 👈 EXCLUIR CANCELADAS
+          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] },
           createdAt: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -65,17 +63,17 @@ const obtenerDashboardStats = async (req, res) => {
     ]);
     
     // ============================================================
-    // 3. PENDIENTES CAE (excluyendo canceladas)
+    // 3. PENDIENTES CAE
     // ============================================================
     const pendientesCAE = await Order.countDocuments({
       userId: userIdObj,
       status: { $ne: 'invoiced' },
       amount: { $gt: 0 },
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS (excluyendo órdenes canceladas)
+    // 4. GRÁFICO DE INGRESOS
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -90,19 +88,17 @@ const obtenerDashboardStats = async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    // Limitar a la fecha actual
     const hoy = new Date();
     hoy.setHours(23, 59, 59, 999);
     if (graficoHasta > hoy) graficoHasta = hoy;
     
-    // ✅ EXCLUIR ÓRDENES CANCELADAS DEL GRÁFICO
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
           userId: userIdObj,
           amount: { $gt: 0 },
           createdAt: { $gte: graficoDesde, $lte: graficoHasta },
-          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
+          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
         }
       },
       {
@@ -126,7 +122,6 @@ const obtenerDashboardStats = async (req, res) => {
       { $sort: { _id: 1 } }
     ]);
     
-    // Generar array de días
     const chartDias = [];
     const chartVentas = [];
     const ventasMap = new Map();
@@ -142,12 +137,12 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS (excluyendo canceladas)
+    // 5. ÚLTIMAS 50 VENTAS
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
       amount: { $gt: 0 },
-      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
+      orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] }
     })
       .sort({ createdAt: -1 })
       .limit(50)
@@ -160,14 +155,15 @@ const obtenerDashboardStats = async (req, res) => {
     }));
     
     // ============================================================
-    // 6. NOTAS DE CRÉDITO
+    // 6. NOTAS DE CRÉDITO (NO excluir canceladas)
     // ============================================================
     const notasCreditoAgg = await Order.aggregate([
       {
         $match: {
           userId: userIdObj,
-          amount: { $lt: 0 },
-          orderStatus: { $nin: ['cancelled', 'refunded', 'failed'] } // 👈 EXCLUIR CANCELADAS
+          amount: { $lt: 0 }
+          // ✅ NOTAS DE CRÉDITO: Sin filtro de orderStatus
+          // Porque son documentos válidos independientemente del estado de la orden original
         }
       },
       {
@@ -184,7 +180,6 @@ const obtenerDashboardStats = async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
-    // Respuesta
     res.json({
       ok: true,
       totalFacturado,

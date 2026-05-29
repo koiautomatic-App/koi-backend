@@ -322,6 +322,7 @@ const eliminarOrden = async (req, res) => {
   }
 };
 
+// ✅ FUNCIÓN ACTUALIZADA - Permite modificar rawPayload.status
 const actualizarOrden = async (req, res) => {
   try {
     const { id } = req.params;
@@ -334,17 +335,27 @@ const actualizarOrden = async (req, res) => {
       }
     }
     
-    const order = await Order.findOneAndUpdate(
+    // 👇 PERMITIR ACTUALIZAR rawPayload.status
+    const order = await Order.findOne({ _id: id, userId: req.userId });
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    // Actualizar rawPayload.status si viene en la petición
+    if (req.body.rawPayload && req.body.rawPayload.status) {
+      order.rawPayload.status = req.body.rawPayload.status;
+      await order.save();
+      return res.json({ ok: true, order });
+    }
+    
+    // Actualizar otros campos
+    const updatedOrder = await Order.findOneAndUpdate(
       { _id: id, userId: req.userId },
       { $set: updates },
       { new: true }
     );
     
-    if (!order) {
-      return res.status(404).json({ error: 'Orden no encontrada' });
-    }
-    
-    res.json({ ok: true, order });
+    res.json({ ok: true, order: updatedOrder });
   } catch (error) {
     console.error('actualizarOrden error:', error);
     res.status(500).json({ error: error.message });

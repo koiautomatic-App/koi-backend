@@ -20,16 +20,11 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO (solo órdenes completadas en WooCommerce)
+    // 1. TOTAL FACTURADO (solo órdenes facturadas)
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
-      status: 'invoiced',
-      // 👇 FILTRAR POR RAWPAYLOAD.STATUS (no orderStatus)
-      $or: [
-        { 'rawPayload.status': 'completed' },
-        { platform: { $ne: 'woocommerce' } }  // Para otras plataformas, no filtrar
-      ]
+      status: 'invoiced'
     };
     
     if (fechaDesde || fechaHasta) {
@@ -59,10 +54,6 @@ const obtenerDashboardStats = async (req, res) => {
         $match: {
           userId: userIdObj,
           status: 'invoiced',
-          $or: [
-            { 'rawPayload.status': 'completed' },
-            { platform: { $ne: 'woocommerce' } }
-          ],
           createdAt: { $gte: hoyInicio, $lte: hoyFin }
         }
       },
@@ -75,15 +66,11 @@ const obtenerDashboardStats = async (req, res) => {
     const pendientesCAE = await Order.countDocuments({
       userId: userIdObj,
       status: { $ne: 'invoiced' },
-      amount: { $gt: 0 },
-      $or: [
-        { 'rawPayload.status': 'completed' },
-        { platform: { $ne: 'woocommerce' } }
-      ]
+      amount: { $gt: 0 }
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS (solo completadas)
+    // 4. GRÁFICO DE INGRESOS - TODAS LAS ÓRDENES (sin filtrar)
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -102,17 +89,13 @@ const obtenerDashboardStats = async (req, res) => {
     hoy.setHours(23, 59, 59, 999);
     if (graficoHasta > hoy) graficoHasta = hoy;
     
+    // ✅ ELIMINADO el filtro de rawPayload.status
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
           userId: userIdObj,
           amount: { $gt: 0 },
-          createdAt: { $gte: graficoDesde, $lte: graficoHasta },
-          // 👇 SOLO ÓRDENES COMPLETADAS EN WOOCOMMERCE
-          $or: [
-            { 'rawPayload.status': 'completed' },
-            { platform: { $ne: 'woocommerce' } }
-          ]
+          createdAt: { $gte: graficoDesde, $lte: graficoHasta }
         }
       },
       {
@@ -151,15 +134,11 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS (solo completadas)
+    // 5. ÚLTIMAS 50 VENTAS - TODAS LAS ÓRDENES
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
-      amount: { $gt: 0 },
-      $or: [
-        { 'rawPayload.status': 'completed' },
-        { platform: { $ne: 'woocommerce' } }
-      ]
+      amount: { $gt: 0 }
     })
       .sort({ createdAt: -1 })
       .limit(50)

@@ -1749,8 +1749,11 @@ function filtrarComprobantes() {
     if (_filtroTipo === 'factura' && c.tipo !== 'Factura C') return false;
     if (_filtroTipo === 'nota' && c.tipo !== 'Nota de Crédito C') return false;
     
-    // Filtro por estado
-    if (_filtroTipo === 'pendiente' && c.estado !== 'pendiente') return false;
+    // 👇 FILTRO POR ESTADO CORREGIDO
+    if (_filtroTipo === 'pendiente') {
+      // Incluir pendientes y errores de AFIP
+      return c.estado === 'pendiente' || c.status === 'error_afip' || c.estado === 'cae-err';
+    }
     
     // Filtro por origen (plataforma)
     if (_filtroTipo === 'manual' && c.origen !== 'manual') return false;

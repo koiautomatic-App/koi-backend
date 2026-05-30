@@ -28,19 +28,19 @@ const obtenerDashboardStats = async (req, res) => {
     const condicionFiscal = user?.settings?.condicionFiscal || 'responsable_inscripto';
     
     // Límites anuales de monotributo 2026 (actualizar según ARCA)
-    const limitesAnuales = {
-      'A': 6886002.48,
-      'B': 10299855.36,
-      'C': 13862982.24,
-      'D': 17237595.60,
-      'E': 20589867.36,
-      'F': 25895377.20,
-      'G': 31074452.64,
-      'H': 37149327.84,
-      'I': 41639741.52,
-      'J': 47696735.28,
-      'K': 53674689.12
-    };
+   const limitesAnuales = {
+  'A': 10277988.13,
+  'B': 15058447.71,
+  'C': 21113696.52,
+  'D': 26212853.42,
+  'E': 30833964.37,
+  'F': 38642048.36,
+  'G': 46211109.37,
+  'H': 70113407.33,
+  'I': 84124088.79,
+  'J': 98144777.00,
+  'K': 112165465.00
+};
     
     const limiteAnual = limitesAnuales[categoria] || limitesAnuales['C'];
     const limiteMensual = limiteAnual / 12;

@@ -110,14 +110,15 @@ const obtenerDashboardStats = async (req, res) => {
       { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
     ]);
     
-    // ============================================================
-    // 5. PENDIENTES CAE
-    // ============================================================
-    const pendientesCAE = await Order.countDocuments({
-      userId: userIdObj,
-      status: { $ne: 'invoiced' },
-      amount: { $gt: 0 }
-    });
+   // ============================================================
+// 5. PENDIENTES CAE (solo del período seleccionado)
+// ============================================================
+const pendientesCAE = await Order.countDocuments({
+  userId: userIdObj,
+  status: { $ne: 'invoiced' },
+  amount: { $gt: 0 },
+  createdAt: { $gte: fechaDesde || graficoDesde, $lte: fechaHasta || graficoHasta }
+});
     
     // ============================================================
     // 6. GRÁFICO DE INGRESOS

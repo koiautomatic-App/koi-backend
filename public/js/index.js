@@ -371,10 +371,17 @@ function adaptarStats(raw) {
 
   return {
     serverOnline:    true,
-    monoCategoria:   'C',
-    monoFacturado:   raw.totalMonto     || 0,
-    monoLimite:      2432364,
-    monoMes:         `Período: ${periodoLabel}`,
+    // 👇 NUEVOS CAMPOS para facturación acumulada (últimos 12 meses)
+    categoria:       raw.categoria || 'C',
+    facturacionAcumulada: raw.facturacionAcumulada || 0,
+    limiteAnual:     raw.limiteAnual || 13862982.24,
+    porcentajeAnual: raw.porcentajeAnual || 0,
+    // 👇 CAMPOS PARA COMPATIBILIDAD (monotributo)
+    monoCategoria:   raw.categoria || 'C',
+    monoFacturado:   raw.facturacionAcumulada || 0,
+    monoLimite:      raw.limiteAnual || 13862982.24,
+    monoMes:         `Período: últimos 12 meses`,
+    // 👇 MÉTRICAS DEL PERÍODO
     hoyFacturado:    raw.hoyMonto || 0,
     hoyDelta:        raw.hoyCount > 0 ? `${raw.hoyCount} factura${raw.hoyCount !== 1 ? 's' : ''} emitida${raw.hoyCount !== 1 ? 's' : ''} hoy` : 'Sin facturar hoy',
     hoyTipo:         raw.hoyCount > 0 ? 'up' : '',
@@ -5489,23 +5496,40 @@ if (document.getElementById('vista-config')) {
   setTimeout(initConfigEvents, 100);
 }
 
-// Al final de tu archivo .js, asegurate de exportarla globalmente:
-window.cargarDatosSuscripcion = cargarDatosSuscripcion;
-
-// En renderMono (dashboard.js)
 function renderMono(d) {
-  const totalAcumulado = d.facturacionAcumulada || 0;
-  const limiteAnual = d.limiteAnual || 13862982.24;
-  const porcentaje = d.porcentajeAnual || 0;
-  const categoria = d.categoria || 'C';
+  // Usar los nuevos campos de facturación acumulada
+  const totalAcumulado = d.facturacionAcumulada || d.monoFacturado || 0;
+  const limiteAnual = d.limiteAnual || d.monoLimite || 13862982.24;
+  const porcentaje = d.porcentajeAnual || (totalAcumulado / limiteAnual) * 100;
+  const categoria = d.categoria || d.monoCategoria || 'C';
   
+  // Actualizar el título de la tarjeta
   document.getElementById('monoCat').textContent = `Cat ${categoria}`;
-  document.getElementById('monoVal').textContent = totalAcumulado.toLocaleString();
-  document.getElementById('monoLimVal').textContent = `$${limiteAnual.toLocaleString()}`;
+  document.getElementById('monoMes').textContent = d.monoMes || 'Período: últimos 12 meses';
   
-  // Actualizar barra de progreso
+  // Actualizar el valor de facturación acumulada
+  document.getElementById('monoVal').textContent = 
+    new Intl.NumberFormat('es-AR', { maximumFractionDigits: 0 }).format(totalAcumulado);
+  document.getElementById('monoLimVal').textContent = ars(limiteAnual);
+  
+  // Calcular y actualizar la barra de progreso
+  const pct = Math.min(porcentaje, 100);
   const fill = document.getElementById('progFill');
   const pctEl = document.getElementById('progPct');
-  fill.style.width = porcentaje + '%';
-  pctEl.textContent = porcentaje.toFixed(1) + '%';
+  
+  requestAnimationFrame(() => { fill.style.width = pct.toFixed(1) + '%'; });
+  
+  let cls = '', pc = '';
+  if (pct >= 90) { cls = 'crit'; pc = 'crit'; }
+  else if (pct >= 70) { cls = 'warn'; pc = 'warn'; }
+  
+  fill.className = `prog-fill ${cls}`;
+  pctEl.textContent = pct.toFixed(1) + '%'; 
+  pctEl.className = `prog-pct ${pc}`;
+  
+  document.getElementById('progMes').textContent = `${pct.toFixed(1)}% del límite anual utilizado`;
 }
+
+
+// Al final de tu archivo .js, asegurate de exportarla globalmente:
+window.cargarDatosSuscripcion = cargarDatosSuscripcion;

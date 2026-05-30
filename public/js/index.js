@@ -5529,7 +5529,28 @@ function renderMono(d) {
   
   document.getElementById('progMes').textContent = `${pct.toFixed(1)}% del límite anual utilizado`;
 }
-
+// Función para ir a la sección de comprobantes filtrando pendientes
+function irAComprobantesPendientes() {
+  // Cambiar a la vista de comprobantes
+  mostrarVista('comprobantes');
+  
+  // Aplicar filtro de pendientes después de un pequeño delay
+  setTimeout(() => {
+    // Buscar y activar el botón de filtro "Sin emitir"
+    const btnPendiente = document.querySelector('.filtro-btn[onclick*="pendiente"]');
+    if (btnPendiente) {
+      btnPendiente.click();
+    } else {
+      // Fallback: buscar por texto
+      const botones = document.querySelectorAll('.filtro-btn');
+      botones.forEach(btn => {
+        if (btn.textContent.includes('Sin emitir') || btn.textContent.includes('pendiente')) {
+          btn.click();
+        }
+      });
+    }
+  }, 300);
+}
 
 // Al final de tu archivo .js, asegurate de exportarla globalmente:
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;

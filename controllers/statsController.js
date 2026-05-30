@@ -1,5 +1,6 @@
 // controllers/statsController.js
 const Order = require('../models/Order');
+const User = require('../models/User');
 const mongoose = require('mongoose');
 
 const obtenerDashboardStats = async (req, res) => {
@@ -20,7 +21,56 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 1. TOTAL FACTURADO (solo órdenes facturadas)
+    // 1. OBTENER USUARIO Y CATEGORÍA
+    // ============================================================
+    const user = await User.findById(userId).select('settings').lean();
+    const categoria = user?.settings?.categoria || 'C';
+    const condicionFiscal = user?.settings?.condicionFiscal || 'responsable_inscripto';
+    
+    // Límites anuales de monotributo 2026 (actualizar según ARCA)
+    const limitesAnuales = {
+      'A': 6886002.48,
+      'B': 10299855.36,
+      'C': 13862982.24,
+      'D': 17237595.60,
+      'E': 20589867.36,
+      'F': 25895377.20,
+      'G': 31074452.64,
+      'H': 37149327.84,
+      'I': 41639741.52,
+      'J': 47696735.28,
+      'K': 53674689.12
+    };
+    
+    const limiteAnual = limitesAnuales[categoria] || limitesAnuales['C'];
+    const limiteMensual = limiteAnual / 12;
+    
+    // ============================================================
+    // 2. FACTURACIÓN ACUMULADA - ÚLTIMOS 12 MESES
+    // ============================================================
+    const hoy = new Date();
+    const hace12Meses = new Date();
+    hace12Meses.setMonth(hoy.getMonth() - 12);
+    hace12Meses.setHours(0, 0, 0, 0);
+    
+    const total12MesesResult = await Order.aggregate([
+      {
+        $match: {
+          userId: userIdObj,
+          status: 'invoiced',
+          amount: { $gt: 0 },
+          createdAt: { $gte: hace12Meses }
+        }
+      },
+      { $group: { _id: null, total: { $sum: '$amount' } } }
+    ]);
+    
+    const total12Meses = total12MesesResult[0]?.total || 0;
+    const porcentaje12Meses = (total12Meses / limiteAnual) * 100;
+    const porcentajeMensual = (total12Meses / limiteAnual) * 100; // Para el mes actual
+    
+    // ============================================================
+    // 3. TOTAL FACTURADO DEL PERÍODO SELECCIONADO
     // ============================================================
     const matchFacturado = {
       userId: userIdObj,
@@ -42,7 +92,7 @@ const obtenerDashboardStats = async (req, res) => {
     const totalFacturas = totalResult[0]?.count || 0;
     
     // ============================================================
-    // 2. EMITIDO HOY
+    // 4. EMITIDO HOY
     // ============================================================
     const hoyInicio = new Date();
     hoyInicio.setHours(0, 0, 0, 0);
@@ -61,7 +111,7 @@ const obtenerDashboardStats = async (req, res) => {
     ]);
     
     // ============================================================
-    // 3. PENDIENTES CAE
+    // 5. PENDIENTES CAE
     // ============================================================
     const pendientesCAE = await Order.countDocuments({
       userId: userIdObj,
@@ -70,7 +120,7 @@ const obtenerDashboardStats = async (req, res) => {
     });
     
     // ============================================================
-    // 4. GRÁFICO DE INGRESOS - TODAS LAS ÓRDENES (sin filtrar)
+    // 6. GRÁFICO DE INGRESOS
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -85,11 +135,8 @@ const obtenerDashboardStats = async (req, res) => {
       graficoHasta.setHours(23, 59, 59, 999);
     }
     
-    const hoy = new Date();
-    hoy.setHours(23, 59, 59, 999);
     if (graficoHasta > hoy) graficoHasta = hoy;
     
-    // ✅ ELIMINADO el filtro de rawPayload.status
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
@@ -134,7 +181,7 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 5. ÚLTIMAS 50 VENTAS - TODAS LAS ÓRDENES
+    // 7. ÚLTIMAS 50 VENTAS
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
@@ -142,16 +189,11 @@ const obtenerDashboardStats = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status rawPayload platform')
+      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status')
       .lean();
     
-    const ultimasConConcepto = ultimas.map(v => ({
-      ...v,
-      conceptoMostrar: v.concepto || (v.items?.length ? v.items.map(i => i.nombre).join(', ') : 'Venta')
-    }));
-    
     // ============================================================
-    // 6. NOTAS DE CRÉDITO
+    // 8. NOTAS DE CRÉDITO
     // ============================================================
     const notasCreditoAgg = await Order.aggregate([
       {
@@ -174,8 +216,20 @@ const obtenerDashboardStats = async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
+    // ============================================================
+    // RESPUESTA COMPLETA
+    // ============================================================
     res.json({
       ok: true,
+      // Facturación acumulada (últimos 12 meses)
+      facturacionAcumulada: total12Meses,
+      limiteAnual: limiteAnual,
+      limiteMensual: limiteMensual,
+      porcentajeAnual: Math.min(porcentaje12Meses, 100),
+      porcentajeMensual: Math.min(porcentajeMensual, 100),
+      categoria: categoria,
+      condicionFiscal: condicionFiscal,
+      // Métricas del período
       totalFacturado,
       totalFacturas,
       hoyMonto: hoyResult[0]?.total || 0,
@@ -184,7 +238,7 @@ const obtenerDashboardStats = async (req, res) => {
       notasCredito,
       chartDias,
       chartVentas,
-      ultimas: ultimasConConcepto
+      ultimas
     });
     
   } catch (error) {

@@ -115,7 +115,10 @@ const obtenerDashboardStats = async (req, res) => {
 // ============================================================
 const pendientesCAE = await Order.countDocuments({
   userId: userIdObj,
-  status: { $ne: 'invoiced' },
+  $or: [
+    { status: 'pending_invoice' },
+    { status: 'error_afip' }
+  ],
   amount: { $gt: 0 },
   createdAt: { $gte: fechaDesde || graficoDesde, $lte: fechaHasta || graficoHasta }
 });

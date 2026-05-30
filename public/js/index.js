@@ -173,8 +173,16 @@ function filtrarComprobantes() {
     if (_filtroTipo === 'factura' && c.tipo !== 'Factura C') return false;
     if (_filtroTipo === 'nota' && c.tipo !== 'Nota de Crédito C') return false;
     
-    // Filtro por estado
-    if (_filtroTipo === 'pendiente' && c.estado !== 'pendiente') return false;
+    // 👇 FILTRO "SIN EMITIR" CORREGIDO
+    if (_filtroTipo === 'pendiente') {
+      // Excluir notas de crédito
+      if (c.tipo === 'Nota de Crédito C') return false;
+      // Excluir facturas ya emitidas o anuladas
+      if (c.estado === 'cae-ok' || c.status === 'invoiced') return false;
+      if (c.status === 'cancelled_by_nc') return false;
+      // Solo incluir pendientes y errores de AFIP
+      return c.estado === 'pendiente' || c.status === 'error_afip';
+    }
     
     // Filtro por origen (plataforma)
     if (_filtroTipo === 'manual' && c.origen !== 'manual') return false;
@@ -183,7 +191,7 @@ function filtrarComprobantes() {
     return true;
   });
 
-  renderComprobantes(lista);  // 👈 CORREGIDO
+  renderComprobantes(lista);
 }
 function renderComps(lista) {
   document.getElementById('compBadge').textContent = lista.length;

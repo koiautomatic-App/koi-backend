@@ -2296,8 +2296,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Cargar datos reales desde la API REST
     try {
         const _ahora = new Date();
-        const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString();
-        const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth() + 1, 0, 23, 59, 59).toISOString();
+      const _desde = new Date(_ahora.getFullYear(), _ahora.getMonth(), 1).toISOString().split('T')[0];
+      const _hasta = new Date(_ahora.getFullYear(), _ahora.getMonth() + 1, 0).toISOString().split('T')[0];
         const raw = await api.get(`/api/stats/dashboard?desde=${_desde}&hasta=${_hasta}`);
         const data = adaptarStats(raw);
         if (data) {

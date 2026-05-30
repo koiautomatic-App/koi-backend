@@ -223,35 +223,31 @@ const obtenerDashboardStats = async (req, res) => {
       cantidad: notasCreditoAgg[0]?.cantidad || 0
     };
     
-    // ============================================================
-    // RESPUESTA COMPLETA
-    // ============================================================
-    res.json({
-      ok: true,
-      // Facturación acumulada (últimos 12 meses)
-      facturacionAcumulada: total12Meses,
-      limiteAnual: limiteAnual,
-      limiteMensual: limiteMensual,
-      porcentajeAnual: Math.min(porcentaje12Meses, 100),
-      porcentajeMensual: Math.min(porcentajeMensual, 100),
-      categoria: categoria,
-      condicionFiscal: condicionFiscal,
-      // Métricas del período
-      totalFacturado,
-      totalFacturas,
-      hoyMonto: hoyResult[0]?.total || 0,
-      hoyCount: hoyResult[0]?.count || 0,
-      pendientesCAE,
-      notasCredito,
-      chartDias,
-      chartVentas,
-      ultimas
-    });
-    
-  } catch (error) {
-    console.error('obtenerDashboardStats error:', error);
-    res.status(500).json({ error: error.message });
-  }
-};
+   // ============================================================
+// RESPUESTA COMPLETA
+// ============================================================
+res.json({
+  ok: true,
+  // Facturación acumulada (últimos 12 meses)
+  facturacionAcumulada: total12Meses,
+  limiteAnual: limiteAnual,
+  limiteMensual: limiteMensual,
+  porcentajeAnual: Math.min(porcentaje12Meses, 100),
+  porcentajeMensual: Math.min(porcentajeMensual, 100),
+  categoria: categoria,
+  condicionFiscal: condicionFiscal,
+  // 👇 AGREGAR ESTA LÍNEA
+  fechaVinculacion: user?.settings?.fechaVinculacionARCA || null,
+  // Métricas del período
+  totalFacturado,
+  totalFacturas,
+  hoyMonto: hoyResult[0]?.total || 0,
+  hoyCount: hoyResult[0]?.count || 0,
+  pendientesCAE,
+  notasCredito,
+  chartDias,
+  chartVentas,
+  ultimas
+});
 
 module.exports = { obtenerDashboardStats };

@@ -4501,7 +4501,7 @@ async function mostrarPantallaInicial() {
       });
       
       const estadoARCA = await resARCA.json();
-      const arcaConectada = estadoARCA.ok && estadoARCA.conectada;
+const arcaConectada = estadoARCA.status === 'vinculado';
       
       console.log('📊 ARCA conectada:', arcaConectada);
       

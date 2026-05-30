@@ -5492,3 +5492,20 @@ if (document.getElementById('vista-config')) {
 // Al final de tu archivo .js, asegurate de exportarla globalmente:
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;
 
+// En renderMono (dashboard.js)
+function renderMono(d) {
+  const totalAcumulado = d.facturacionAcumulada || 0;
+  const limiteAnual = d.limiteAnual || 13862982.24;
+  const porcentaje = d.porcentajeAnual || 0;
+  const categoria = d.categoria || 'C';
+  
+  document.getElementById('monoCat').textContent = `Cat ${categoria}`;
+  document.getElementById('monoVal').textContent = totalAcumulado.toLocaleString();
+  document.getElementById('monoLimVal').textContent = `$${limiteAnual.toLocaleString()}`;
+  
+  // Actualizar barra de progreso
+  const fill = document.getElementById('progFill');
+  const pctEl = document.getElementById('progPct');
+  fill.style.width = porcentaje + '%';
+  pctEl.textContent = porcentaje.toFixed(1) + '%';
+}

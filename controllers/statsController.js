@@ -27,20 +27,20 @@ const obtenerDashboardStats = async (req, res) => {
     const categoria = user?.settings?.categoria || 'C';
     const condicionFiscal = user?.settings?.condicionFiscal || 'responsable_inscripto';
     
-    // Límites anuales de monotributo 2026 (actualizar según ARCA)
-   const limitesAnuales = {
-  'A': 10277988.13,
-  'B': 15058447.71,
-  'C': 21113696.52,
-  'D': 26212853.42,
-  'E': 30833964.37,
-  'F': 38642048.36,
-  'G': 46211109.37,
-  'H': 70113407.33,
-  'I': 84124088.79,
-  'J': 98144777.00,
-  'K': 112165465.00
-};
+    // Límites anuales de monotributo 2026
+    const limitesAnuales = {
+      'A': 10277988.13,
+      'B': 15058447.71,
+      'C': 21113696.52,
+      'D': 26212853.42,
+      'E': 30833964.37,
+      'F': 38642048.36,
+      'G': 46211109.37,
+      'H': 70113407.33,
+      'I': 84124088.79,
+      'J': 98144777.00,
+      'K': 112165465.00
+    };
     
     const limiteAnual = limitesAnuales[categoria] || limitesAnuales['C'];
     const limiteMensual = limiteAnual / 12;
@@ -67,7 +67,7 @@ const obtenerDashboardStats = async (req, res) => {
     
     const total12Meses = total12MesesResult[0]?.total || 0;
     const porcentaje12Meses = (total12Meses / limiteAnual) * 100;
-    const porcentajeMensual = (total12Meses / limiteAnual) * 100; // Para el mes actual
+    const porcentajeMensual = (total12Meses / limiteAnual) * 100;
     
     // ============================================================
     // 3. TOTAL FACTURADO DEL PERÍODO SELECCIONADO
@@ -110,21 +110,8 @@ const obtenerDashboardStats = async (req, res) => {
       { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } }
     ]);
     
-   // ============================================================
-// 5. PENDIENTES CAE (solo del período seleccionado)
-// ============================================================
-const pendientesCAE = await Order.countDocuments({
-  userId: userIdObj,
-  $or: [
-    { status: 'pending_invoice' },
-    { status: 'error_afip' }
-  ],
-  amount: { $gt: 0 },
-  createdAt: { $gte: fechaDesde || graficoDesde, $lte: fechaHasta || graficoHasta }
-});
-    
     // ============================================================
-    // 6. GRÁFICO DE INGRESOS
+    // 5. DEFINIR FECHAS DEL GRÁFICO (ANTES DE USARLAS)
     // ============================================================
     let graficoDesde = fechaDesde;
     let graficoHasta = fechaHasta;
@@ -141,6 +128,22 @@ const pendientesCAE = await Order.countDocuments({
     
     if (graficoHasta > hoy) graficoHasta = hoy;
     
+    // ============================================================
+    // 6. PENDIENTES CAE (solo del período seleccionado)
+    // ============================================================
+    const pendientesCAE = await Order.countDocuments({
+      userId: userIdObj,
+      $or: [
+        { status: 'pending_invoice' },
+        { status: 'error_afip' }
+      ],
+      amount: { $gt: 0 },
+      createdAt: { $gte: fechaDesde || graficoDesde, $lte: fechaHasta || graficoHasta }
+    });
+    
+    // ============================================================
+    // 7. GRÁFICO DE INGRESOS
+    // ============================================================
     const ventasPorDia = await Order.aggregate([
       {
         $match: {
@@ -185,7 +188,7 @@ const pendientesCAE = await Order.countDocuments({
     }
     
     // ============================================================
-    // 7. ÚLTIMAS 50 VENTAS
+    // 8. ÚLTIMAS 50 VENTAS
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
@@ -197,7 +200,7 @@ const pendientesCAE = await Order.countDocuments({
       .lean();
     
     // ============================================================
-    // 8. NOTAS DE CRÉDITO
+    // 9. NOTAS DE CRÉDITO
     // ============================================================
     const notasCreditoAgg = await Order.aggregate([
       {

@@ -173,10 +173,11 @@ function filtrarComprobantes() {
     if (_filtroTipo === 'factura' && c.tipo !== 'Factura C') return false;
     if (_filtroTipo === 'nota' && c.tipo !== 'Nota de Crédito C') return false;
     
-    // 👇 FILTRO "SIN EMITIR" CORREGIDO
+    // 👇 FILTRO "SIN EMITIR" CORREGIDO (VERSIÓN DEFINITIVA)
     if (_filtroTipo === 'pendiente') {
-      // Excluir notas de crédito
-      if (c.tipo === 'Nota de Crédito C') return false;
+      // Excluir notas de crédito (por status cancelled o por ID con NC)
+      if (c.status === 'cancelled') return false;
+      if (c.id && c.id.includes('NC')) return false;
       // Excluir facturas ya emitidas o anuladas
       if (c.estado === 'cae-ok' || c.status === 'invoiced') return false;
       if (c.status === 'cancelled_by_nc') return false;

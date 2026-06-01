@@ -15,25 +15,7 @@ router.delete('/:id', requireAuthAPI, desconectarIntegracion);
 router.patch('/:id/status', requireAuthAPI, toggleIntegracionEstado);
 router.get('/:id/webhook', requireAuthAPI, obtenerWebhookUrl);
 
-module.exports = router;
-const express = require('express');
-const router = express.Router();
-const { requireAuthAPI } = require('../../middleware/auth');
-const {
-  listarIntegraciones,
-  conectarIntegracionToken,
-  desconectarIntegracion,
-  toggleIntegracionEstado,
-  obtenerWebhookUrl
-} = require('../../controllers/integrationController');
-
-router.get('/', requireAuthAPI, listarIntegraciones);
-router.post('/:platform', requireAuthAPI, conectarIntegracionToken);
-router.delete('/:id', requireAuthAPI, desconectarIntegracion);
-router.patch('/:id/status', requireAuthAPI, toggleIntegracionEstado);
-router.get('/:id/webhook', requireAuthAPI, obtenerWebhookUrl);
-
-// 👇 NUEVO ENDPOINT: Sincronizar orden específica de WooCommerce
+// Endpoint: Sincronizar orden específica de WooCommerce
 router.post('/woocommerce/sync-order/:orderId', requireAuthAPI, async (req, res) => {
   try {
     const Integration = require('../../models/Integration');
@@ -58,7 +40,6 @@ router.post('/woocommerce/sync-order/:orderId', requireAuthAPI, async (req, res)
     
     console.log(`🔄 Sincronizando orden específica: ${orderId}`);
     
-    // Obtener la orden desde WooCommerce
     const { data: raw } = await axios.get(`${base}/wp-json/wc/v3/orders/${orderId}`, {
       auth: { username: key, password: secret },
       timeout: 30000
@@ -68,7 +49,6 @@ router.post('/woocommerce/sync-order/:orderId', requireAuthAPI, async (req, res)
       return res.status(404).json({ error: 'Orden no encontrada en WooCommerce' });
     }
     
-    // Normalizar y guardar
     const canonical = normalize.woocommerce(raw);
     if (!canonical) {
       return res.status(400).json({ error: 'La orden no está completada o no es válida' });

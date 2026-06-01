@@ -81,6 +81,8 @@ const solicitarCAE = async (orden, userSettings, token, sign) => {
 
   const soap = '<?xml version="1.0" encoding="UTF-8"?>\n<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:ar="http://ar.gov.afip.dif.FEV1/">\n  <soapenv:Header/>\n  <soapenv:Body>\n    <ar:FECAESolicitar>\n      <ar:Auth>\n        <ar:Token>' + token + '</ar:Token>\n        <ar:Sign>' + sign + '</ar:Sign>\n        <ar:Cuit>' + cuit + '</ar:Cuit>\n      </ar:Auth>\n      <ar:FeCAEReq>\n        <ar:FeCabReq>\n          <ar:CantReg>1</ar:CantReg>\n          <ar:PtoVta>' + ptoVta + '</ar:PtoVta>\n          <ar:CbteTipo>' + tipo + '</ar:CbteTipo>\n        </ar:FeCabReq>\n        <ar:FeDetReq>\n          <ar:FECAEDetRequest>\n            <ar:Concepto>1</ar:Concepto>\n            <ar:DocTipo>' + tipoDoc + '</ar:DocTipo>\n            <ar:DocNro>' + nroDoc + '</ar:DocNro>\n            <ar:CbteDesde>' + nroCbte + '</ar:CbteDesde>\n            <ar:CbteHasta>' + nroCbte + '</ar:CbteHasta>\n            <ar:CbteFch>' + fecha + '</ar:CbteFch>\n            <ar:ImpTotal>' + importe + '</ar:ImpTotal>\n            <ar:ImpTotConc>0</ar:ImpTotConc>\n            <ar:ImpNeto>' + impNeto + '</ar:ImpNeto>\n            <ar:ImpOpEx>0</ar:ImpOpEx>\n            <ar:ImpIVA>' + impIVA + '</ar:ImpIVA>\n            <ar:ImpTrib>0</ar:ImpTrib>\n            <ar:MonId>PES</ar:MonId>\n            <ar:MonCotiz>1</ar:MonCotiz>' + ivaItems + '\n          </ar:FECAEDetRequest>\n        </ar:FeDetReq>\n      </ar:FeCAEReq>\n    </ar:FECAESolicitar>\n  </soapenv:Body>\n</soapenv:Envelope>';
 
+  console.log('[AFIP] Enviando solicitud CAE...');
+  
   const wsfeResp = await axios.post(config.AFIP_URLS.wsfe, soap, {
     headers: { 'Content-Type': 'text/xml; charset=utf-8', 'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECAESolicitar' },
     httpsAgent: httpsAgent,
@@ -89,11 +91,35 @@ const solicitarCAE = async (orden, userSettings, token, sign) => {
   });
 
   const xml = new DOMParser().parseFromString(wsfeResp.data, 'text/xml');
+  
+  // Verificar SOAP Fault
+  const soapFault = xml.getElementsByTagName('faultstring')[0]?.textContent;
+  if (soapFault) {
+    console.error('[AFIP] SOAP Fault:', soapFault);
+    throw new Error('WSFE SOAP Fault: ' + soapFault);
+  }
+  
   const detResp = xml.getElementsByTagName('FECAEDetResponse')[0];
   const result = detResp?.getElementsByTagName('Resultado')[0]?.textContent;
 
   if (result !== 'A') {
-    const errMsg = detResp?.getElementsByTagName('Msg')[0]?.textContent || 'Error desconocido';
+    // Buscar todos los errores (Err y Obs)
+    const errores = [];
+    const errNodes = xml.getElementsByTagName('Err');
+    for (let i = 0; i < errNodes.length; i++) {
+      const msg = errNodes[i].getElementsByTagName('Msg')[0]?.textContent;
+      const code = errNodes[i].getElementsByTagName('Code')[0]?.textContent;
+      if (msg) errores.push(`[${code}] ${msg}`);
+      console.log(`[AFIP] Err: Code=${code}, Msg=${msg}`);
+    }
+    const obsNodes = xml.getElementsByTagName('Obs');
+    for (let i = 0; i < obsNodes.length; i++) {
+      const msg = obsNodes[i].getElementsByTagName('Msg')[0]?.textContent;
+      if (msg) errores.push(msg);
+      console.log(`[AFIP] Obs: ${msg}`);
+    }
+    const errMsg = errores.join(' | ') || `Resultado=${result || 'vacío'}`;
+    console.error('[AFIP] WSFE rechazó:', errMsg);
     throw new Error('AFIP rechazó: ' + errMsg);
   }
 

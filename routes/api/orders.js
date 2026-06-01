@@ -36,5 +36,83 @@ router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) =>
     res.status(500).json({ error: error.message });
   }
 });
+// ============================================================
+// DIAGNÓSTICO: Obtener próximo número de AFIP
+// ============================================================
+router.get('/debug/afip-next-number', requireAuthAPI, async (req, res) => {
+  try {
+    const User = require('../../models/User');
+    const { getAfipToken } = require('../../services/afip/wsaa');
+    const { getUltimoComprobante } = require('../../services/afip/wsfe');
+    
+    const user = await User.findById(req.userId).select('settings').lean();
+    const cuit = user?.settings?.cuit;
+    const ptoVta = user?.settings?.arcaPtoVta || 3;
+    const tipoCbte = 11; // Factura C
+    
+    if (!cuit) {
+      return res.status(400).json({ error: 'CUIT no configurado' });
+    }
+    
+    console.log(`🔍 Consultando AFIP para CUIT: ${cuit}, PtoVta: ${ptoVta}`);
+    
+    const { token, sign } = await getAfipToken(cuit);
+    const ultimoNro = await getUltimoComprobante(cuit, ptoVta, tipoCbte, token, sign);
+    
+    res.json({
+      ok: true,
+      cuit,
+      puntoVenta: ptoVta,
+      tipoComprobante: tipoCbte,
+      ultimoNro,
+      proximoNro: ultimoNro + 1
+    });
+    
+  } catch (error) {
+    console.error('Error obteniendo próximo número:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
+// ============================================================
+// EMITIR FACTURA CON NÚMERO FORZADO (solo admin)
+// ============================================================
+router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nroComprobante, puntoVenta } = req.body;
+    
+    const Order = require('../../models/Order');
+    const User = require('../../models/User');
+    const { emitirCAE } = require('../../services/afip/wsfe');
+    
+    if (!nroComprobante) {
+      return res.status(400).json({ error: 'Falta nroComprobante' });
+    }
+    
+    // Actualizar la orden con el número forzado
+    await Order.findByIdAndUpdate(id, {
+      nroComprobante: nroComprobante,
+      puntoVenta: puntoVenta || 3,
+      tipoComprobante: 11,
+      nroFormatted: `FC C 00003-00000${nroComprobante}`
+    });
+    
+    // Emitir la factura
+    const user = await User.findById(req.userId).select('settings').lean();
+    const result = await emitirCAE(id, user);
+    
+    res.json({
+      ok: true,
+      cae: result.cae,
+      nroCbte: result.nroCbte,
+      nroFormatted: `FC C 00003-00000${result.nroCbte}`,
+      message: 'Factura emitida correctamente'
+    });
+    
+  } catch (error) {
+    console.error('Error emitir con número:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;

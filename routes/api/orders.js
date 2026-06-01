@@ -21,7 +21,9 @@ router.delete('/:id', requireAuthAPI, eliminarOrden);
 router.get('/:id/pdf', requireAuthAPI, generarPDF);
 router.patch('/:id', requireAuthAPI, actualizarOrden);
 
-// 👇 ENDPOINT DE EMERGENCIA PARA CORREGIR STATUS (solo admin)
+// ============================================================
+// ENDPOINT DE EMERGENCIA PARA CORREGIR STATUS (solo admin)
+// ============================================================
 router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const Order = require('../../models/Order');
@@ -36,6 +38,7 @@ router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) =>
     res.status(500).json({ error: error.message });
   }
 });
+
 // ============================================================
 // DIAGNÓSTICO: Obtener próximo número de AFIP
 // ============================================================
@@ -115,4 +118,93 @@ router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, 
     res.status(500).json({ error: error.message });
   }
 });
+
+// ============================================================
+// EMITIR FACTURA CON NÚMERO FORZADO (para usuarios normales)
+// ============================================================
+router.post('/:id/emitir-con-numero-user', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { nroComprobante, puntoVenta } = req.body;
+    
+    const Order = require('../../models/Order');
+    const User = require('../../models/User');
+    const { emitirCAE } = require('../../services/afip/wsfe');
+    
+    if (!nroComprobante) {
+      return res.status(400).json({ error: 'Falta nroComprobante' });
+    }
+    
+    // Verificar que la orden pertenece al usuario
+    const order = await Order.findOne({ _id: id, userId: req.userId });
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    // Actualizar la orden con el número forzado
+    await Order.findByIdAndUpdate(id, {
+      nroComprobante: nroComprobante,
+      puntoVenta: puntoVenta || 3,
+      tipoComprobante: 11,
+      nroFormatted: `FC C 00003-00000${nroComprobante}`
+    });
+    
+    // Emitir la factura
+    const user = await User.findById(req.userId).select('settings').lean();
+    const result = await emitirCAE(id, user);
+    
+    res.json({
+      ok: true,
+      cae: result.cae,
+      nroCbte: result.nroCbte,
+      nroFormatted: `FC C 00003-00000${result.nroCbte}`,
+      message: 'Factura emitida correctamente'
+    });
+    
+  } catch (error) {
+    console.error('Error emitir con número:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ============================================================
+// FORZAR DATOS DE FACTURACIÓN (para usuarios normales)
+// ============================================================
+router.post('/:id/forzar-datos', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { puntoVenta, nroComprobante, tipoComprobante, nroFormatted } = req.body;
+    
+    const Order = require('../../models/Order');
+    
+    // Verificar que la orden pertenece al usuario
+    const order = await Order.findOne({ _id: id, userId: req.userId });
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    const updateData = {};
+    if (puntoVenta !== undefined) updateData.puntoVenta = puntoVenta;
+    if (nroComprobante !== undefined) updateData.nroComprobante = nroComprobante;
+    if (tipoComprobante !== undefined) updateData.tipoComprobante = tipoComprobante;
+    if (nroFormatted !== undefined) updateData.nroFormatted = nroFormatted;
+    
+    const updatedOrder = await Order.findByIdAndUpdate(id, { $set: updateData }, { new: true });
+    
+    res.json({
+      ok: true,
+      message: 'Datos actualizados correctamente',
+      order: {
+        puntoVenta: updatedOrder.puntoVenta,
+        nroComprobante: updatedOrder.nroComprobante,
+        nroFormatted: updatedOrder.nroFormatted
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error forzar datos:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

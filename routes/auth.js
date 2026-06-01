@@ -39,7 +39,7 @@ router.get('/google/callback',
 );
 
 // ============================================================
-// WOOCOMMERCE OAUTH - VERSIÓN CORREGIDA (GET)
+// WOOCOMMERCE OAUTH - CONEXIÓN
 // ============================================================
 router.get('/woo/connect', requireAuth, (req, res) => {
   console.log('🟢 [WOO] /auth/woo/connect llamado');
@@ -69,18 +69,29 @@ router.get('/woo/connect', requireAuth, (req, res) => {
   res.redirect(wooAuthUrl);
 });
 
-// ✅ CAMBIADO DE POST A GET
-router.get('/woo/callback', async (req, res) => {
-  console.log('📞 [WOO] Callback GET recibido');
+// ============================================================
+// WOOCOMMERCE OAUTH - CALLBACK (ACEPTA GET Y POST)
+// ============================================================
+router.all('/woo/callback', async (req, res) => {
+  console.log('📞 [WOO] Callback recibido');
+  console.log('  Method:', req.method);
+  console.log('  Content-Type:', req.headers['content-type']);
   console.log('  Query params:', req.query);
+  console.log('  Body params:', req.body);
+
+  // Extraer parámetros TANTO de query string como del body
+  const state = req.query.state || req.body.state;
+  let consumer_key = req.query.consumer_key || req.body.consumer_key;
+  let consumer_secret = req.query.consumer_secret || req.body.consumer_secret;
   
-  // WooCommerce envía todo por query string en GET
-  const { state, consumer_key, consumer_secret } = req.query;
-  
+  // WooCommerce a veces envía 'consumerKey' y 'consumerSecret'
+  if (!consumer_key) consumer_key = req.query.consumerKey || req.body.consumerKey;
+  if (!consumer_secret) consumer_secret = req.query.consumerSecret || req.body.consumerSecret;
+
   console.log('  state:', state ? '✅ presente' : '❌ ausente');
   console.log('  consumer_key:', consumer_key ? '✅ presente' : '❌ ausente');
   console.log('  consumer_secret:', consumer_secret ? '✅ presente' : '❌ ausente');
-  
+
   // Validaciones
   if (!state) {
     console.error('❌ [WOO] Missing state parameter');
@@ -122,7 +133,7 @@ router.get('/woo/callback', async (req, res) => {
     
     // Guardar integración
     console.log('💾 [WOO] Guardando integración...');
-    const integration = await Integration.findOneAndUpdate(
+    await Integration.findOneAndUpdate(
       { userId, platform: 'woocommerce', storeId: storeUrl },
       { 
         $set: { 
@@ -143,7 +154,7 @@ router.get('/woo/callback', async (req, res) => {
           createdAt: new Date() 
         } 
       },
-      { upsert: true, new: true }
+      { upsert: true }
     );
     
     console.log(`✅ [WOO] WooCommerce conectado exitosamente: ${storeUrl}`);

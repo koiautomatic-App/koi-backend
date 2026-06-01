@@ -1,9 +1,13 @@
 // routes/auth.js
 const express = require('express');
 const passport = require('passport');
+const jwt = require('jsonwebtoken');
+const axios = require('axios');
 const router = express.Router();
 const { register, login, logout } = require('../controllers/authController');
-const { signToken, setTokenCookie } = require('../middleware/auth');
+const { signToken, setTokenCookie, requireAuth } = require('../middleware/auth');
+const Integration = require('../models/Integration');
+const { encrypt } = require('../utils/encrypt');
 
 // ============================================================
 // LOCAL AUTH
@@ -34,5 +38,161 @@ router.get('/google/callback',
     res.redirect('/dashboard');
   }
 );
+
+// ============================================================
+// WOOCOMMERCE OAUTH
+// ============================================================
+router.get('/woo/connect', requireAuth, (req, res) => {
+  console.log('🟢 [WOO] /auth/woo/connect llamado');
+  const { store_url } = req.query;
+  
+  if (!store_url) {
+    console.error('❌ [WOO] Falta store_url');
+    return res.status(400).send('Falta store_url');
+  }
+  
+  const clean = store_url.replace(/\/$/, '').toLowerCase();
+  console.log(`📦 [WOO] Store URL: ${clean}`);
+  console.log(`👤 [WOO] User ID: ${req.userId}`);
+  
+  const state = jwt.sign(
+    { userId: req.userId, storeUrl: clean }, 
+    process.env.JWT_SECRET, 
+    { expiresIn: '15m' }
+  );
+  
+  const callback = `${process.env.BASE_URL}/auth/woo/callback`;
+  const returnUrl = `${process.env.BASE_URL}/dashboard?woo=connected`;
+  
+  const wooAuthUrl = `${clean}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}&return_url=${encodeURIComponent(returnUrl)}&callback_url=${encodeURIComponent(callback)}`;
+  
+  console.log('🔄 [WOO] Redirigiendo a:', wooAuthUrl);
+  res.redirect(wooAuthUrl);
+});
+
+router.post('/woo/callback', async (req, res) => {
+  console.log('📞 [WOO] Callback recibido');
+  console.log('  Query params:', req.query);
+  console.log('  Body:', req.body);
+  
+  const { state } = req.query;
+  const { consumer_key, consumer_secret, store_url } = req.body;
+  
+  // Validaciones
+  if (!state) {
+    console.error('❌ [WOO] Missing state parameter');
+    return res.status(400).send('Missing state parameter');
+  }
+  
+  if (!consumer_key || !consumer_secret) {
+    console.error('❌ [WOO] Missing consumer credentials');
+    return res.status(400).send('Missing consumer credentials');
+  }
+  
+  try {
+    // Decodificar state
+    const decoded = jwt.verify(state, process.env.JWT_SECRET);
+    const userId = decoded.userId;
+    const storeUrl = decoded.storeUrl;
+    
+    console.log(`✅ [WOO] State decodificado: userId=${userId}, storeUrl=${storeUrl}`);
+    
+    // TESTEAR credenciales antes de guardar
+    console.log('🔍 [WOO] Probando credenciales...');
+    try {
+      const testResponse = await axios.get(`${storeUrl}/wp-json/wc/v3/system_status`, {
+        auth: { username: consumer_key, password: consumer_secret },
+        timeout: 10000
+      });
+      console.log('✅ [WOO] Credenciales válidas! Status:', testResponse.status);
+    } catch(testError) {
+      console.error('❌ [WOO] Credenciales inválidas:', testError.message);
+      return res.redirect(`${process.env.BASE_URL}/dashboard?error=woo_invalid_credentials`);
+    }
+    
+    // Guardar integración
+    console.log('💾 [WOO] Guardando integración...');
+    const integration = await Integration.findOneAndUpdate(
+      { userId, platform: 'woocommerce', storeId: storeUrl },
+      { 
+        $set: { 
+          storeName: storeUrl.replace(/^https?:\/\//, ''), 
+          storeUrl, 
+          status: 'active', 
+          errorLog: '',
+          credentials: { 
+            consumerKey: encrypt(consumer_key), 
+            consumerSecret: encrypt(consumer_secret) 
+          },
+          updatedAt: new Date() 
+        },
+        $setOnInsert: { 
+          userId, 
+          platform: 'woocommerce', 
+          storeId: storeUrl, 
+          createdAt: new Date() 
+        } 
+      },
+      { upsert: true, new: true }
+    );
+    
+    console.log(`✅ [WOO] WooCommerce conectado exitosamente: ${storeUrl}`);
+    
+    // Responder con HTML para cerrar la ventana emergente
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Conectado a WooCommerce</title>
+          <style>
+            body {
+              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+              margin: 0;
+              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            }
+            .container {
+              text-align: center;
+              background: white;
+              padding: 40px;
+              border-radius: 20px;
+              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+            }
+            h1 { color: #333; margin-bottom: 20px; }
+            p { color: #666; font-size: 16px; }
+            .success { color: #10b981; font-size: 48px; margin-bottom: 20px; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <div class="success">✓</div>
+            <h1>¡Conexión Exitosa!</h1>
+            <p>Tu tienda WooCommerce ha sido conectada correctamente.</p>
+            <p>Esta ventana se cerrará automáticamente...</p>
+          </div>
+          <script>
+            setTimeout(() => {
+              if (window.opener) {
+                window.opener.postMessage({ 
+                  type: 'woocommerce_connected', 
+                  success: true,
+                  storeUrl: '${storeUrl}'
+                }, '*');
+              }
+              window.close();
+            }, 2000);
+          </script>
+        </body>
+      </html>
+    `);
+    
+  } catch(error) {
+    console.error('❌ [WOO] Error en callback:', error);
+    res.redirect(`${process.env.BASE_URL}/dashboard?error=woo_connection_failed`);
+  }
+});
 
 module.exports = router;

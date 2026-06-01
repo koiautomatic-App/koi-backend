@@ -21,16 +21,127 @@ router.get('/:id/pdf', requireAuthAPI, generarPDF);
 router.post('/:id/mail', requireAuthAPI, enviarMailOrden);
 
 // ============================================================
-// ENDPOINTS QUE REQUIEREN ADMIN (emisión, cancelación, modificación)
+// ENDPOINTS QUE PERMITEN AL DUEÑO DE LA ORDEN (usuario normal)
 // ============================================================
-router.post('/:id/emitir', requireAuthAPI, requireAdmin, emitirOrden);
-router.post('/:id/cancelar', requireAuthAPI, requireAdmin, cancelarFactura);
-router.delete('/:id', requireAuthAPI, requireAdmin, eliminarOrden);
-router.patch('/:id', requireAuthAPI, requireAdmin, actualizarOrden);
+// Emitir factura - solo el dueño de la orden puede emitir sus propias facturas
+router.post('/:id/emitir', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Order = require('../../models/Order');
+    const User = require('../../models/User');
+    const { emitirCAE } = require('../../services/afip/wsfe');
+    
+    // Verificar que la orden existe y pertenece al usuario
+    const orden = await Order.findOne({ _id: id, userId: req.userId });
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada o no pertenece a este usuario' });
+    }
+    
+    const user = await User.findById(req.userId).select('settings').lean();
+    const result = await emitirCAE(orden._id, user);
+    
+    res.json({
+      ok: true,
+      cae: result.cae,
+      vto: result.caeExpiry,
+      nroCbte: result.nroCbte,
+      nroFormatted: result.nroFormatted,
+      message: `CAE emitido: ${result.cae}`,
+    });
+  } catch (e) {
+    console.error('Emitir CAE error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Cancelar factura - solo el dueño de la orden puede cancelar sus propias facturas
+router.post('/:id/cancelar', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Order = require('../../models/Order');
+    const User = require('../../models/User');
+    const { cancelarFactura: cancelarFacturaService } = require('../../services/afip/wsfe');
+    
+    // Verificar que la orden existe y pertenece al usuario
+    const orden = await Order.findOne({ _id: id, userId: req.userId });
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada o no pertenece a este usuario' });
+    }
+    
+    if (orden.status !== 'invoiced') {
+      return res.status(400).json({ error: 'La orden no está facturada' });
+    }
+    
+    const user = await User.findById(req.userId).select('settings').lean();
+    const result = await cancelarFacturaService(orden._id, user);
+    
+    res.json({
+      ok: true,
+      message: 'Factura cancelada correctamente',
+      nc: result.ncFormatted
+    });
+  } catch (e) {
+    console.error('Cancelar factura error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Actualizar orden - solo el dueño puede modificar sus propias órdenes
+router.patch('/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Order = require('../../models/Order');
+    
+    // Verificar que la orden existe y pertenece al usuario
+    const orden = await Order.findOne({ _id: id, userId: req.userId });
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada o no pertenece a este usuario' });
+    }
+    
+    // Campos permitidos para actualización
+    const allowedUpdates = ['nroFormatted', 'emailSent', 'emailSentAt', 'concepto', 'amount', 'caeNumber', 'status', 'orderDate', 'nroComprobante', 'puntoVenta'];
+    const updates = {};
+    
+    for (const key of allowedUpdates) {
+      if (req.body[key] !== undefined) {
+        updates[key] = req.body[key];
+      }
+    }
+    
+    const updatedOrder = await Order.findByIdAndUpdate(id, { $set: updates }, { new: true });
+    
+    res.json({ ok: true, order: updatedOrder });
+  } catch (e) {
+    console.error('Actualizar orden error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Eliminar orden - solo el dueño puede eliminar sus propias órdenes
+router.delete('/:id', requireAuthAPI, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const Order = require('../../models/Order');
+    
+    // Verificar que la orden existe y pertenece al usuario
+    const orden = await Order.findOne({ _id: id, userId: req.userId });
+    if (!orden) {
+      return res.status(404).json({ error: 'Orden no encontrada o no pertenece a este usuario' });
+    }
+    
+    await Order.findByIdAndDelete(id);
+    res.json({ ok: true, message: 'Orden eliminada' });
+  } catch (e) {
+    console.error('Eliminar orden error:', e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
 
 // ============================================================
-// ENDPOINT DE EMERGENCIA PARA CORREGIR STATUS (solo admin)
+// ENDPOINTS QUE REQUIEREN ADMIN (operaciones sobre cualquier orden)
 // ============================================================
+
+// Forzar estado de WooCommerce (solo admin)
 router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const Order = require('../../models/Order');
@@ -46,9 +157,7 @@ router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) =>
   }
 });
 
-// ============================================================
-// DIAGNÓSTICO: Obtener próximo número de AFIP (solo admin)
-// ============================================================
+// Diagnóstico: Obtener próximo número de AFIP (solo admin)
 router.get('/debug/afip-next-number', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const User = require('../../models/User');
@@ -82,9 +191,7 @@ router.get('/debug/afip-next-number', requireAuthAPI, requireAdmin, async (req, 
   }
 });
 
-// ============================================================
-// EMITIR FACTURA CON NÚMERO FORZADO (solo admin)
-// ============================================================
+// Emitir factura con número forzado (solo admin)
 router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -98,7 +205,7 @@ router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, 
       return res.status(400).json({ error: 'Falta nroComprobante' });
     }
     
-    const order = await Order.findOne({ _id: id, userId: req.userId });
+    const order = await Order.findOne({ _id: id });
     if (!order) {
       return res.status(404).json({ error: 'Orden no encontrada' });
     }

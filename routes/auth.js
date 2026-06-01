@@ -22,7 +22,6 @@ router.get('/logout', logout);
 router.get('/google',
   passport.authenticate('google', { 
     scope: ['profile', 'email']
-    // ✅ Eliminado 'prompt: select_account' - ahora usará la última sesión
   })
 );
 
@@ -40,7 +39,7 @@ router.get('/google/callback',
 );
 
 // ============================================================
-// WOOCOMMERCE OAUTH
+// WOOCOMMERCE OAUTH - VERSIÓN CORREGIDA (GET)
 // ============================================================
 router.get('/woo/connect', requireAuth, (req, res) => {
   console.log('🟢 [WOO] /auth/woo/connect llamado');
@@ -70,13 +69,17 @@ router.get('/woo/connect', requireAuth, (req, res) => {
   res.redirect(wooAuthUrl);
 });
 
-router.post('/woo/callback', async (req, res) => {
-  console.log('📞 [WOO] Callback recibido');
+// ✅ CAMBIADO DE POST A GET
+router.get('/woo/callback', async (req, res) => {
+  console.log('📞 [WOO] Callback GET recibido');
   console.log('  Query params:', req.query);
-  console.log('  Body:', req.body);
   
-  const { state } = req.query;
-  const { consumer_key, consumer_secret, store_url } = req.body;
+  // WooCommerce envía todo por query string en GET
+  const { state, consumer_key, consumer_secret } = req.query;
+  
+  console.log('  state:', state ? '✅ presente' : '❌ ausente');
+  console.log('  consumer_key:', consumer_key ? '✅ presente' : '❌ ausente');
+  console.log('  consumer_secret:', consumer_secret ? '✅ presente' : '❌ ausente');
   
   // Validaciones
   if (!state) {
@@ -86,7 +89,18 @@ router.post('/woo/callback', async (req, res) => {
   
   if (!consumer_key || !consumer_secret) {
     console.error('❌ [WOO] Missing consumer credentials');
-    return res.status(400).send('Missing consumer credentials');
+    return res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Error de conexión</title></head>
+        <body style="font-family: sans-serif; text-align: center; margin-top: 100px;">
+          <h1 style="color: #ef4444;">❌ Error de conexión</h1>
+          <p>No se recibieron las credenciales de WooCommerce.</p>
+          <p>Verificá que las claves API estén configuradas correctamente en tu tienda.</p>
+          <a href="/dashboard">Volver al dashboard</a>
+        </body>
+      </html>
+    `);
   }
   
   try {
@@ -99,16 +113,12 @@ router.post('/woo/callback', async (req, res) => {
     
     // TESTEAR credenciales antes de guardar
     console.log('🔍 [WOO] Probando credenciales...');
-    try {
-      const testResponse = await axios.get(`${storeUrl}/wp-json/wc/v3/system_status`, {
-        auth: { username: consumer_key, password: consumer_secret },
-        timeout: 10000
-      });
-      console.log('✅ [WOO] Credenciales válidas! Status:', testResponse.status);
-    } catch(testError) {
-      console.error('❌ [WOO] Credenciales inválidas:', testError.message);
-      return res.redirect(`${process.env.BASE_URL}/dashboard?error=woo_invalid_credentials`);
-    }
+    const testResponse = await axios.get(`${storeUrl}/wp-json/wc/v3/system_status`, {
+      auth: { username: consumer_key, password: consumer_secret },
+      timeout: 10000
+    });
+    
+    console.log('✅ [WOO] Credenciales válidas! Status:', testResponse.status);
     
     // Guardar integración
     console.log('💾 [WOO] Guardando integración...');
@@ -190,8 +200,18 @@ router.post('/woo/callback', async (req, res) => {
     `);
     
   } catch(error) {
-    console.error('❌ [WOO] Error en callback:', error);
-    res.redirect(`${process.env.BASE_URL}/dashboard?error=woo_connection_failed`);
+    console.error('❌ [WOO] Error en callback:', error.message);
+    res.send(`
+      <!DOCTYPE html>
+      <html>
+        <head><title>Error de conexión</title></head>
+        <body style="font-family: sans-serif; text-align: center; margin-top: 100px;">
+          <h1 style="color: #ef4444;">❌ Error de conexión</h1>
+          <p>${error.message}</p>
+          <a href="/dashboard">Volver al dashboard</a>
+        </body>
+      </html>
+    `);
   }
 });
 

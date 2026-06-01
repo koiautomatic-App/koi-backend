@@ -188,7 +188,7 @@ const obtenerDashboardStats = async (req, res) => {
     }
     
     // ============================================================
-    // 8. ÚLTIMAS 50 VENTAS
+    // 8. ÚLTIMAS 50 VENTAS (CORREGIDO: incluye externalId y orderDate)
     // ============================================================
     const ultimas = await Order.find({ 
       userId: userIdObj,
@@ -196,7 +196,7 @@ const obtenerDashboardStats = async (req, res) => {
     })
       .sort({ createdAt: -1 })
       .limit(50)
-      .select('customerName amount currency createdAt caeNumber nroFormatted customerEmail concepto items status')
+      .select('customerName amount currency createdAt orderDate caeNumber nroFormatted customerEmail concepto items status externalId platform')
       .lean();
     
     // ============================================================
@@ -236,7 +236,7 @@ const obtenerDashboardStats = async (req, res) => {
       porcentajeMensual: Math.min(porcentajeMensual, 100),
       categoria: categoria,
       condicionFiscal: condicionFiscal,
-      fechaVinculacion: user?.settings?.fechaVinculacionARCA || null,  // 👈 AGREGADA
+      fechaVinculacion: user?.settings?.fechaVinculacionARCA || null,
       // Métricas del período
       totalFacturado,
       totalFacturas,

@@ -1370,51 +1370,87 @@ function cargarConfigVista() {
       const user = data.user;
       const s = user.settings || {};
       
-      // Perfil
-      const nombreInput = document.getElementById('cfgNombre2');
+      // ✅ USAR IDs SIN "2" (los que existen en el HTML)
+      const nombreInput = document.getElementById('cfgNombre');
       if (nombreInput) nombreInput.value = user.nombre || '';
       
-      const cuitInput = document.getElementById('cfgCuit2');
+      const cuitInput = document.getElementById('cfgCuit');
       if (cuitInput) cuitInput.value = s.cuit || '';
       
-      const emailInput = document.getElementById('cfgEmail2');
+      const emailInput = document.getElementById('cfgEmail');
       if (emailInput) emailInput.value = user.email || '';
       
-      const categoriaSelect = document.getElementById('cfgCategoria2');
+      const condicionSelect = document.getElementById('cfgCondicionFiscal');
+      if (condicionSelect) condicionSelect.value = s.condicionFiscal || 'responsable_inscripto';
+      
+      const categoriaSelect = document.getElementById('cfgCategoria');
       if (categoriaSelect) categoriaSelect.value = s.categoria || 'C';
       
-      // Switches
-      const swFactAuto = document.getElementById('switchFactAuto2');
+      // Switches (verificar si existen estos IDs)
+      const swFactAuto = document.getElementById('switchFactAuto');
       if (swFactAuto) swFactAuto.checked = s.factAuto === true;
       
-      const swEnvioAuto = document.getElementById('switchEnvioAuto2');
+      const swEnvioAuto = document.getElementById('switchEnvioAuto');
       if (swEnvioAuto) swEnvioAuto.checked = s.envioAuto === true;
-     // 👇 AGREGAR ESTAS DOS LÍNEAS
+      
+      // Mostrar/ocultar categoría según condición fiscal
+      const categoriaGroup = document.getElementById('categoriaGroup');
+      if (categoriaGroup) {
+        categoriaGroup.style.display = s.condicionFiscal === 'monotributo' ? 'flex' : 'none';
+      }
+      
       cargarLogoActual();
       initLogoHandlers();
     })
-
-
     .catch(err => console.warn('cargarConfigVista error:', err.message));
 }
 
 function guardarPerfilVista() {
+  // ✅ USAR IDs SIN "2"
+  const nombre = document.getElementById('cfgNombre')?.value.trim() || '';
+  const cuit = document.getElementById('cfgCuit')?.value.trim() || '';
+  const email = document.getElementById('cfgEmail')?.value.trim() || '';
+  const condicionFiscal = document.getElementById('cfgCondicionFiscal')?.value || 'responsable_inscripto';
+  const categoria = document.getElementById('cfgCategoria')?.value || 'C';
+  
   const datos = {
-    nombre:    document.getElementById('cfgNombre2').value.trim(),
-    cuit:      document.getElementById('cfgCuit2').value.trim(),
-    email:     document.getElementById('cfgEmail2').value.trim(),
-    categoria: document.getElementById('cfgCategoria2').value,
+    nombre,
+    cuit,
+    email,
+    condicionFiscal,
+    categoria: condicionFiscal === 'monotributo' ? categoria : 'C'
   };
-  gasRun('guardarConfiguracion', [datos], () => {
-    const st = document.getElementById('cfgSaveStatus2');
-    st.style.display = 'block';
-    setTimeout(() => st.style.display = 'none', 2500);
-  }, err => toast('Error al guardar: ' + err.message, 'error'));
-  if (typeof google === 'undefined') {
-    const st = document.getElementById('cfgSaveStatus2');
-    st.style.display = 'block';
-    setTimeout(() => st.style.display = 'none', 2000);
-  }
+  
+  console.log('📤 Guardando configuración:', datos);
+  
+  fetch('/api/me/settings', {
+    method: 'PATCH',
+    credentials: 'include',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(datos)
+  })
+  .then(r => r.json())
+  .then(data => {
+    if (data.ok) {
+      const st = document.getElementById('cfgSaveStatus');
+      if (st) {
+        st.classList.add('visible');
+        setTimeout(() => st.classList.remove('visible'), 2500);
+      }
+      toast('✅ Configuración guardada', 'success');
+      
+      // Actualizar variable global
+      if (typeof _condicionFiscal !== 'undefined') {
+        window._condicionFiscal = condicionFiscal;
+      }
+    } else {
+      toast('Error: ' + (data.error || 'No se pudo guardar'), 'error');
+    }
+  })
+  .catch(err => {
+    console.error('Error:', err);
+    toast('Error al guardar: ' + err.message, 'error');
+  });
 }
 
 async function guardarSwitch(key, value) {
@@ -1428,23 +1464,22 @@ async function guardarSwitch(key, value) {
     
     if (!res.ok) throw new Error('Error al guardar');
     
-    // Asegurar que el switch visual refleje el estado guardado
-    const swId = key === 'factAuto' ? 'switchFactAuto2' : 'switchEnvioAuto2';
+    // ✅ Usar IDs correctos
+    const swId = key === 'factAuto' ? 'switchFactAuto' : 'switchEnvioAuto';
     const sw = document.getElementById(swId);
     if (sw) sw.checked = value;
     
     const nombre = key === 'factAuto' ? 'Facturación automática' : 'Envío automático';
     toast(`${nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
     
-    const statusDiv = document.getElementById('cfgAutoStatus2');
+    const statusDiv = document.getElementById('cfgAutoStatus');
     if (statusDiv) {
-      statusDiv.style.display = 'block';
-      setTimeout(() => statusDiv.style.display = 'none', 2000);
+      statusDiv.classList.add('visible');
+      setTimeout(() => statusDiv.classList.remove('visible'), 2000);
     }
   } catch(e) {
     toast('Error al guardar: ' + e.message, 'error');
-    // Revertir el switch visual
-    const swId = key === 'factAuto' ? 'switchFactAuto2' : 'switchEnvioAuto2';
+    const swId = key === 'factAuto' ? 'switchFactAuto' : 'switchEnvioAuto';
     const sw = document.getElementById(swId);
     if (sw) sw.checked = !value;
   }

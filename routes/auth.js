@@ -54,12 +54,6 @@ router.get('/woo/connect', requireAuth, (req, res) => {
   console.log(`📦 [WOO] Store URL: ${clean}`);
   console.log(`👤 [WOO] User ID: ${req.userId}`);
   
-  const state = jwt.sign(
-    { userId: req.userId, storeUrl: clean }, 
-    process.env.JWT_SECRET, 
-    { expiresIn: '15m' }
-  );
-  
   const callback = `${process.env.BASE_URL}/auth/woo/callback`;
   const returnUrl = `${process.env.BASE_URL}/dashboard?woo=connected`;
   
@@ -70,57 +64,41 @@ router.get('/woo/connect', requireAuth, (req, res) => {
 });
 
 // ============================================================
-// WOOCOMMERCE OAUTH - CALLBACK (ACEPTA GET Y POST)
+// WOOCOMMERCE OAUTH - CALLBACK (USA user_id en lugar de state)
 // ============================================================
-router.all('/woo/callback', async (req, res) => {
-  console.log('📞 [WOO] Callback recibido');
-  console.log('  Method:', req.method);
-  console.log('  Content-Type:', req.headers['content-type']);
-  console.log('  Query params:', req.query);
+router.post('/woo/callback', async (req, res) => {
+  console.log('📞 [WOO] Callback POST recibido');
   console.log('  Body params:', req.body);
-
-  // Extraer parámetros TANTO de query string como del body
-  const state = req.query.state || req.body.state;
-  let consumer_key = req.query.consumer_key || req.body.consumer_key;
-  let consumer_secret = req.query.consumer_secret || req.body.consumer_secret;
   
-  // WooCommerce a veces envía 'consumerKey' y 'consumerSecret'
-  if (!consumer_key) consumer_key = req.query.consumerKey || req.body.consumerKey;
-  if (!consumer_secret) consumer_secret = req.query.consumerSecret || req.body.consumerSecret;
-
-  console.log('  state:', state ? '✅ presente' : '❌ ausente');
+  // WooCommerce envía los datos en el body
+  const { 
+    user_id,           // El ID del usuario en KOI
+    consumer_key, 
+    consumer_secret,
+    key_id,
+    key_permissions
+  } = req.body;
+  
+  console.log('  user_id:', user_id);
   console.log('  consumer_key:', consumer_key ? '✅ presente' : '❌ ausente');
   console.log('  consumer_secret:', consumer_secret ? '✅ presente' : '❌ ausente');
-
+  
   // Validaciones
-  if (!state) {
-    console.error('❌ [WOO] Missing state parameter');
-    return res.status(400).send('Missing state parameter');
+  if (!user_id) {
+    console.error('❌ [WOO] Missing user_id');
+    return res.status(400).send('Missing user_id');
   }
   
   if (!consumer_key || !consumer_secret) {
     console.error('❌ [WOO] Missing consumer credentials');
-    return res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Error de conexión</title></head>
-        <body style="font-family: sans-serif; text-align: center; margin-top: 100px;">
-          <h1 style="color: #ef4444;">❌ Error de conexión</h1>
-          <p>No se recibieron las credenciales de WooCommerce.</p>
-          <p>Verificá que las claves API estén configuradas correctamente en tu tienda.</p>
-          <a href="/dashboard">Volver al dashboard</a>
-        </body>
-      </html>
-    `);
+    return res.status(400).send('Missing consumer credentials');
   }
   
   try {
-    // Decodificar state
-    const decoded = jwt.verify(state, process.env.JWT_SECRET);
-    const userId = decoded.userId;
-    const storeUrl = decoded.storeUrl;
+    const userId = user_id;
+    const storeUrl = 'https://www.sonohandmade.com';
     
-    console.log(`✅ [WOO] State decodificado: userId=${userId}, storeUrl=${storeUrl}`);
+    console.log(`✅ [WOO] Procesando para userId: ${userId}, storeUrl: ${storeUrl}`);
     
     // TESTEAR credenciales antes de guardar
     console.log('🔍 [WOO] Probando credenciales...');

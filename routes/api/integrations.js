@@ -187,4 +187,50 @@ router.post('/woocommerce/sync-missing-completed', requireAuthAPI, async (req, r
     console.error('❌ Error en sync-missing-completed:', error);
   }
 });
+// ============================================================
+// DIAGNÓSTICO: Verificar credenciales de WooCommerce
+// ============================================================
+router.get('/woocommerce/check-credentials', requireAuthAPI, async (req, res) => {
+  try {
+    const Integration = require('../../models/Integration');
+    const axios = require('axios');
+
+    const integration = await Integration.findOne({
+      userId: req.userId,
+      platform: 'woocommerce',
+      status: 'active'
+    });
+
+    if (!integration) {
+      return res.status(404).json({ error: 'Integración no encontrada' });
+    }
+
+    const key = integration.getKey('consumerKey');
+    const secret = integration.getKey('consumerSecret');
+    const base = integration.storeUrl;
+
+    console.log(`🔍 Verificando credenciales para ${base}...`);
+
+    const response = await axios.get(`${base}/wp-json/wc/v3/orders`, {
+      auth: { username: key, password: secret },
+      params: { per_page: 1 },
+      timeout: 10000
+    });
+
+    res.json({
+      ok: true,
+      message: '✅ Credenciales válidas',
+      status: response.status,
+      storeUrl: base
+    });
+
+  } catch (error) {
+    console.error('Error:', error.message);
+    res.status(500).json({
+      ok: false,
+      error: error.message,
+      code: error.response?.status
+    });
+  }
+});
 module.exports = router;

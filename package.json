@@ -8,6 +8,7 @@
     "dev": "nodemon server.js"
   },
   "dependencies": {
+    "@aws-sdk/client-lambda": "^3.0.0",
     "@xmldom/xmldom": "^0.8.10",
     "axios": "^1.7.2",
     "bcryptjs": "^2.4.3",

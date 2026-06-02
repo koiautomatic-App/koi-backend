@@ -1,8 +1,8 @@
-// controllers/orderController.js
 const Order = require('../models/Order');
 const User = require('../models/User');
 const { emitirCAE } = require('../services/afip/wsfe');
 const { enviarFacturaMail } = require('../services/email');
+const { generateInvoicePDF } = require('../services/pdf/invoice');
 
 const listarOrdenes = async (req, res) => {
   try {
@@ -287,21 +287,88 @@ const enviarMailOrden = async (req, res) => {
   try {
     const orden = await Order.findOne({ _id: req.params.id, userId: req.userId });
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
+
+    // ════════════════════════════════════════════════════════════
+    // MERCADOLIBRE: Adjuntar a la plataforma (no enviar email)
+    // ════════════════════════════════════════════════════════════
+    if (orden.platform === 'mercadolibre') {
+      const Integration = require('../models/Integration');
+      const { getMLToken } = require('../services/integrations/token/ml');
+      const axios = require('axios');
+      const FormData = require('form-data');
+
+      // Buscar integración activa de ML
+      const mlIntegration = await Integration.findOne({ 
+        userId: req.userId, 
+        platform: 'mercadolibre',
+        status: 'active'
+      });
+      
+      if (!mlIntegration) {
+        return res.status(400).json({ error: 'MercadoLibre no está conectado' });
+      }
+      
+      const accessToken = await getMLToken(mlIntegration);
+      
+      // Obtener el pack_id de la orden
+      const orderDetail = await axios.get(`https://api.mercadolibre.com/orders/${orden.externalId}`, {
+        headers: { Authorization: `Bearer ${accessToken}` }
+      });
+      
+      const packId = orderDetail.data.pack_id || orden.externalId;
+      
+      // Generar el PDF usando el microservicio
+      const pdfBuffer = await generateInvoicePDF(req.userId, orden);
+      
+      // Crear FormData con el PDF
+      const form = new FormData();
+      form.append('fiscal_document', pdfBuffer, {
+        filename: `${orden.nroFormatted || 'comprobante'}.pdf`,
+        contentType: 'application/pdf'
+      });
+      
+      // Subir a Mercado Libre
+      await axios.post(
+        `https://api.mercadolibre.com/packs/${packId}/fiscal_documents`,
+        form,
+        {
+          headers: {
+            ...form.getHeaders(),
+            'Authorization': `Bearer ${accessToken}`
+          },
+          timeout: 30000
+        }
+      );
+      
+      await Order.findByIdAndUpdate(orden._id, { 
+        emailSent: true, 
+        emailSentAt: new Date() 
+      });
+      
+      return res.json({ 
+        ok: true, 
+        message: '✅ Comprobante adjuntado a Mercado Libre. El comprador lo verá en su cuenta.',
+        platform: 'mercadolibre'
+      });
+    }
+
+    // ════════════════════════════════════════════════════════════
+    // OTRAS PLATAFORMAS: Enviar email normal
+    // ════════════════════════════════════════════════════════════
     if (!orden.customerEmail) {
       return res.status(400).json({ error: 'El cliente no tiene email registrado' });
     }
     
-    // Enviar el email realmente
     const enviado = await enviarFacturaMail(orden._id);
     
-    if (enviado) {
+    if (enviado.ok) {
       res.json({
         ok: true,
         message: 'Factura enviada por email',
         email: orden.customerEmail
       });
     } else {
-      res.status(500).json({ error: 'Error al enviar el email' });
+      res.status(500).json({ error: enviado.error || 'Error al enviar el email' });
     }
   } catch (error) {
     console.error('enviarMailOrden error:', error);

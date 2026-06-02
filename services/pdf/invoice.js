@@ -1,3 +1,4 @@
+// services/pdf/invoice.js
 const { generarFacturaHtml } = require('../email/templates');
 const { generatePDF } = require('./generate');
 
@@ -9,15 +10,15 @@ const { generatePDF } = require('./generate');
  */
 async function generateInvoicePDF(userId, orden) {
   try {
+    console.log(`📄 Generando PDF para orden ${orden.externalId}`);
+    
     // 1. Generar el HTML usando la función existente
     const html = await generarFacturaHtml(userId, orden);
     
-    // 2. Generar nombre de archivo
-    const filename = `${orden.nroFormatted || 'comprobante'}.pdf`;
+    // 2. Llamar al microservicio para convertir HTML a PDF
+    const pdfBuffer = await generatePDF(html, orden.externalId, orden.nroFormatted);
     
-    // 3. Llamar al microservicio para convertir HTML a PDF
-    const pdfBuffer = await generatePDF(html, filename);
-    
+    console.log(`✅ PDF generado para orden ${orden.externalId} (${pdfBuffer.length} bytes)`);
     return pdfBuffer;
     
   } catch (error) {

@@ -18,7 +18,7 @@ const getMLToken = async (integration) => {
   
   const data = response.data;
   
-  const Integration = require('../../models/Integration');
+  const Integration = require('../../../models/Integration');
   await Integration.findByIdAndUpdate(integration._id, {
     'credentials.accessToken': encrypt(data.access_token),
     'credentials.refreshToken': encrypt(data.refresh_token),

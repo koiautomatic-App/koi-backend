@@ -39,168 +39,94 @@ router.get('/google/callback',
 );
 
 // ============================================================
-// WOOCOMMERCE OAUTH - CONEXIÓN
+// WOOCOMMERCE OAUTH
 // ============================================================
 router.get('/woo/connect', requireAuth, (req, res) => {
-  console.log('🟢 [WOO] /auth/woo/connect llamado');
-  const { store_url } = req.query;
-  
-  if (!store_url) {
-    console.error('❌ [WOO] Falta store_url');
-    return res.status(400).send('Falta store_url');
-  }
-  
-  const clean = store_url.replace(/\/$/, '').toLowerCase();
-  console.log(`📦 [WOO] Store URL: ${clean}`);
-  console.log(`👤 [WOO] User ID: ${req.userId}`);
-  
-  const callback = `${process.env.BASE_URL}/auth/woo/callback`;
-  const returnUrl = `${process.env.BASE_URL}/dashboard?woo=connected`;
-  
-  const wooAuthUrl = `${clean}/wc-auth/v1/authorize?app_name=KOI-Factura&scope=read_write&user_id=${req.userId}&return_url=${encodeURIComponent(returnUrl)}&callback_url=${encodeURIComponent(callback)}`;
-  
-  console.log('🔄 [WOO] Redirigiendo a:', wooAuthUrl);
-  res.redirect(wooAuthUrl);
+  // ... (tu código existente)
+});
+
+router.post('/woo/callback', async (req, res) => {
+  // ... (tu código existente)
 });
 
 // ============================================================
-// WOOCOMMERCE OAUTH - CALLBACK (USA user_id en lugar de state)
+// MERCADOLIBRE OAUTH
 // ============================================================
-router.post('/woo/callback', async (req, res) => {
-  console.log('📞 [WOO] Callback POST recibido');
-  console.log('  Body params:', req.body);
+router.get('/ml/connect', requireAuth, (req, res) => {
+  console.log('🟢 [ML] /auth/ml/connect llamado');
   
-  // WooCommerce envía los datos en el body
-  const { 
-    user_id,           // El ID del usuario en KOI
-    consumer_key, 
-    consumer_secret,
-    key_id,
-    key_permissions
-  } = req.body;
+  const state = jwt.sign({ userId: req.userId }, process.env.JWT_SECRET, { expiresIn: '15m' });
+  const scopes = 'read write offline_access invoices orders.read shipments.read';
+  const redirectUri = `${process.env.BASE_URL}/auth/ml/callback`;
   
-  console.log('  user_id:', user_id);
-  console.log('  consumer_key:', consumer_key ? '✅ presente' : '❌ ausente');
-  console.log('  consumer_secret:', consumer_secret ? '✅ presente' : '❌ ausente');
+  const authUrl = `https://auth.mercadolibre.com.ar/authorization?response_type=code&client_id=${process.env.ML_CLIENT_ID}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}&scope=${scopes}`;
   
-  // Validaciones
-  if (!user_id) {
-    console.error('❌ [WOO] Missing user_id');
-    return res.status(400).send('Missing user_id');
-  }
+  console.log('🔄 [ML] Redirigiendo a:', authUrl);
+  res.redirect(authUrl);
+});
+
+router.get('/ml/callback', async (req, res) => {
+  console.log('📞 [ML] Callback recibido');
+  console.log('  Query params:', req.query);
   
-  if (!consumer_key || !consumer_secret) {
-    console.error('❌ [WOO] Missing consumer credentials');
-    return res.status(400).send('Missing consumer credentials');
+  const { code, state } = req.query;
+  
+  if (!code) {
+    console.error('❌ [ML] Missing code');
+    return res.redirect('/dashboard?error=ml_denied');
   }
   
   try {
-    const userId = user_id;
-    const storeUrl = 'https://www.sonohandmade.com';
+    const { userId } = jwt.verify(state, process.env.JWT_SECRET);
+    console.log(`✅ [ML] State decodificado: userId=${userId}`);
     
-    console.log(`✅ [WOO] Procesando para userId: ${userId}, storeUrl: ${storeUrl}`);
-    
-    // TESTEAR credenciales antes de guardar
-    console.log('🔍 [WOO] Probando credenciales...');
-    const testResponse = await axios.get(`${storeUrl}/wp-json/wc/v3/system_status`, {
-      auth: { username: consumer_key, password: consumer_secret },
-      timeout: 10000
+    const { data: token } = await axios.post('https://api.mercadolibre.com/oauth/token', {
+      grant_type: 'authorization_code',
+      client_id: process.env.ML_CLIENT_ID,
+      client_secret: process.env.ML_CLIENT_SECRET,
+      code,
+      redirect_uri: `${process.env.BASE_URL}/auth/ml/callback`
     });
     
-    console.log('✅ [WOO] Credenciales válidas! Status:', testResponse.status);
+    console.log('✅ [ML] Token obtenido');
     
-    // Guardar integración
-    console.log('💾 [WOO] Guardando integración...');
+    const { data: seller } = await axios.get('https://api.mercadolibre.com/users/me', {
+      headers: { Authorization: `Bearer ${token.access_token}` }
+    });
+    
+    const sellerId = String(token.user_id || seller.id);
+    console.log(`✅ [ML] Seller ID: ${sellerId}, Nickname: ${seller.nickname}`);
+    
     await Integration.findOneAndUpdate(
-      { userId, platform: 'woocommerce', storeId: storeUrl },
+      { userId, platform: 'mercadolibre', storeId: sellerId },
       { 
         $set: { 
-          storeName: storeUrl.replace(/^https?:\/\//, ''), 
-          storeUrl, 
-          status: 'active', 
-          errorLog: '',
+          storeName: seller.nickname || `ML ${sellerId}`, 
+          status: 'active',
           credentials: { 
-            consumerKey: encrypt(consumer_key), 
-            consumerSecret: encrypt(consumer_secret) 
+            accessToken: encrypt(token.access_token), 
+            refreshToken: encrypt(token.refresh_token),
+            tokenExpiry: new Date(Date.now() + token.expires_in * 1000).toISOString(),
+            sellerId 
           },
-          updatedAt: new Date() 
+          updatedAt: new Date()
         },
         $setOnInsert: { 
           userId, 
-          platform: 'woocommerce', 
-          storeId: storeUrl, 
+          platform: 'mercadolibre', 
+          storeId: sellerId, 
           createdAt: new Date() 
-        } 
+        }
       },
       { upsert: true }
     );
     
-    console.log(`✅ [WOO] WooCommerce conectado exitosamente: ${storeUrl}`);
+    console.log(`✅ MercadoLibre conectado: ${seller.nickname}`);
+    res.redirect('/dashboard?ml=connected');
     
-    // Responder con HTML para cerrar la ventana emergente
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Conectado a WooCommerce</title>
-          <style>
-            body {
-              font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-              margin: 0;
-              background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            }
-            .container {
-              text-align: center;
-              background: white;
-              padding: 40px;
-              border-radius: 20px;
-              box-shadow: 0 10px 40px rgba(0,0,0,0.2);
-            }
-            h1 { color: #333; margin-bottom: 20px; }
-            p { color: #666; font-size: 16px; }
-            .success { color: #10b981; font-size: 48px; margin-bottom: 20px; }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <div class="success">✓</div>
-            <h1>¡Conexión Exitosa!</h1>
-            <p>Tu tienda WooCommerce ha sido conectada correctamente.</p>
-            <p>Esta ventana se cerrará automáticamente...</p>
-          </div>
-          <script>
-            setTimeout(() => {
-              if (window.opener) {
-                window.opener.postMessage({ 
-                  type: 'woocommerce_connected', 
-                  success: true,
-                  storeUrl: '${storeUrl}'
-                }, '*');
-              }
-              window.close();
-            }, 2000);
-          </script>
-        </body>
-      </html>
-    `);
-    
-  } catch(error) {
-    console.error('❌ [WOO] Error en callback:', error.message);
-    res.send(`
-      <!DOCTYPE html>
-      <html>
-        <head><title>Error de conexión</title></head>
-        <body style="font-family: sans-serif; text-align: center; margin-top: 100px;">
-          <h1 style="color: #ef4444;">❌ Error de conexión</h1>
-          <p>${error.message}</p>
-          <a href="/dashboard">Volver al dashboard</a>
-        </body>
-      </html>
-    `);
+  } catch (error) {
+    console.error('❌ [ML] Error en callback:', error.message);
+    res.redirect('/dashboard?error=ml_failed');
   }
 });
 

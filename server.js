@@ -36,6 +36,12 @@ try {
 // Configurar rutas
 app.use('/', router);
 
+// ============================================================
+// INICIAR AUTO-ENRIQUECIMIENTO DE ÓRDENES ML (cada hora)
+// ============================================================
+const { startAutoEnrich } = require('./services/integrations/enrich/autoEnrich');
+startAutoEnrich(60 * 60 * 1000); // Cada hora
+
 // Iniciar servidor
 const server = app.listen(config.PORT, () => {
   logger.info(`🚀 KOI-Factura v4.0 | Puerto ${config.PORT} | ${config.BASE_URL}`);

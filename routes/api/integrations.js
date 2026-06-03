@@ -233,4 +233,106 @@ router.get('/woocommerce/check-credentials', requireAuthAPI, async (req, res) =>
     });
   }
 });
+// ============================================================
+// ENRIQUECIMIENTO DE ÓRDENES MERCADOLIBRE
+// ============================================================
+
+// Enriquecer todas las órdenes pendientes del usuario
+router.post('/mercadolibre/enrich-all', requireAuthAPI, async (req, res) => {
+  try {
+    const { enrichPendingOrders } = require('../../services/integrations/enrich/autoEnrich');
+    
+    // Responder inmediatamente
+    res.json({ 
+      ok: true, 
+      message: 'Enriquecimiento masivo iniciado en background. Revisa los logs para ver el progreso.' 
+    });
+    
+    // Ejecutar en background
+    const result = await enrichPendingOrders(req.userId);
+    console.log(`📊 Usuario ${req.userId}: ${result.enriched}/${result.total} órdenes ML enriquecidas`);
+    
+  } catch (error) {
+    console.error('Error en enrich-all:', error);
+    if (!res.headersSent) {
+      res.status(500).json({ error: error.message });
+    }
+  }
+});
+
+// Enriquecer una orden específica de MercadoLibre
+router.post('/mercadolibre/enrich-order/:orderId', requireAuthAPI, async (req, res) => {
+  try {
+    const Order = require('../../models/Order');
+    const { enrichOrderWithRetry } = require('../../services/integrations/enrich/autoEnrich');
+    
+    const order = await Order.findOne({
+      _id: req.params.orderId,
+      userId: req.userId,
+      platform: 'mercadolibre'
+    });
+    
+    if (!order) {
+      return res.status(404).json({ error: 'Orden no encontrada' });
+    }
+    
+    const success = await enrichOrderWithRetry(order);
+    
+    const updatedOrder = await Order.findById(order._id);
+    
+    res.json({
+      success,
+      order: {
+        id: updatedOrder.externalId,
+        customerName: updatedOrder.customerName,
+        customerDoc: updatedOrder.customerDoc,
+        buyerIdentificationNumber: updatedOrder.buyerIdentificationNumber,
+        buyerIdentificationType: updatedOrder.buyerIdentificationType,
+        orderEnriched: updatedOrder.orderEnriched
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error en enrich-order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Obtener estadísticas de órdenes pendientes de enriquecer
+router.get('/mercadolibre/enrich-stats', requireAuthAPI, async (req, res) => {
+  try {
+    const Order = require('../../models/Order');
+    
+    const totalMLOrders = await Order.countDocuments({
+      userId: req.userId,
+      platform: 'mercadolibre'
+    });
+    
+    const pendingEnrich = await Order.countDocuments({
+      userId: req.userId,
+      platform: 'mercadolibre',
+      $or: [
+        { buyerIdentificationNumber: { $in: [null, '', '0'] } },
+        { customerDoc: { $in: [null, '', '0'] } },
+        { orderEnriched: false },
+        { 'settings.needsEnrich': true }
+      ]
+    });
+    
+    const enriched = totalMLOrders - pendingEnrich;
+    
+    res.json({
+      ok: true,
+      stats: {
+        totalMLOrders,
+        enriched,
+        pendingEnrich,
+        percentage: totalMLOrders > 0 ? Math.round((enriched / totalMLOrders) * 100) : 0
+      }
+    });
+    
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;

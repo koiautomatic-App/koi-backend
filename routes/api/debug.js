@@ -115,5 +115,44 @@ router.get('/ml-shipment/:shipmentId', requireAuthAPI, async (req, res) => {
     res.status(error.response?.status || 500).json({ error: error.message });
   }
 });
+// 4. Obtener datos del comprador por ID (DNI, nombre, etc.)
+router.get('/ml-user/:userId', requireAuthAPI, async (req, res) => {
+  try {
+    const Integration = require('../../models/Integration');
+    const { getMLToken } = require('../../services/integrations/token/ml');
+    const axios = require('axios');
+    
+    const integration = await Integration.findOne({ 
+      userId: req.userId, 
+      platform: 'mercadolibre',
+      status: 'active'
+    });
+    
+    if (!integration) {
+      return res.status(404).json({ error: 'No hay integración con MercadoLibre' });
+    }
+    
+    const token = await getMLToken(integration);
+    const { data } = await axios.get(`https://api.mercadolibre.com/users/${req.params.userId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    
+    res.json({
+      id: data.id,
+      nickname: data.nickname,
+      first_name: data.first_name,
+      last_name: data.last_name,
+      email: data.email,
+      identification: data.identification || { type: null, number: null }
+    });
+    
+  } catch (error) {
+    console.error('Error en ml-user:', error.message);
+    res.status(error.response?.status || 500).json({ 
+      error: error.message,
+      details: error.response?.data
+    });
+  }
+});
 
 module.exports = router;

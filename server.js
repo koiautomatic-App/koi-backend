@@ -39,11 +39,17 @@ app.use('/', router);
 // ============================================================
 // INICIAR AUTO-ENRIQUECIMIENTO DE ÓRDENES ML
 // ============================================================
-// Batch cada 1 hora SOLO para errores recuperables
-// (token expirado, problemas de red temporales, etc.)
-// El procesamiento normal ya es inmediato vía webhook
+// Batch para recuperar errores según tipo:
+// - Rate limiting: reintento cada 5 minutos
+// - Timeout: reintento cada 5 minutos
+// - Error ML: reintento cada 15 minutos
+// - Token expirado: reintento cada 1 hora
+// - El procesamiento normal ya es inmediato vía webhook (2 intentos en 5 segundos)
 const { startAutoEnrich } = require('./services/integrations/enrich/autoEnrich');
-startAutoEnrich(60 * 60 * 1000); // Cada 1 hora
+
+// Ejecutar batch cada 5 minutos (para recuperar rate_limit y timeout más rápido)
+// La lógica interna de autoEnrich.js manejará diferentes tiempos según el tipo de error
+startAutoEnrich(5 * 60 * 1000); // Cada 5 minutos
 
 // Iniciar servidor
 const server = app.listen(config.PORT, () => {

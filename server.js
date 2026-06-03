@@ -37,10 +37,13 @@ try {
 app.use('/', router);
 
 // ============================================================
-// INICIAR AUTO-ENRIQUECIMIENTO DE ÓRDENES ML (cada hora)
+// INICIAR AUTO-ENRIQUECIMIENTO DE ÓRDENES ML
 // ============================================================
+// Batch cada 1 hora SOLO para errores recuperables
+// (token expirado, problemas de red temporales, etc.)
+// El procesamiento normal ya es inmediato vía webhook
 const { startAutoEnrich } = require('./services/integrations/enrich/autoEnrich');
-startAutoEnrich(60 * 60 * 1000); // Cada hora
+startAutoEnrich(60 * 60 * 1000); // Cada 1 hora
 
 // Iniciar servidor
 const server = app.listen(config.PORT, () => {

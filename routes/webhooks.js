@@ -57,8 +57,9 @@ router.post('/mercadolibre/:secret', async (req, res) => {
     if (order && order.platform === 'mercadolibre') {
       setImmediate(async () => {
         try {
-          const { enrichOrderWithRetry } = require('../../services/integrations/enrich/autoEnrich');
-          await enrichOrderWithRetry(order);
+          const { enrichAndProcess } = require('../../services/integrations/enrich/autoEnrich');
+          console.log(`🚀 [WEBHOOK] Enriquecimiento inmediato para orden ${order.externalId}`);
+          await enrichAndProcess(order);
         } catch (e) {
           console.error('❌ Error en enriquecimiento post-webhook:', e.message);
         }
@@ -67,6 +68,12 @@ router.post('/mercadolibre/:secret', async (req, res) => {
     
     return canonical;
   });
+});
+
+// VTEX
+router.post('/vtex/:secret', async (req, res) => {
+  res.status(200).send('OK');
+  await handleWebhook('vtex', req.params.secret, () => normalize.vtex(req.body));
 });
 
 // Empretienda

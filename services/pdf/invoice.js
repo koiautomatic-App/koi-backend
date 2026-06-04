@@ -1,32 +1,38 @@
-// services/pdf/invoice.js
-const { generarFacturaHtml } = require('../email/templates');
+// services/pdf/invoice.js - MODIFICADO
 const { generatePDF } = require('./generate');
 
-/**
- * Genera el PDF de una factura/NC usando el microservicio AWS Lambda
- * @param {string} userId - ID del usuario
- * @param {object} orden - Objeto de la orden
- * @returns {Promise<Buffer>} - Buffer del PDF
- */
 async function generateInvoicePDF(userId, orden) {
   try {
     console.log(`📄 Generando PDF para orden ${orden.externalId}`);
     
-    // 1. Generar el HTML usando la función existente
-    const html = await generarFacturaHtml(userId, orden);
+    // ✅ Ya NO llamas a generarFacturaHtml()
+    // ✅ Envías los datos directamente al Lambda
     
-    // 2. Llamar al microservicio para convertir HTML a PDF
-    const pdfBuffer = await generatePDF(html, orden.externalId, orden.nroFormatted);
+    const items = orden.items.map(item => ({
+      descripcion: item.name || item.descripcion,
+      cantidad: item.quantity || item.cantidad,
+      precio: item.price || item.precio
+    }));
     
-    console.log(`✅ PDF generado para orden ${orden.externalId} (${pdfBuffer.length} bytes)`);
+    const orderData = {
+      orderId: orden.externalId,
+      nroFormatted: orden.nroFormatted,
+      items: items,
+      total: orden.total,
+      cliente: {
+        nombre: orden.cliente?.nombre || orden.user?.name,
+        tipoDoc: orden.cliente?.tipoDoc || 'DNI',
+        numeroDoc: orden.cliente?.numeroDoc || orden.user?.documento,
+        email: orden.cliente?.email || orden.user?.email
+      }
+    };
+    
+    const pdfBuffer = await generatePDF(orderData);
     return pdfBuffer;
     
   } catch (error) {
-    console.error('❌ Error en generateInvoicePDF:', error.message);
-    
-    // Fallback: devolver HTML como buffer
-    const html = await generarFacturaHtml(userId, orden);
-    return Buffer.from(html, 'utf-8');
+    console.error('❌ Error en generateInvoicePDF:', error);
+    throw error;
   }
 }
 

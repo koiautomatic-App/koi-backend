@@ -1,8 +1,8 @@
-// services/pdf/generate.js - MODIFICADO
+// services/pdf/generate.js - Versión mejorada (envía datos completos)
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const lambdaClient = new LambdaClient({
-  region: 'us-east-1',
+  region: 'us-east-2',
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID,
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
@@ -10,18 +10,43 @@ const lambdaClient = new LambdaClient({
 });
 
 async function generatePDF(orderData) {
-  const { orderId, nroFormatted, items, total, cliente } = orderData;
+  const {
+    orderId,
+    nroFormatted,
+    items,
+    total,
+    fecha,
+    cliente,
+    nombreFantasia,
+    razonSocial,
+    cuitFmt,
+    tipoFactura,
+    impNeto,
+    impIVA,
+    caeDisplay,
+    caeVto,
+    logoUrl
+  } = orderData;
   
   console.log(`📄 Solicitando PDF para orden ${orderId}`);
   
-  // ✅ Envía datos estructurados, NO HTML
+  // Envía TODOS los datos que la Lambda necesita
   const payload = {
     orderId,
     nroFormatted,
     items,
     total,
-    fecha: new Date().toISOString(),
-    cliente
+    fecha,
+    cliente,
+    nombreFantasia: nombreFantasia || 'KOI',
+    razonSocial: razonSocial || 'KOI S.R.L.',
+    cuitFmt: cuitFmt || '20-30978248-9',
+    tipoFactura: tipoFactura || 'FACTURA C',
+    impNeto,
+    impIVA,
+    caeDisplay: caeDisplay || '86228278246278',
+    caeVto: caeVto || '13/6/2026',
+    logoUrl: logoUrl || null
   };
   
   const command = new InvokeCommand({
@@ -35,7 +60,6 @@ async function generatePDF(orderData) {
     const result = JSON.parse(responsePayload.body);
     
     if (result.success && result.pdfUrl) {
-      // Descargar el PDF desde S3
       const https = require('https');
       const pdfBuffer = await new Promise((resolve, reject) => {
         https.get(result.pdfUrl, (res) => {

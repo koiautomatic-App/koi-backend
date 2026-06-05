@@ -2,9 +2,10 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../../models/Order');
-const { generateInvoicePDF } = require('../../services/pdf/invoice');  // 👈 RUTA CORREGIDA
+const { generateInvoicePDF } = require('../../services/pdf/invoice');
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { requireAuthAPI } = require('../../middleware/auth');
+const { attachInvoiceToML } = require('../../services/integrations/ml/attachInvoice');
 
 // Configurar S3
 const s3 = new S3Client({
@@ -44,7 +45,27 @@ router.post('/regenerate/:orderId', requireAuthAPI, async (req, res) => {
     await order.save();
     
     console.log(`✅ PDF regenerado: ${pdfUrl}`);
-    res.json({ success: true, pdfUrl, message: 'PDF generado exitosamente' });
+    
+    // ============================================================
+    // ADJUNTAR AUTOMÁTICAMENTE A MERCADO LIBRE SI CORRESPONDE
+    // ============================================================
+    let mlAttached = false;
+    if (order.platform === 'mercadolibre') {
+      console.log(`📎 Adjuntando automáticamente a MercadoLibre...`);
+      mlAttached = await attachInvoiceToML(order.userId, order.externalId, pdfUrl);
+      if (mlAttached) {
+        console.log(`✅ Factura adjuntada automáticamente a ML`);
+      } else {
+        console.log(`⚠️ No se pudo adjuntar automáticamente a ML`);
+      }
+    }
+    
+    res.json({ 
+      success: true, 
+      pdfUrl, 
+      mlAttached,
+      message: 'PDF generado exitosamente' + (mlAttached ? ' y adjuntado a MercadoLibre' : '')
+    });
     
   } catch (error) {
     console.error('❌ Error regenerando PDF:', error);

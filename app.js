@@ -76,11 +76,25 @@ app.use(
         "https://api.mercadopago.com",
         "https://*.afip.gov.ar",
         "https://cdn.jsdelivr.net",
-        "https://cdnjs.cloudflare.com"
+        "https://cdnjs.cloudflare.com",
+        "https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com",
+        "https://koi-facturas-pdfs-2.s3.amazonaws.com"
       ],
       "frame-src": [
         "'self'",
-        "https://accounts.google.com"
+        "https://accounts.google.com",
+        "https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com",
+        "https://koi-facturas-pdfs-2.s3.amazonaws.com"
+      ],
+      "object-src": [
+        "'self'",
+        "https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com",
+        "https://koi-facturas-pdfs-2.s3.amazonaws.com"
+      ],
+      "media-src": [
+        "'self'",
+        "https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com",
+        "https://koi-facturas-pdfs-2.s3.amazonaws.com"
       ]
     },
   })

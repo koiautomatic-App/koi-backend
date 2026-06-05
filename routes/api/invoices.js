@@ -2,7 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const Order = require('../../models/Order');
-const { generateInvoicePDF } = require('../../services/pdf-generator');
+const { generateInvoicePDF } = require('../../services/pdf/invoice');  // 👈 RUTA CORREGIDA
 const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
 const { requireAuthAPI } = require('../../middleware/auth');
 

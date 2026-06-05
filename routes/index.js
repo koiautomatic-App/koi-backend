@@ -1,4 +1,4 @@
-// routes/index.js - VERSIÓN CORREGIDA
+// routes/index.js - VERSIÓN CORREGIDA CON INVOICES
 const express = require('express');
 const path = require('path');
 const router = express.Router();
@@ -12,6 +12,7 @@ const adminRoutes = require('./api/admin');
 const suscripcionRoutes = require('./api/suscripcion');
 const webhookRoutes = require('./webhooks');
 const debugRoutes = require('./api/debug');
+const invoicesRoutes = require('./api/invoices');  // 👈 LÍNEA AGREGADA
 
 // ============================================================
 // RUTAS DE AUTENTICACIÓN
@@ -28,6 +29,7 @@ router.use('/api/stats', statsRoutes);
 router.use('/api/admin', adminRoutes);
 router.use('/api/suscripcion', suscripcionRoutes);
 router.use('/api/debug', debugRoutes);
+router.use('/api/invoices', invoicesRoutes);  // 👈 LÍNEA AGREGADA
 
 // ============================================================
 // WEBHOOKS
@@ -97,4 +99,4 @@ router.get('/logout', (req, res) => {
   res.redirect('/login');
 });
 
-module.exports = router;  // 👈 ESTO ES CRUCIAL
+module.exports = router;

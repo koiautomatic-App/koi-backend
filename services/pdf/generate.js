@@ -1,4 +1,4 @@
-// services/pdf/generate.js - Versión mejorada (envía datos completos)
+// services/pdf/generate.js - Versión mejorada (envía datos completos + QR)
 const { LambdaClient, InvokeCommand } = require('@aws-sdk/client-lambda');
 
 const lambdaClient = new LambdaClient({
@@ -25,10 +25,12 @@ async function generatePDF(orderData) {
     impIVA,
     caeDisplay,
     caeVto,
-    logoUrl
+    logoUrl,
+    qrImageUrl  // 👈 AGREGAR ESTO
   } = orderData;
   
   console.log(`📄 Solicitando PDF para orden ${orderId}`);
+  console.log(`   QR incluido: ${qrImageUrl ? '✅ Sí' : '❌ No'}`);
   
   // Envía TODOS los datos que la Lambda necesita
   const payload = {
@@ -46,7 +48,8 @@ async function generatePDF(orderData) {
     impIVA,
     caeDisplay: caeDisplay || '86228278246278',
     caeVto: caeVto || '13/6/2026',
-    logoUrl: logoUrl || null
+    logoUrl: logoUrl || null,
+    qrImageUrl: qrImageUrl || null  // 👈 AGREGAR ESTO
   };
   
   const command = new InvokeCommand({

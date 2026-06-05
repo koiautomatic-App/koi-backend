@@ -99,14 +99,28 @@ router.patch('/:id', requireAuthAPI, async (req, res) => {
     }
     
     // Campos permitidos para actualización
-    const allowedUpdates = ['nroFormatted', 'emailSent', 'emailSentAt', 'concepto', 'amount', 'caeNumber', 'status', 'orderDate', 'nroComprobante', 'puntoVenta'];
-    const updates = {};
-    
-    for (const key of allowedUpdates) {
-      if (req.body[key] !== undefined) {
-        updates[key] = req.body[key];
-      }
-    }
+const allowedUpdates = [
+  'nroFormatted', 
+  'emailSent', 
+  'emailSentAt', 
+  'concepto', 
+  'amount', 
+  'caeNumber', 
+  'status', 
+  'orderDate', 
+  'nroComprobante', 
+  'puntoVenta',
+  'customerDoc',    // 👈 AGREGAR
+  'customerName',   // 👈 AGREGAR
+  'buyerIdentificationNumber'  // 👈 AGREGAR (opcional)
+];
+const updates = {};
+
+for (const key of allowedUpdates) {
+  if (req.body[key] !== undefined) {
+    updates[key] = req.body[key];
+  }
+}
     
     const updatedOrder = await Order.findByIdAndUpdate(id, { $set: updates }, { new: true });
     

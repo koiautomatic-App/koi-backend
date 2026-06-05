@@ -1,4 +1,4 @@
-// services/pdf/invoice.js - Versión definitiva con QR
+// services/pdf/invoice.js - Versión definitiva con QR y logs de depuración
 const { generatePDF } = require('./generate');
 
 // Función para generar la URL del QR de AFIP
@@ -108,6 +108,9 @@ async function generateInvoicePDF(userId, orden) {
     console.log(`   QR generado: ${qrImageUrl ? '✅ Sí' : '❌ No'}`);
     console.log(`   Logo: ${logoUrl ? '✅ Sí' : '❌ No'}`);
     
+    // 👇 LOG DE DEPURACIÓN: Verificar valor del QR antes de enviar
+    console.log(`   📱 qrImageUrl (primeros 100 chars): ${qrImageUrl ? qrImageUrl.substring(0, 100) : 'null'}...`);
+    
     // Datos completos para la Lambda - CON QR Y LOGO
     const orderData = {
       orderId: orden.externalId,
@@ -129,10 +132,12 @@ async function generateInvoicePDF(userId, orden) {
       impIVA: orden.impIVA,
       caeDisplay: orden.caeNumber || '',
       caeVto: caeVtoFormateado,
-      logoUrl: logoUrl,           // 👈 Logo del vendedor
-      qrImageUrl: qrImageUrl      // 👈 QR de AFIP
+      logoUrl: logoUrl,
+      qrImageUrl: qrImageUrl
     };
     
+    // 👇 LOG DE DEPURACIÓN: Verificar que orderData tiene qrImageUrl
+    console.log(`   ✅ orderData.qrImageUrl existe: ${!!orderData.qrImageUrl}`);
     console.log(`   Enviando a Lambda: cliente=${orderData.cliente.nombre}, doc=${orderData.cliente.numeroDoc}`);
     
     const pdfBuffer = await generatePDF(orderData);

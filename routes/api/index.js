@@ -1,4 +1,3 @@
-// routes/api/index.js
 const express = require('express');
 const router = express.Router();
 
@@ -8,7 +7,7 @@ const integrationsRoutes = require('./integrations');
 const statsRoutes = require('./stats');
 const adminRoutes = require('./admin');
 const suscripcionRoutes = require('./suscripcion');
-const debugRoutes = require('./debug');  // 👈 AGREGAR ESTA LÍNEA
+const debugRoutes = require('./debug');
 
 router.use('/me', meRoutes);
 router.use('/orders', ordersRoutes);
@@ -16,6 +15,6 @@ router.use('/integrations', integrationsRoutes);
 router.use('/stats', statsRoutes);
 router.use('/admin', adminRoutes);
 router.use('/suscripcion', suscripcionRoutes);
-router.use('/debug', debugRoutes);  // 👈 AGREGAR ESTA LÍNEA
+router.use('/debug', debugRoutes);
 
 module.exports = router;

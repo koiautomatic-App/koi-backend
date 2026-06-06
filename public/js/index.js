@@ -611,8 +611,8 @@ function mostrarMiPlanExpirado() {
         contenedor.innerHTML = `
             <div class="plan-unified-container" style="max-width: 850px; margin: 0 auto; padding: 20px;">
                 <div class="koi-unified-header">
-                    <div class="koi-unified-icon">K</div>
-                </div>
+  <div class="koi-unified-icon" style="display: none;">K</div>
+</div>
                 <div class="status-unified-card status-expired">
                     <div class="status-unified-title">⚠️ Tu período de prueba finalizó</div>
                     <div class="status-unified-sub">Suscribite para seguir facturando sin interrupciones.</div>
@@ -4758,10 +4758,9 @@ function mostrarOnboardingPlan() {
     // Inyectar HTML unificado (sin estilos inline)
     vistaOnboardingPlan.innerHTML = `
         <div class="plan-unified-container">
-            <div class="koi-unified-header">
-                <div class="koi-unified-icon">K</div>
-            </div>
-
+           <div class="koi-unified-header">
+  <div class="koi-unified-icon" style="display: none;">K</div>
+</div>
             <div class="status-unified-card" id="statusCard">
                 <div class="status-unified-title" id="statusTitle">Cargando...</div>
                 <div class="status-unified-sub" id="statusSub">Verificando tu período de cortesía...</div>

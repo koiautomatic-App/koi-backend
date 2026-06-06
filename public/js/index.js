@@ -1821,11 +1821,10 @@ function renderComprobantes(lista) {
     const c = lista[i];
     
     const esCancelada = c.status === 'cancelled';
-    const esAnulada = c.status === 'cancelled_by_nc';  // 👈 NUEVO: factura original anulada
+    const esAnulada = c.status === 'cancelled_by_nc';
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
     
-    // 👇 ESTADO CHIP MEJORADO
     let estadoChip = '';
     if (esAnulada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
@@ -1850,7 +1849,6 @@ function renderComprobantes(lista) {
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
-    // 👇 BOTÓN CANCELAR: NO mostrar si ya está anulada o es NC
     const btnCancelar = (emitido && !esCancelada && !esNotaCredito && !esAnulada && c.origen !== 'manual')
       ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c.orderId || c._id || c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
@@ -1860,7 +1858,6 @@ function renderComprobantes(lista) {
          </button>`
       : '';
     
-    // 👇 TÍTULO DEL BOTÓN PDF
     const tituloPDF = (esNotaCredito || esCancelada) 
       ? 'Ver Nota de Crédito' 
       : (esAnulada ? 'Ver Factura Anulada' : 'Ver PDF');
@@ -1874,20 +1871,18 @@ function renderComprobantes(lista) {
     
     const montoRaw = c.monto !== undefined ? c.monto : (c.amount !== undefined ? Math.abs(c.amount) : 0);
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
-    
-    // 👇 ID para el PDF
     const pdfId = c._id || c.id;
     
+    // 👇 CORRECCIÓN: El orden correcto de las columnas
     html += `
     <tr style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
-      <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>
         <div style="font-weight:600;font-size:12px">${c.cliente}</div>
         ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
       </td>
-      <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto||c.tipo||''}</td>
+      <td style="max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--text-2)">${c.concepto || c.tipo || ''}</td>
       <td style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
       <td style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td style="text-align:center">${estadoChip}</td>
@@ -1923,7 +1918,7 @@ function renderComprobantes(lista) {
           ${btnAnular}
         </div>
       </td>
-    </tr>`;
+     </tr>`;
   }
   
   tbody.innerHTML = html;

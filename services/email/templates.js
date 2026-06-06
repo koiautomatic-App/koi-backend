@@ -61,9 +61,14 @@ const generarFacturaHtml = async (userId, orden) => {
   };
 
   const filasItems = items.map(item => {
-    const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
-    return '<td>\n  <td>' + escapeHtml(item.nombre || 'Producto') + '</td>\n  <td>' + (item.cantidad || 1) + '</td>\n  <td>$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n  <td>$ ' + fmtARS(subtotal) + '</td>\n</tr>';
-  }).join('');
+  const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
+  return '<tr>\n' +
+    '   <td style="text-align: left;">' + escapeHtml(item.nombre || 'Producto') + '</td>\n' +
+    '   <td style="text-align: center;">' + (item.cantidad || 1) + '</td>\n' +
+    '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n' +
+    '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(subtotal) + '</td>\n' +
+    '</tr>';
+}).join('');
 
   const caeNum = orden.caeNumber || null;
   const caeVto = orden.caeExpiry

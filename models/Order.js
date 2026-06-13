@@ -33,6 +33,7 @@ const OrderSchema = new mongoose.Schema({
   fechaEmision: { type: Date },
   errorLog: { type: String },
   nroFormatted: { type: String, default: '' },
+  pdfUrl: { type: String, default: '' },  // 👈 CAMPO AGREGADO
   emailSent: { type: Boolean, default: false },
   emailSentAt: { type: Date },
   // Campos para MercadoLibre

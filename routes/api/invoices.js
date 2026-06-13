@@ -39,10 +39,9 @@ router.post('/regenerate/:orderId', requireAuthAPI, async (req, res) => {
       ContentType: 'application/pdf'
     }));
     
-    // Actualizar orden con URL
+    // Actualizar orden con URL usando findByIdAndUpdate
     const pdfUrl = `https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com/${key}`;
-    order.pdfUrl = pdfUrl;
-    await order.save();
+    await Order.findByIdAndUpdate(req.params.orderId, { $set: { pdfUrl: pdfUrl } });
     
     console.log(`✅ PDF regenerado: ${pdfUrl}`);
     
@@ -55,6 +54,10 @@ router.post('/regenerate/:orderId', requireAuthAPI, async (req, res) => {
       mlAttached = await attachInvoiceToML(order.userId, order.externalId, pdfUrl);
       if (mlAttached) {
         console.log(`✅ Factura adjuntada automáticamente a ML`);
+        // También marcar como enviado
+        await Order.findByIdAndUpdate(req.params.orderId, { 
+          $set: { emailSent: true, emailSentAt: new Date() } 
+        });
       } else {
         console.log(`⚠️ No se pudo adjuntar automáticamente a ML`);
       }

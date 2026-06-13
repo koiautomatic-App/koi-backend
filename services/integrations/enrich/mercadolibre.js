@@ -9,10 +9,10 @@ const enrichMercadoLibreOrder = async (order, token) => {
   let updates = {};
 
   console.log(`🔍 Enriquociendo orden ${order.externalId}: buyerId=${order.buyerId}, shipmentId=${order.shipmentId}`);
+  console.log(`   rawPayload: ${order.rawPayload ? '✅ Presente' : '❌ Ausente (orden vieja)'}`);
 
   // ============================================================
-  // 1. PRIMERO: Verificar billing_info del rawPayload
-  //    (El DNI puede estar aquí, no en la API de users)
+  // 1. PRIMERO: Verificar billing_info del rawPayload (órdenes nuevas)
   // ============================================================
   if (order.rawPayload?.billing_info?.doc_number) {
     const docNumber = order.rawPayload.billing_info.doc_number;
@@ -25,9 +25,8 @@ const enrichMercadoLibreOrder = async (order, token) => {
       updates.buyerIdentificationType = docType || 'DNI';
       updates.taxCondition = docClean.length === 11 ? 'responsable_inscripto' : 'consumidor_final';
       updated = true;
-      console.log(`✅ DNI obtenido de billing_info: ${docClean} (${docType || 'DNI'})`);
+      console.log(`✅ DNI obtenido de billing_info (rawPayload): ${docClean}`);
       
-      // También actualizar nombre si está disponible
       if (order.rawPayload.billing_info.additional_info) {
         for (const item of order.rawPayload.billing_info.additional_info) {
           if (item.type === 'FIRST_NAME') updates.buyerFirstName = item.value;
@@ -41,7 +40,49 @@ const enrichMercadoLibreOrder = async (order, token) => {
   }
 
   // ============================================================
-  // 2. SEGUNDO: Si no hay DNI en billing_info, consultar API de users
+  // 2. SEGUNDO: Si no hay rawPayload (orden vieja), consultar billing_info directamente
+  // ============================================================
+  if (!updated && !order.rawPayload && order.externalId) {
+    try {
+      console.log(`   📡 Orden sin rawPayload - consultando billing_info directamente a ML...`);
+      const billingRes = await axios.get(`https://api.mercadolibre.com/orders/${order.externalId}/billing_info`, {
+        headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
+      });
+      
+      const billingData = billingRes.data;
+      
+      if (billingData?.billing_info?.doc_number) {
+        const docNumber = billingData.billing_info.doc_number;
+        const docType = billingData.billing_info.doc_type;
+        const docClean = cleanDoc(docNumber);
+        
+        if (docClean && (docClean.length === 8 || docClean.length === 11)) {
+          updates.customerDoc = docClean;
+          updates.buyerIdentificationNumber = docClean;
+          updates.buyerIdentificationType = docType || 'DNI';
+          updates.taxCondition = docClean.length === 11 ? 'responsable_inscripto' : 'consumidor_final';
+          updated = true;
+          console.log(`✅ DNI obtenido de billing_info (API directa): ${docClean}`);
+          
+          const additional = billingData.billing_info?.additional_info || [];
+          for (const item of additional) {
+            if (item.type === 'FIRST_NAME') updates.buyerFirstName = item.value;
+            if (item.type === 'LAST_NAME') updates.buyerLastName = item.value;
+          }
+          if (updates.buyerFirstName) {
+            updates.customerName = `${updates.buyerFirstName} ${updates.buyerLastName || ''}`.trim();
+          }
+        }
+      } else {
+        console.log(`   ⚠️ No se encontró billing_info en API directa`);
+      }
+    } catch (error) {
+      console.log(`   ⚠️ Error consultando billing_info: ${error.message}`);
+    }
+  }
+
+  // ============================================================
+  // 3. TERCERO: Si no hay DNI, consultar API de users (fallback)
   // ============================================================
   if (!updated && order.buyerId && (!order.buyerFirstName || !order.buyerIdentificationNumber)) {
     try {
@@ -70,12 +111,12 @@ const enrichMercadoLibreOrder = async (order, token) => {
       }
       
     } catch(e) {
-      console.error(`   ❌ Error obteniendo buyer ${order.buyerId} desde API:`, e.message);
+      console.error(`   ❌ Error obteniendo buyer ${order.buyerId}:`, e.message);
     }
   }
 
   // ============================================================
-  // 3. TERCERO: Datos del envío (si aplica)
+  // 4. CUARTO: Datos del envío (si aplica)
   // ============================================================
   if (order.shipmentId && !order.shippingMode) {
     try {
@@ -119,10 +160,9 @@ const enrichMercadoLibreOrder = async (order, token) => {
   }
 
   // ============================================================
-  // 4. Guardar cambios en la orden
+  // 5. Guardar cambios en la orden
   // ============================================================
   if (updated) {
-    // Solo marcar orderEnriched = true si realmente tiene DNI
     const hasDNI = updates.customerDoc && updates.customerDoc !== '0' && updates.customerDoc !== '';
     
     if (hasDNI) {

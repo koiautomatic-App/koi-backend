@@ -179,7 +179,6 @@ const marcarParaBatchReintento = async (orderId, errorType) => {
       'settings.batchRetryAt': retryAt,
       'settings.batchAttempts': 0,
       'settings.enrichStatus': 'scheduled_for_batch'
-      // NOTA: NO modificamos orderEnriched aquí, se mantiene el valor original
     }
   });
 };
@@ -237,8 +236,10 @@ const processPendingOrders = async (userId = null, limit = 30) => {
     'settings.noSolution': { $ne: true },
     $or: [
       // Sin DNI (prioritario)
-      { customerDoc: { $in: [null, '', '0'] } },
+      { customerDoc: { $in: [null, '', '0', '99999999'] } },
       { buyerIdentificationNumber: { $in: [null, '', '0'] } },
+      // 👇 NUEVO: Incluir órdenes viejas sin rawPayload
+      { rawPayload: null },
       // Errores recuperables
       { 'settings.needsBatch': true },
       { 'settings.needsReconnect': true }
@@ -259,6 +260,7 @@ const processPendingOrders = async (userId = null, limit = 30) => {
   
   console.log(`📊 [BATCH] Procesando ${readyOrders.length} órdenes recuperables (de ${orders.length} encontradas)`);
   console.log(`   - Buscando órdenes sin DNI (aunque tengan orderEnriched=true)`);
+  console.log(`   - Incluye órdenes sin rawPayload (órdenes viejas)`);
   
   let results = {
     total: readyOrders.length,
@@ -273,7 +275,7 @@ const processPendingOrders = async (userId = null, limit = 30) => {
     const errorType = order.settings?.batchError || 'unknown';
     const tieneDNI = order.customerDoc && order.customerDoc !== '0' && order.customerDoc !== '';
     
-    console.log(`📋 Orden ${order.externalId}: customerDoc="${order.customerDoc}", orderEnriched=${order.orderEnriched}`);
+    console.log(`📋 Orden ${order.externalId}: customerDoc="${order.customerDoc}", orderEnriched=${order.orderEnriched}, rawPayload=${order.rawPayload ? '✅' : '❌'}`);
     
     try {
       const result = await enrichAndProcess(order);
@@ -338,6 +340,7 @@ const startAutoEnrich = (intervalMs = 5 * 60 * 1000) => {
   console.log(`   - Token expirado: cada 1 hora`);
   console.log(`   - Máximo 3 intentos por orden`);
   console.log(`   - Busca órdenes sin DNI (independientemente de orderEnriched)`);
+  console.log(`   - También procesa órdenes sin rawPayload (órdenes viejas)`);
   
   // Ejecutar inmediatamente al inicio
   setTimeout(() => {

@@ -335,4 +335,55 @@ router.get('/mercadolibre/enrich-stats', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+// Sincronizar una orden específica de MercadoLibre
+router.post('/mercadolibre/sync-order/:orderId', requireAuthAPI, async (req, res) => {
+  try {
+    const { orderId } = req.params;
+    const Integration = require('../../models/Integration');
+    const axios = require('axios');
+    const normalize = require('../../services/integrations/normalizers');
+    const { upsertOrder } = require('../../services/integrations/upsert');
+    const { getMLToken } = require('../../services/integrations/token/ml');
+    
+    // Buscar integración activa de ML
+    const integration = await Integration.findOne({
+      userId: req.userId,
+      platform: 'mercadolibre',
+      status: 'active'
+    });
+    
+    if (!integration) {
+      return res.status(404).json({ error: 'Integración ML no encontrada' });
+    }
+    
+    // Obtener token
+    const token = await getMLToken(integration);
+    
+    // Obtener la orden desde ML
+    const response = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
+      headers: { Authorization: `Bearer ${token}`, 'x-format-new': 'true' }
+    });
+    
+    // Normalizar y guardar
+    const canonical = normalize.mercadolibre(response.data);
+    canonical.rawPayload = response.data; // Guardar payload original
+    
+    const order = await upsertOrder(integration, canonical);
+    
+    res.json({
+      ok: true,
+      message: 'Orden sincronizada correctamente',
+      order: {
+        id: order.externalId,
+        customerName: order.customerName,
+        customerDoc: order.customerDoc,
+        status: order.status
+      }
+    });
+    
+  } catch (error) {
+    console.error('Error sync ML order:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 module.exports = router;

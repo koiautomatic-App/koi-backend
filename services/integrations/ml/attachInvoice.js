@@ -31,12 +31,26 @@ const attachInvoiceToML = async (userId, orderId, pdfUrl) => {
     const token = await getMLToken(integration);
     console.log(`✅ [ML] Token obtenido`);
 
-    // 3. Descargar el PDF
+    // 3. Verificar si la orden ya tiene factura adjunta
+    try {
+      const checkRes = await axios.get(`https://api.mercadolibre.com/orders/${orderId}`, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      
+      if (checkRes.data.invoice_id) {
+        console.log(`⚠️ [ML] La orden ya tiene factura adjunta: ${checkRes.data.invoice_id}`);
+        return true; // Considerar como éxito
+      }
+    } catch (checkError) {
+      console.log(`⚠️ [ML] No se pudo verificar factura existente: ${checkError.message}`);
+    }
+
+    // 4. Descargar el PDF
     const pdfResponse = await axios.get(pdfUrl, { responseType: 'arraybuffer' });
     const pdfBuffer = Buffer.from(pdfResponse.data);
     console.log(`✅ [ML] PDF descargado (${pdfBuffer.length} bytes)`);
 
-    // 4. Subir archivo a ML como attachment
+    // 5. Subir archivo a ML como attachment
     const formData = new FormData();
     formData.append('file', pdfBuffer, {
       filename: 'factura.pdf',
@@ -52,15 +66,17 @@ const attachInvoiceToML = async (userId, orderId, pdfUrl) => {
         headers: {
           'Authorization': `Bearer ${token}`,
           ...formData.getHeaders()
-        }
+        },
+        maxBodyLength: Infinity,
+        maxContentLength: Infinity
       }
     );
 
     const fileId = uploadRes.data.id;
     console.log(`✅ [ML] Archivo subido, file_id: ${fileId}`);
 
-    // 5. Adjuntar a la orden como mensaje
-    const attachRes = await axios.post(
+    // 6. Adjuntar a la orden como mensaje
+    await axios.post(
       `https://api.mercadolibre.com/orders/${orderId}/messages`,
       {
         text: `Factura electrónica - Comprobante N° ${orderId}`,
@@ -76,6 +92,12 @@ const attachInvoiceToML = async (userId, orderId, pdfUrl) => {
     return true;
 
   } catch (error) {
+    // Manejar específicamente el error 409 (conflicto - ya existe)
+    if (error.response?.status === 409) {
+      console.log(`⚠️ [ML] La orden ya tiene una factura adjunta (409 Conflict)`);
+      return true; // Considerar como éxito
+    }
+    
     console.error(`❌ [ML] Error:`, error.response?.data || error.message);
     return false;
   }

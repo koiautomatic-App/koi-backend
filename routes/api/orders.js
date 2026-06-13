@@ -112,7 +112,8 @@ router.patch('/:id', requireAuthAPI, async (req, res) => {
       'puntoVenta',
       'customerDoc',
       'customerName',
-      'buyerIdentificationNumber'
+      'buyerIdentificationNumber',
+      'pdfUrl'  // 👈 AGREGADO
     ];
     const updates = {};
 

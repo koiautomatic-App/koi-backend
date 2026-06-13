@@ -8,24 +8,20 @@ const { emitirCAE } = require('../../afip/wsfe');
 
 // Configuración de reintentos por tipo de error
 const BATCH_CONFIG = {
-  'rate_limit': { retry: true, delayMs: 5 * 60 * 1000, maxAttempts: 3 },     // 5 minutos
-  'timeout': { retry: true, delayMs: 5 * 60 * 1000, maxAttempts: 3 },          // 5 minutos
-  'ml_error': { retry: true, delayMs: 15 * 60 * 1000, maxAttempts: 3 },        // 15 minutos
-  'network': { retry: true, delayMs: 10 * 60 * 1000, maxAttempts: 3 },         // 10 minutos
-  'token_expired': { retry: false, delayMs: 60 * 60 * 1000, maxAttempts: 3 },  // 1 hora (batch)
+  'rate_limit': { retry: true, delayMs: 5 * 60 * 1000, maxAttempts: 3 },
+  'timeout': { retry: true, delayMs: 5 * 60 * 1000, maxAttempts: 3 },
+  'ml_error': { retry: true, delayMs: 15 * 60 * 1000, maxAttempts: 3 },
+  'network': { retry: true, delayMs: 10 * 60 * 1000, maxAttempts: 3 },
+  'token_expired': { retry: false, delayMs: 60 * 60 * 1000, maxAttempts: 3 },
   'no_solution': { retry: false, delayMs: 0, maxAttempts: 0 }
 };
 
 /**
  * Enriquecer una orden ML y facturar automáticamente
- * - 2 intentos inmediatos (0s y 5s)
- * - Si tiene DNI → factura con DNI real
- * - Si no tiene DNI → Consumidor Final (99999999)
- * - Respeta la lógica existente de getTipoComprobante
  */
 const enrichAndProcess = async (order) => {
   const MAX_IMMEDIATE_ATTEMPTS = 2;
-  const RETRY_DELAY_MS = 5000; // 5 segundos
+  const RETRY_DELAY_MS = 5000;
   
   let hasDNI = false;
   let finalCustomerDoc = '0';
@@ -33,7 +29,6 @@ const enrichAndProcess = async (order) => {
   
   console.log(`🔍 [ENRICH] Procesando orden ${order.externalId}`);
   
-  // Verificar si ya es una orden sin solución
   if (order.settings?.noSolution === true) {
     console.log(`⏭️ [ENRICH] Orden ${order.externalId} ya marcada sin solución, omitiendo`);
     return { hasDNI: false, reason: 'already_no_solution' };
@@ -41,7 +36,6 @@ const enrichAndProcess = async (order) => {
   
   for (let attempt = 1; attempt <= MAX_IMMEDIATE_ATTEMPTS; attempt++) {
     try {
-      // Obtener integración de ML
       const integration = await Integration.findOne({
         userId: order.userId,
         platform: 'mercadolibre',
@@ -55,18 +49,13 @@ const enrichAndProcess = async (order) => {
         return { hasDNI: false, reason: 'no_integration' };
       }
       
-      // Obtener token (renovación automática incluida)
       const token = await getMLToken(integration);
-      
-      // Intentar enriquecer
       await enrichMercadoLibreOrder(order, token);
       
-      // Verificar resultado
       const updatedOrder = await Order.findById(order._id);
       const dni = updatedOrder.customerDoc;
       const buyerId = updatedOrder.buyerId;
       
-      // Verificar si tiene buyerId (sin buyerId no se puede obtener DNI)
       if (!buyerId || buyerId === '') {
         console.log(`⚠️ [ENRICH] Orden ${order.externalId}: Sin buyerId → Consumidor Final`);
         await marcarSinSolucion(order._id, 'no_buyer_id');
@@ -74,7 +63,6 @@ const enrichAndProcess = async (order) => {
         return { hasDNI: false, reason: 'no_buyer_id' };
       }
       
-      // Verificar si se obtuvo DNI
       if (dni && dni !== '0' && dni !== '') {
         hasDNI = true;
         finalCustomerDoc = dni;
@@ -82,7 +70,6 @@ const enrichAndProcess = async (order) => {
         break;
       }
       
-      // Si es el primer intento y no hay DNI, esperar y reintentar
       if (attempt < MAX_IMMEDIATE_ATTEMPTS) {
         console.log(`⏳ [ENRICH] Orden ${order.externalId}: Sin DNI en intento ${attempt}, reintento en ${RETRY_DELAY_MS/1000}s...`);
         await new Promise(r => setTimeout(r, RETRY_DELAY_MS));
@@ -100,9 +87,7 @@ const enrichAndProcess = async (order) => {
     }
   }
   
-  // Si no hay DNI después de los intentos inmediatos
   if (!hasDNI) {
-    // Verificar si el error es recuperable (rate_limit, timeout, etc.)
     if (lastError) {
       const errorType = classifyError(lastError);
       const config = BATCH_CONFIG[errorType] || BATCH_CONFIG.network;
@@ -114,7 +99,6 @@ const enrichAndProcess = async (order) => {
       }
     }
     
-    // Si no es recuperable o no hay error, Consumidor Final
     finalCustomerDoc = '99999999';
     console.log(`📝 [ENRICH] Orden ${order.externalId}: Sin DNI → Consumidor Final`);
     
@@ -130,7 +114,6 @@ const enrichAndProcess = async (order) => {
     });
   }
   
-  // Facturar automáticamente (solo si tiene DNI o ya es Consumidor Final)
   if (hasDNI || finalCustomerDoc === '99999999') {
     await facturarOrden(order._id);
   }
@@ -200,7 +183,7 @@ const marcarSinSolucion = async (orderId, reason) => {
 };
 
 /**
- * Facturar orden automáticamente
+ * Facturar orden automáticamente y generar PDF
  */
 const facturarOrden = async (orderId) => {
   const order = await Order.findById(orderId);
@@ -211,8 +194,48 @@ const facturarOrden = async (orderId) => {
   if (user?.settings?.factAuto && user?.settings?.cuit) {
     console.log(`📤 [ENRICH] Facturando orden ${order.externalId}...`);
     try {
+      // 1. Emitir CAE
       const result = await emitirCAE(orderId, user);
       console.log(`✅ [ENRICH] Factura emitida: ${result.nroFormatted} - CAE: ${result.cae}`);
+      
+      // 2. Generar PDF automáticamente
+      const { generateInvoicePDF } = require('../../pdf/invoice');
+      const { S3Client, PutObjectCommand } = require('@aws-sdk/client-s3');
+      
+      console.log(`📄 [ENRICH] Generando PDF para orden ${order.externalId}...`);
+      const pdfBuffer = await generateInvoicePDF(order.userId, order);
+      
+      const key = `facturas/${order.externalId}-${result.nroFormatted}.pdf`;
+      
+      const s3 = new S3Client({
+        region: 'us-east-2',
+        credentials: {
+          accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+          secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
+        }
+      });
+      
+      await s3.send(new PutObjectCommand({
+        Bucket: 'koi-facturas-pdfs-2',
+        Key: key,
+        Body: pdfBuffer,
+        ContentType: 'application/pdf'
+      }));
+      
+      const pdfUrl = `https://koi-facturas-pdfs-2.s3.us-east-2.amazonaws.com/${key}`;
+      await Order.findByIdAndUpdate(orderId, { pdfUrl });
+      console.log(`✅ [ENRICH] PDF generado: ${pdfUrl}`);
+      
+      // 3. Adjuntar a ML automáticamente
+      if (order.platform === 'mercadolibre') {
+        const { attachInvoiceToML } = require('../../ml/attachInvoice');
+        const attached = await attachInvoiceToML(order.userId, order.externalId, pdfUrl);
+        if (attached) {
+          console.log(`✅ [ENRICH] Factura adjuntada a MercadoLibre`);
+          await Order.findByIdAndUpdate(orderId, { emailSent: true, emailSentAt: new Date() });
+        }
+      }
+      
       return result;
     } catch (error) {
       console.error(`❌ [ENRICH] Error al facturar orden ${order.externalId}:`, error.message);
@@ -228,19 +251,14 @@ const facturarOrden = async (orderId) => {
 const processPendingOrders = async (userId = null, limit = 30) => {
   const now = new Date();
   
-  // 🔥 IMPORTANTE: Buscar órdenes sin DNI (independientemente de orderEnriched)
-  // El enriquecimiento puede tener datos de envío (shipping) pero no DNI
   const query = {
     platform: 'mercadolibre',
     status: 'pending_invoice',
     'settings.noSolution': { $ne: true },
     $or: [
-      // Sin DNI (prioritario)
       { customerDoc: { $in: [null, '', '0', '99999999'] } },
       { buyerIdentificationNumber: { $in: [null, '', '0'] } },
-      // 👇 NUEVO: Incluir órdenes viejas sin rawPayload
       { rawPayload: null },
-      // Errores recuperables
       { 'settings.needsBatch': true },
       { 'settings.needsReconnect': true }
     ]
@@ -250,7 +268,6 @@ const processPendingOrders = async (userId = null, limit = 30) => {
   
   const orders = await Order.find(query).limit(limit);
   
-  // Filtrar órdenes listas para reintentar (según batchRetryAt)
   const readyOrders = orders.filter(order => {
     if (order.settings?.batchRetryAt) {
       return new Date(order.settings.batchRetryAt) <= now;
@@ -273,7 +290,6 @@ const processPendingOrders = async (userId = null, limit = 30) => {
   
   for (const order of readyOrders) {
     const errorType = order.settings?.batchError || 'unknown';
-    const tieneDNI = order.customerDoc && order.customerDoc !== '0' && order.customerDoc !== '';
     
     console.log(`📋 Orden ${order.externalId}: customerDoc="${order.customerDoc}", orderEnriched=${order.orderEnriched}, rawPayload=${order.rawPayload ? '✅' : '❌'}`);
     
@@ -298,7 +314,6 @@ const processPendingOrders = async (userId = null, limit = 30) => {
       results.errors++;
       console.error(`❌ [BATCH] Error procesando orden ${order.externalId}:`, error.message);
       
-      // Incrementar contador de intentos
       const attempts = (order.settings?.batchAttempts || 0) + 1;
       const config = BATCH_CONFIG[errorType] || BATCH_CONFIG.network;
       
@@ -318,7 +333,6 @@ const processPendingOrders = async (userId = null, limit = 30) => {
       }
     }
     
-    // Pausa entre órdenes
     await new Promise(r => setTimeout(r, 500));
   }
   
@@ -342,12 +356,10 @@ const startAutoEnrich = (intervalMs = 5 * 60 * 1000) => {
   console.log(`   - Busca órdenes sin DNI (independientemente de orderEnriched)`);
   console.log(`   - También procesa órdenes sin rawPayload (órdenes viejas)`);
   
-  // Ejecutar inmediatamente al inicio
   setTimeout(() => {
     processPendingOrders().catch(e => console.error('Error en batch inicial:', e));
   }, 10000);
   
-  // Luego cada intervalo
   setInterval(async () => {
     try {
       await processPendingOrders();

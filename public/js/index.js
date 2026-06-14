@@ -4870,105 +4870,6 @@ function mostrarOnboardingPlan() {
     configurarBotonesPlan();
 }
 
-async function actualizarUIUnificada() {
-    const fechaVinculacion = await obtenerFechaVinculacionARCA();
-    const suscripcionActiva = await verificarEstadoSuscripcion();
-    
-    const titleEl = document.getElementById('statusTitle');
-    const subEl = document.getElementById('statusSub');
-    const statusCard = document.getElementById('statusCard');
-    const timersSection = document.getElementById('timersSection');
-    const breakdownBox = document.getElementById('breakdownBox');
-    const countdownEl = document.getElementById('countdownTimer');
-    const offerCountdownEl = document.getElementById('offerCountdown');
-    const priceCard = document.querySelector('.price-unified-card');
-    const subscribeBtn = document.getElementById('btnSuscripcionMercadoPago');
-    const container = document.querySelector('.plan-unified-container');
-    
-    if (!titleEl || !subEl) return;
-    
-    // ========== CASO 1: SUSCRIPCIÓN ACTIVA (ya pagó) ==========
-    if (suscripcionActiva) {
-        titleEl.innerHTML = '✅ ¡Suscripción activa!';
-        subEl.innerHTML = 'Tu cuenta está al día. Seguí facturando sin límites.';
-        if (statusCard) statusCard.className = 'status-unified-card status-active';
-        if (timersSection) timersSection.style.display = 'none';
-        if (breakdownBox) breakdownBox.style.display = 'none';
-        if (countdownEl) countdownEl.textContent = '--d --h --m';
-        if (priceCard) {
-            priceCard.classList.remove('price-expired');
-            priceCard.style.border = '1px solid rgba(0,230,118,0.2)';
-            priceCard.style.boxShadow = '';
-        }
-        if (container) container.classList.remove('plan-expired');
-        if (subscribeBtn) {
-            subscribeBtn.innerHTML = '✅ Suscripción activa';
-            subscribeBtn.disabled = true;
-            subscribeBtn.style.opacity = '0.6';
-            subscribeBtn.style.cursor = 'default';
-            subscribeBtn.style.animation = '';
-        }
-        return;
-    }
-    
-    // ========== CASO 2: Sin fecha de vinculación ==========
-    if (!fechaVinculacion) {
-        titleEl.textContent = '⚠️ Período de prueba no disponible';
-        subEl.textContent = 'Vinculá ARCA para comenzar tu prueba gratuita de 30 días.';
-        if (statusCard) statusCard.className = 'status-unified-card status-warning';
-        if (timersSection) timersSection.style.display = 'none';
-        if (breakdownBox) breakdownBox.style.display = 'none';
-        if (priceCard) priceCard.classList.add('price-expired');
-        if (container) container.classList.add('plan-expired');
-        if (subscribeBtn) {
-            subscribeBtn.innerHTML = '🔌 Conectar ARCA primero →';
-            subscribeBtn.style.background = 'linear-gradient(135deg, #F97316, #FB923C)';
-            subscribeBtn.style.opacity = '0.7';
-            subscribeBtn.disabled = true;
-            subscribeBtn.style.animation = '';
-        }
-        return;
-    }
-    
-    // ========== Calcular estado de cortesía ==========
-    const hoy = new Date();
-    const finCortesia = new Date(fechaVinculacion);
-    finCortesia.setDate(finCortesia.getDate() + 30);
-    const expirado = finCortesia <= hoy;
-    const diasRestantes = Math.ceil((finCortesia - hoy) / (1000 * 60 * 60 * 24));
-    
-    const finOferta = new Date(fechaVinculacion);
-    finOferta.setDate(finOferta.getDate() + 7);
-    const ofertaActiva = finOferta > hoy;
-    
-    // ========== CASO 3: CORTESÍA EXPIRADA ==========
-    if (expirado) {
-        titleEl.innerHTML = '⚠️ Tu período de prueba finalizó';
-        subEl.innerHTML = 'Suscribite para seguir facturando sin interrupciones.';
-        if (statusCard) statusCard.className = 'status-unified-card status-expired';
-        
-        if (timersSection) timersSection.style.display = 'none';
-        if (breakdownBox) breakdownBox.style.display = 'none';
-        
-        if (countdownEl) countdownEl.textContent = '0d 0h 0m';
-        
-        if (priceCard) {
-            priceCard.classList.add('price-expired');
-            priceCard.style.border = '2px solid rgba(255,61,87,0.4)';
-            priceCard.style.boxShadow = '0 8px 32px rgba(255,61,87,0.15)';
-        }
-        
-        if (subscribeBtn) {
-            subscribeBtn.innerHTML = 'Suscribirme ahora →';
-            subscribeBtn.style.background = 'linear-gradient(135deg, #F97316, #FB923C)';
-            subscribeBtn.style.animation = 'pulse-warning 1.5s infinite';
-            subscribeBtn.disabled = false;
-            subscribeBtn.style.opacity = '1';
-            subscribeBtn.style.cursor = 'pointer';
-        }
-        
-        if (container) container.classList.add('plan-expired');
-        
     // ========== CASO 4: CORTESÍA ACTIVA ==========
     } else {
         titleEl.innerHTML = '🎉 Estás en período de prueba';
@@ -4976,7 +4877,6 @@ async function actualizarUIUnificada() {
         if (statusCard) statusCard.className = 'status-unified-card status-active';
         
         if (timersSection) timersSection.style.display = 'block';
-        if (breakdownBox) breakdownBox.style.display = 'block';
         
         if (priceCard) {
             priceCard.classList.remove('price-expired');
@@ -5002,24 +4902,41 @@ async function actualizarUIUnificada() {
             countdownEl.textContent = `${dias}d ${horas.toString().padStart(2, '0')}h ${minutos.toString().padStart(2, '0')}m`;
         }
         
-        // Actualizar contador de oferta
-        if (offerCountdownEl && ofertaActiva) {
-            const diffOferta = finOferta - hoy;
-            const diasOferta = Math.floor(diffOferta / (1000 * 60 * 60 * 24));
-            const horasOferta = Math.floor((diffOferta % 86400000) / 3600000);
-            const minutosOferta = Math.floor((diffOferta % 3600000) / 60000);
-            offerCountdownEl.textContent = `${diasOferta}d ${horasOferta.toString().padStart(2, '0')}h ${minutosOferta.toString().padStart(2, '0')}m`;
-        }
-        
-        // Ocultar oferta si ya expiró
+        // 👇 NUEVA LÓGICA: Ocultar/mostrar según oferta activa
+        const breakdownBox = document.getElementById('breakdownBox');
         const offerTimerDiv = document.querySelector('.timer-unified-item.offer-timer');
-        if (offerTimerDiv && !ofertaActiva) {
-            offerTimerDiv.style.display = 'none';
-        } else if (offerTimerDiv && ofertaActiva) {
-            offerTimerDiv.style.display = 'flex';
+        const totalLabel = document.querySelector('.total-unified-label');
+        const totalPrice = document.querySelector('.total-unified-price');
+        
+        if (ofertaActiva) {
+            // Mostrar breakdown y timer de oferta
+            if (breakdownBox) breakdownBox.style.display = 'block';
+            if (offerTimerDiv) offerTimerDiv.style.display = 'flex';
+            
+            // Actualizar contador de oferta
+            if (offerCountdownEl) {
+                const diffOferta = finOferta - hoy;
+                const diasOferta = Math.floor(diffOferta / (1000 * 60 * 60 * 24));
+                const horasOferta = Math.floor((diffOferta % 86400000) / 3600000);
+                const minutosOferta = Math.floor((diffOferta % 3600000) / 60000);
+                offerCountdownEl.textContent = `${diasOferta}d ${horasOferta.toString().padStart(2, '0')}h ${minutosOferta.toString().padStart(2, '0')}m`;
+            }
+            
+            // Texto del total a 60 días
+            if (totalLabel) totalLabel.innerHTML = '📋 TOTAL';
+            if (totalPrice) totalPrice.innerHTML = '60 DÍAS → $0';
+            
+        } else {
+            // Ocultar breakdown y timer de oferta (ya expiró)
+            if (breakdownBox) breakdownBox.style.display = 'none';
+            if (offerTimerDiv) offerTimerDiv.style.display = 'none';
+            if (offerCountdownEl) offerCountdownEl.textContent = '';
+            
+            // Texto del total a 30 días
+            if (totalLabel) totalLabel.innerHTML = '📋 PERÍODO DE PRUEBA';
+            if (totalPrice) totalPrice.innerHTML = '30 DÍAS → $0';
         }
     }
-}
 // ============================================================
 //  CONFIGURAR BOTONES DEL ONBOARDING (Mercado Pago REAL)
 // ============================================================

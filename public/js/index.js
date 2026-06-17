@@ -4733,7 +4733,7 @@ async function obtenerFechaVinculacionARCA() {
 }
 
 // ============================================================
-//  MOSTRAR ONBOARDING PLAN (VERSIÓN UNIFICADA)
+//  MOSTRAR ONBOARDING PLAN (VERSIÓN MODERNA - FONDO NEGRO)
 //  - Muestra diseño ACTIVO o EXPIRADO según fecha
 //  - Los estilos están en index.css
 // ============================================================
@@ -4755,15 +4755,26 @@ function mostrarOnboardingPlan() {
     const sidebar = document.querySelector('.sidebar');
     if (sidebar) sidebar.style.display = '';
     
-    // Inyectar HTML unificado (sin estilos inline)
+    // Inyectar HTML con bloque de estado moderno
     vistaOnboardingPlan.innerHTML = `
         <div class="plan-unified-container">
-           <div class="koi-unified-header">
-  <div class="koi-unified-icon" style="display: none;">K</div>
-</div>
-            <div class="status-unified-card" id="statusCard">
-                <div class="status-unified-title" id="statusTitle">Cargando...</div>
-                <div class="status-unified-sub" id="statusSub">Verificando tu período de cortesía...</div>
+            <div class="koi-unified-header">
+                <div class="koi-unified-icon" style="display: none;">K</div>
+            </div>
+
+            <!-- ===== BLOQUE DE ESTADO MODERNO (FONDO NEGRO) ===== -->
+            <div class="status-card-modern" id="statusCard">
+                <div class="status-badge" id="statusBadge">🔹 PERÍODO DE CORTESÍA</div>
+                <div class="status-days-container">
+                    <span class="status-days-number" id="statusDaysNumber">--</span>
+                    <span class="status-days-label">días</span>
+                </div>
+                <div class="status-days-sub" id="statusDaysSub">de prueba gratuita</div>
+                <div class="status-progress-container">
+                    <div class="status-progress-bar" id="statusProgressBar" style="--progress: 0%"></div>
+                    <span class="status-progress-label" id="statusProgressLabel">0% restante</span>
+                </div>
+                <div class="status-expiry" id="statusExpiry">⏱️ Cargando...</div>
             </div>
 
             <div class="timers-unified-section" id="timersSection">
@@ -4771,7 +4782,7 @@ function mostrarOnboardingPlan() {
                     <span class="timer-unified-label">⏱️ Tiempo restante de tu período de cortesía:</span>
                     <span class="timer-unified-value" id="countdownTimer">--d --h --m</span>
                 </div>
-                <div class="timer-unified-item offer-timer">
+                <div class="timer-unified-item offer-timer" id="offerTimer">
                     <span class="timer-unified-label">⚡ Tiempo para asegurar 60 días:</span>
                     <span class="timer-unified-value" id="offerCountdown">--d --h --m</span>
                 </div>
@@ -4780,20 +4791,20 @@ function mostrarOnboardingPlan() {
             <div class="breakdown-unified-box" id="breakdownBox">
                 <div class="breakdown-unified-row">
                     <div>
-                        <div class="breakdown-unified-label">30 días de cortesía</div>
+                        <div class="breakdown-unified-label">🎁 30 días de cortesía</div>
                         <div class="breakdown-unified-sub">✅ ya disponibles · por ser parte de KOI</div>
                     </div>
                     <div class="breakdown-unified-price">$0</div>
                 </div>
-                <div class="plus-unified-icon">+</div>
+                <div class="plus-unified-icon">＋</div>
                 <div class="breakdown-unified-row">
                     <div>
-                        <div class="breakdown-unified-label">30 días extra</div>
+                        <div class="breakdown-unified-label">⚡ 30 días extra</div>
                         <div class="breakdown-unified-sub">⚡ si suscribís dentro de los próximos 7 días</div>
                     </div>
                     <div class="breakdown-unified-price">$0</div>
                 </div>
-                <div class="divider-unified-dashed"></div>
+                <hr class="divider-unified-dashed">
                 <div class="total-unified-row">
                     <div>
                         <div class="total-unified-label">📋 TOTAL</div>
@@ -4870,32 +4881,42 @@ function mostrarOnboardingPlan() {
     configurarBotonesPlan();
 }
 
+// ============================================================
+//  ACTUALIZAR UI UNIFICADA (CON BLOQUE MODERNO Y FONDO NEGRO)
+// ============================================================
+
 async function actualizarUIUnificada() {
     const fechaVinculacion = await obtenerFechaVinculacionARCA();
     const suscripcionActiva = await verificarEstadoSuscripcion();
     
-    const titleEl = document.getElementById('statusTitle');
-    const subEl = document.getElementById('statusSub');
+    // Elementos del nuevo bloque moderno
+    const badgeEl = document.getElementById('statusBadge');
+    const daysNumberEl = document.getElementById('statusDaysNumber');
+    const daysSubEl = document.getElementById('statusDaysSub');
+    const progressBarEl = document.getElementById('statusProgressBar');
+    const progressLabelEl = document.getElementById('statusProgressLabel');
+    const expiryEl = document.getElementById('statusExpiry');
     const statusCard = document.getElementById('statusCard');
     const timersSection = document.getElementById('timersSection');
     const breakdownBox = document.getElementById('breakdownBox');
     const countdownEl = document.getElementById('countdownTimer');
     const offerCountdownEl = document.getElementById('offerCountdown');
+    const offerTimer = document.getElementById('offerTimer');
     const priceCard = document.querySelector('.price-unified-card');
-    const subscribeBtn = document.getElementById('btnSuscripcionMercadoPago');
     const container = document.querySelector('.plan-unified-container');
-    const offerTimerDiv = document.querySelector('.timer-unified-item.offer-timer');
-    
-    if (!titleEl || !subEl) return;
+    const subscribeBtn = document.getElementById('btnSuscripcionMercadoPago');
     
     // ========== CASO 1: SUSCRIPCIÓN ACTIVA ==========
     if (suscripcionActiva) {
-        titleEl.innerHTML = '✅ ¡Suscripción activa!';
-        subEl.innerHTML = 'Tu cuenta está al día. Seguí facturando sin límites.';
-        if (statusCard) statusCard.className = 'status-unified-card status-active';
+        if (badgeEl) badgeEl.textContent = '✅ SUSCRIPCIÓN ACTIVA';
+        if (daysNumberEl) daysNumberEl.textContent = '∞';
+        if (daysSubEl) daysSubEl.textContent = 'disfrutá de KOI sin límites';
+        if (statusCard) statusCard.className = 'status-card-modern status-active';
         if (timersSection) timersSection.style.display = 'none';
         if (breakdownBox) breakdownBox.style.display = 'none';
-        if (countdownEl) countdownEl.textContent = '--d --h --m';
+        if (progressBarEl) progressBarEl.style.setProperty('--progress', '100%');
+        if (progressLabelEl) progressLabelEl.textContent = '100% activo';
+        if (expiryEl) expiryEl.innerHTML = '✅ Suscripción activa · renovación automática';
         if (priceCard) {
             priceCard.classList.remove('price-expired');
             priceCard.style.border = '';
@@ -4912,11 +4933,15 @@ async function actualizarUIUnificada() {
     
     // ========== CASO 2: Sin fecha de vinculación ==========
     if (!fechaVinculacion) {
-        titleEl.innerHTML = '⚠️ Período de prueba no disponible';
-        subEl.innerHTML = 'Vinculá ARCA para comenzar tu prueba gratuita de 30 días.';
-        if (statusCard) statusCard.className = 'status-unified-card status-warning';
+        if (badgeEl) badgeEl.textContent = '⚠️ CONFIGURACIÓN PENDIENTE';
+        if (daysNumberEl) daysNumberEl.textContent = '--';
+        if (daysSubEl) daysSubEl.textContent = 'vinculá ARCA para comenzar tu prueba';
+        if (statusCard) statusCard.className = 'status-card-modern status-warning';
         if (timersSection) timersSection.style.display = 'none';
         if (breakdownBox) breakdownBox.style.display = 'none';
+        if (progressBarEl) progressBarEl.style.setProperty('--progress', '0%');
+        if (progressLabelEl) progressLabelEl.textContent = '0%';
+        if (expiryEl) expiryEl.innerHTML = '⚠️ Vinculá ARCA para comenzar tu prueba gratuita';
         if (priceCard) priceCard.classList.add('price-expired');
         if (container) container.classList.add('plan-expired');
         if (subscribeBtn) {
@@ -4936,20 +4961,26 @@ async function actualizarUIUnificada() {
     
     const expirado = finCortesia.getTime() < hoy.getTime();
     const diasRestantes = Math.ceil((finCortesia - hoy) / (1000 * 60 * 60 * 24));
+    const diasCorrectos = Math.max(diasRestantes, 0);
     
-    // Calcular oferta de 7 días
+    // Calcular oferta de 7 días (CORREGIDO)
     const finOferta = new Date(fechaVinculacion);
-    finOferta.setUTCDate(finOferta.getUTCDate() + 7);
-    const ofertaActiva = finOferta.getTime() > hoy.getTime();
+    finOferta.setDate(finOferta.getDate() + 7);
+    finOferta.setHours(23, 59, 59, 999);
+    const ofertaActiva = hoy.getTime() <= finOferta.getTime();
     
     // ========== CASO 3: CORTESÍA EXPIRADA ==========
     if (expirado) {
-        titleEl.innerHTML = '⚠️ Tu período de prueba finalizó';
-        subEl.innerHTML = 'Suscribite para seguir facturando sin interrupciones.';
-        if (statusCard) statusCard.className = 'status-unified-card status-expired';
+        if (badgeEl) badgeEl.textContent = '⛔ PERÍODO EXPIRADO';
+        if (daysNumberEl) daysNumberEl.textContent = '0';
+        if (daysSubEl) daysSubEl.textContent = 'período de prueba finalizado';
+        if (statusCard) statusCard.className = 'status-card-modern status-expired';
         if (timersSection) timersSection.style.display = 'none';
         if (breakdownBox) breakdownBox.style.display = 'none';
         if (countdownEl) countdownEl.textContent = '0d 0h 0m';
+        if (progressBarEl) progressBarEl.style.setProperty('--progress', '0%');
+        if (progressLabelEl) progressLabelEl.textContent = '0% restante';
+        if (expiryEl) expiryEl.innerHTML = '⛔ Período de prueba finalizado · Suscribite para continuar';
         if (priceCard) {
             priceCard.classList.add('price-expired');
             priceCard.style.border = '2px solid rgba(255,61,87,0.4)';
@@ -4959,13 +4990,16 @@ async function actualizarUIUnificada() {
             subscribeBtn.innerHTML = 'Suscribirme ahora →';
             subscribeBtn.disabled = false;
         }
-        if (offerTimerDiv) offerTimerDiv.style.display = 'none';
+        if (offerTimer) offerTimer.style.display = 'none';
         
     // ========== CASO 4: CORTESÍA ACTIVA ==========
     } else {
-        titleEl.innerHTML = '🎉 Estás en período de prueba';
-        subEl.innerHTML = `Disfrutá de KOI sin cargo por <strong style="color:#00e676">${diasRestantes} días</strong>.`;
-        if (statusCard) statusCard.className = 'status-unified-card status-active';
+        const porcentaje = Math.min(Math.round((diasCorrectos / 30) * 100), 100);
+        
+        if (badgeEl) badgeEl.textContent = '🔹 PERÍODO DE CORTESÍA';
+        if (daysNumberEl) daysNumberEl.textContent = diasCorrectos;
+        if (daysSubEl) daysSubEl.textContent = 'de prueba gratuita';
+        if (statusCard) statusCard.className = 'status-card-modern';
         if (timersSection) timersSection.style.display = 'block';
         if (priceCard) {
             priceCard.classList.remove('price-expired');
@@ -4977,17 +5011,32 @@ async function actualizarUIUnificada() {
             subscribeBtn.innerHTML = 'Suscribirme ahora →';
             subscribeBtn.disabled = false;
         }
+        if (progressBarEl) progressBarEl.style.setProperty('--progress', porcentaje + '%');
+        if (progressLabelEl) progressLabelEl.textContent = `${porcentaje}% restante`;
         
-        // 👇 NUEVA LÓGICA: Ocultar/mostrar según oferta activa
+        // Calcular fecha de vencimiento
+        const fechaVencimiento = new Date();
+        fechaVencimiento.setDate(fechaVencimiento.getDate() + diasCorrectos);
+        const fechaStr = fechaVencimiento.toLocaleDateString('es-AR', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+        if (expiryEl) expiryEl.innerHTML = `⏱️ Vence en ${diasCorrectos} días · ${fechaStr}`;
+        
+        // Actualizar timer de cortesía
+        if (countdownEl) {
+            const dias = Math.floor(diasCorrectos);
+            const horas = Math.floor((diasCorrectos - dias) * 24);
+            countdownEl.textContent = `${dias}d ${horas.toString().padStart(2, '0')}h`;
+        }
+        
+        // 👇 LÓGICA: Oferta de 7 días
         if (ofertaActiva) {
-            // Mostrar breakdown y timer de oferta
             if (breakdownBox) breakdownBox.style.display = 'block';
-            if (offerTimerDiv) offerTimerDiv.style.display = 'flex';
-            if (countdownEl) {
-                const dias = Math.floor(diasRestantes);
-                const horas = Math.floor((diasRestantes - dias) * 24);
-                countdownEl.textContent = `${dias}d ${horas.toString().padStart(2, '0')}h`;
-            }
+            if (offerTimer) offerTimer.style.display = 'flex';
+            
+            // Actualizar timer de oferta
             if (offerCountdownEl) {
                 const diffOferta = finOferta - hoy;
                 const diasOferta = Math.floor(diffOferta / (1000 * 60 * 60 * 24));
@@ -5002,14 +5051,8 @@ async function actualizarUIUnificada() {
             if (totalPrice) totalPrice.innerHTML = '60 DÍAS → $0';
             
         } else {
-            // Ocultar breakdown y timer de oferta (ya expiró)
             if (breakdownBox) breakdownBox.style.display = 'none';
-            if (offerTimerDiv) offerTimerDiv.style.display = 'none';
-            if (countdownEl) {
-                const dias = Math.floor(diasRestantes);
-                const horas = Math.floor((diasRestantes - dias) * 24);
-                countdownEl.textContent = `${dias}d ${horas.toString().padStart(2, '0')}h`;
-            }
+            if (offerTimer) offerTimer.style.display = 'none';
             
             // Actualizar texto del total a 30 días
             const totalLabel = document.querySelector('.total-unified-label');

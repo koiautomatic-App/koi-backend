@@ -3898,3 +3898,233 @@ select.cfg-input:focus {
     width: 90px;
   }
 }
+/* ==========================================
+   BLOQUE DE ESTADO MODERNO (FONDO NEGRO)
+   Agregar al final de index.css
+   ========================================== */
+
+/* Contenedor principal del bloque de estado */
+.status-card-modern {
+    background: #0D0D16 !important;
+    border-radius: 20px;
+    padding: 28px 32px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(249, 115, 22, 0.12);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s ease;
+}
+
+/* Efecto de brillo sutil */
+.status-card-modern::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    right: -50%;
+    width: 100%;
+    height: 100%;
+    background: radial-gradient(circle, rgba(249, 115, 22, 0.02), transparent 70%);
+    pointer-events: none;
+}
+
+/* Línea superior naranja */
+.status-card-modern::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #F97316, #FB923C, #FBBF24);
+    border-radius: 20px 20px 0 0;
+}
+
+/* Badge naranja */
+.status-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: #F97316;
+    background: rgba(249, 115, 22, 0.08);
+    padding: 4px 14px;
+    border-radius: 20px;
+    border: 1px solid rgba(249, 115, 22, 0.15);
+    margin-bottom: 16px;
+}
+
+/* Contenedor de días */
+.status-days-container {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    margin-bottom: 2px;
+}
+
+.status-days-number {
+    font-size: 56px;
+    font-weight: 900;
+    font-family: 'Space Grotesk', monospace;
+    line-height: 1;
+    letter-spacing: -2px;
+    background: linear-gradient(135deg, #f0f0fa, #a0a0c0);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.status-days-label {
+    font-size: 18px;
+    font-weight: 600;
+    color: rgba(136, 136, 170, 0.6);
+    margin-left: 2px;
+}
+
+.status-days-sub {
+    font-size: 14px;
+    color: rgba(136, 136, 170, 0.5);
+    margin-bottom: 20px;
+}
+
+/* Barra de progreso */
+.status-progress-container {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-top: 4px;
+}
+
+.status-progress-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.06);
+    position: relative;
+    overflow: hidden;
+}
+
+.status-progress-bar::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    width: var(--progress, 86%);
+    background: linear-gradient(90deg, #F97316, #FB923C);
+    border-radius: 4px;
+    animation: progressPulse 2s ease-in-out infinite;
+}
+
+@keyframes progressPulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.7; }
+}
+
+.status-progress-label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #F97316;
+    font-family: 'Space Grotesk', monospace;
+    white-space: nowrap;
+}
+
+/* Fecha de expiración */
+.status-expiry {
+    font-size: 12px;
+    color: rgba(136, 136, 170, 0.4);
+    margin-top: 14px;
+    padding-top: 14px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+/* ===== ESTADO EXPIRADO (ROJO) ===== */
+.status-card-modern.status-expired {
+    background: #0D0D16 !important;
+    border-color: rgba(239, 68, 68, 0.12);
+}
+
+.status-card-modern.status-expired::after {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.status-card-modern.status-expired .status-badge {
+    color: #ef4444;
+    background: rgba(239, 68, 68, 0.08);
+    border-color: rgba(239, 68, 68, 0.15);
+}
+
+.status-card-modern.status-expired .status-days-number {
+    background: linear-gradient(135deg, #f87171, #ef4444);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.status-card-modern.status-expired .status-progress-bar::after {
+    background: linear-gradient(90deg, #ef4444, #f87171);
+}
+
+.status-card-modern.status-expired .status-progress-label {
+    color: #ef4444;
+}
+
+/* ===== ESTADO ACTIVO (VERDE) ===== */
+.status-card-modern.status-active {
+    background: #0D0D16 !important;
+    border-color: rgba(0, 230, 118, 0.12);
+}
+
+.status-card-modern.status-active::after {
+    background: linear-gradient(90deg, #00e676, #4ade80);
+}
+
+.status-card-modern.status-active .status-badge {
+    color: #00e676;
+    background: rgba(0, 230, 118, 0.08);
+    border-color: rgba(0, 230, 118, 0.15);
+}
+
+/* ===== ESTADO WARNING (AMARILLO) ===== */
+.status-card-modern.status-warning {
+    background: #0D0D16 !important;
+    border-color: rgba(251, 191, 36, 0.12);
+}
+
+.status-card-modern.status-warning::after {
+    background: linear-gradient(90deg, #FBBF24, #F59E0B);
+}
+
+.status-card-modern.status-warning .status-badge {
+    color: #FBBF24;
+    background: rgba(251, 191, 36, 0.08);
+    border-color: rgba(251, 191, 36, 0.15);
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .status-card-modern {
+        padding: 20px;
+    }
+
+    .status-days-number {
+        font-size: 40px;
+    }
+
+    .status-days-label {
+        font-size: 16px;
+    }
+
+    .status-days-sub {
+        font-size: 13px;
+    }
+
+    .status-progress-container {
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+}

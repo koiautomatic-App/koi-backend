@@ -72,67 +72,66 @@
 
   <!-- MAIN -->
   <div class="main">
-    <div class="topbar">
-      <div class="topbar-left">
+   <div class="topbar">
+    <div class="topbar-left">
         <button class="mob-hamburger" id="mobHamburger" onclick="toggleSidebar()" aria-label="Menú">
-          <span></span><span></span><span></span>
+            <span></span><span></span><span></span>
         </button>
         <div class="topbar-title">KOI · Facturación</div>
         <div class="topbar-sub" id="topbarPeriod"></div>
-      </div>
-      <div class="topbar-right">
-   
-    <!-- ===== ESTADO AFIP ===== -->
-    <div class="topbar-status" id="topbarStatus">
-        <div class="status-dot checking" id="topbarDot"></div>
-        <span id="topbarLabel">Verificando…</span>
+    </div>
+    <div class="topbar-right">
+        <!-- ===== ESTADO AFIP ===== -->
+        <div class="topbar-status" id="topbarStatus">
+            <div class="status-dot checking" id="topbarDot"></div>
+            <span id="topbarLabel">Verificando…</span>
+        </div>
     </div>
 </div>
 
-      <!-- SELECTOR DE PERÍODO — solo dashboard -->
-      <div class="dash-period-bar">
-        <div class="dash-period-wrap">
-          <button class="dash-period-btn" id="btnDashPeriodo" onclick="toggleDashCalendario()">
+<!-- ===== SELECTOR DE PERÍODO — FUERA DEL TOPBAR ===== -->
+<div class="dash-period-bar">
+    <div class="dash-period-wrap">
+        <button class="dash-period-btn" id="btnDashPeriodo" onclick="toggleDashCalendario()">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
-              <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
-              <path d="M1 5.5h12" stroke="currentColor" stroke-width="1.2"/>
-              <path d="M4 1v2M10 1v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
-              <rect x="3" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".6"/>
-              <rect x="6.5" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".6"/>
-              <rect x="10" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".3"/>
+                <rect x="1" y="2" width="12" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                <path d="M1 5.5h12" stroke="currentColor" stroke-width="1.2"/>
+                <path d="M4 1v2M10 1v2" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+                <rect x="3" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".6"/>
+                <rect x="6.5" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".6"/>
+                <rect x="10" y="7.5" width="2" height="2" rx=".4" fill="currentColor" opacity=".3"/>
             </svg>
             <span id="dashPeriodoLabel">Este mes</span>
             <svg width="10" height="10" viewBox="0 0 10 10" fill="none" style="opacity:.4">
-              <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M2 3.5l3 3 3-3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
-          </button>
-          <div class="topbar-cal-dropdown" id="dashCalDropdown">
+        </button>
+        <div class="topbar-cal-dropdown" id="dashCalDropdown">
             <div class="tcal-presets">
-              <button class="tcal-preset active" onclick="aplicarDashPreset('mes',this)">Este mes</button>
-              <button class="tcal-preset" onclick="aplicarDashPreset('ant',this)">Mes anterior</button>
-              <button class="tcal-preset" onclick="aplicarDashPreset('trim',this)">Trimestre</button>
-              <button class="tcal-preset" onclick="aplicarDashPreset('anio',this)">Este año</button>
-              <button class="tcal-preset" onclick="aplicarDashPreset('todo',this)">Todo</button>
+                <button class="tcal-preset active" onclick="aplicarDashPreset('mes',this)">Este mes</button>
+                <button class="tcal-preset" onclick="aplicarDashPreset('ant',this)">Mes anterior</button>
+                <button class="tcal-preset" onclick="aplicarDashPreset('trim',this)">Trimestre</button>
+                <button class="tcal-preset" onclick="aplicarDashPreset('anio',this)">Este año</button>
+                <button class="tcal-preset" onclick="aplicarDashPreset('todo',this)">Todo</button>
             </div>
             <div class="tcal-divider"></div>
             <div class="tcal-custom">
-              <div class="tcal-custom-lbl">Rango personalizado</div>
-              <div class="tcal-custom-inputs">
-                <div>
-                  <div class="tcal-input-lbl">Desde</div>
-                  <input id="dashDesde" class="cfg-input tcal-input" type="date" onchange="aplicarDashRangoCustom()"/>
+                <div class="tcal-custom-lbl">Rango personalizado</div>
+                <div class="tcal-custom-inputs">
+                    <div>
+                        <div class="tcal-input-lbl">Desde</div>
+                        <input id="dashDesde" class="cfg-input tcal-input" type="date" onchange="aplicarDashRangoCustom()"/>
+                    </div>
+                    <div class="tcal-arrow">→</div>
+                    <div>
+                        <div class="tcal-input-lbl">Hasta</div>
+                        <input id="dashHasta" class="cfg-input tcal-input" type="date" onchange="aplicarDashRangoCustom()"/>
+                    </div>
                 </div>
-                <div class="tcal-arrow">→</div>
-                <div>
-                  <div class="tcal-input-lbl">Hasta</div>
-                  <input id="dashHasta" class="cfg-input tcal-input" type="date" onchange="aplicarDashRangoCustom()"/>
-                </div>
-              </div>
             </div>
-          </div>
         </div>
-      </div>
-
+    </div>
+</div>
         <!-- MONOTRIBUTO -->
       <p class="sec-label">Monitor de Categoría · Monotributo</p>
       <div class="mono-card">

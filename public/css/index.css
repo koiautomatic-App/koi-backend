@@ -4373,6 +4373,42 @@ select.cfg-input:focus {
     font-size: 13px;
 }
 
+/* ==========================================
+   TOPBAR - FORZAR ALINEACIÓN DERECHA
+   ========================================== */
+
+.topbar-right {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 8px !important;
+    margin-left: auto !important;
+    width: auto !important;
+}
+
+/* Asegurar que el topbar use grid correctamente */
+.topbar {
+    display: grid !important;
+    grid-template-columns: 1fr auto 1fr !important;
+    align-items: center !important;
+    padding: 10px 24px !important;
+    border-bottom: 1px solid var(--border) !important;
+    background: var(--card) !important;
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 10 !important;
+    box-shadow: 0 1px 0 rgba(232, 98, 42, 0.08) !important;
+    gap: 16px !important;
+}
+
+/* Forzar que .topbar-left ocupe su espacio */
+.topbar-left {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 2px !important;
+    justify-self: start !important;
+}
+
 /* Responsive */
 @media (max-width: 600px) {
     .notif-dropdown {

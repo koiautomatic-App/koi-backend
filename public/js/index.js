@@ -2783,7 +2783,7 @@ function getMensajePorCondicionFiscal() {
     
     if (condicionFiscal === 'monotributo' || condicionFiscal === 'monotributista') {
         return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
-                Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de Monotributo</strong> y superar los límites de facturación.<br>
+                Facturar períodos anteriores puede afectar tu <strong>CATEGORÍA de MoFributo</strong> y superar los límites de facturación.<br>
                 Verificá antes de continuar.`;
     } else {
         return `📅 Las facturas se imputan al <strong>MES CORRIENTE</strong>.<br>
@@ -5634,6 +5634,7 @@ function irAComprobantesPendientes() {
     }
   }, 300);
 }
+
 
 // Al final de tu archivo .js, asegurate de exportarla globalmente:
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;

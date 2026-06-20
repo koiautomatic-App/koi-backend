@@ -588,6 +588,40 @@
     if (p.get('error') === 'auth_failed') err('No se pudo autenticar con Google.');
     if (p.get('registered')) ok('Cuenta creada. Ya podés ingresar.');
     if (p.get('tab') === 'register') switchTab('register');
+  // ============================================================
+//  APLICAR ESTILOS A LOS INPUTS DE LOGIN
+// ============================================================
+
+function aplicarEstilosLogin() {
+    const inputs = document.querySelectorAll('#pLogin input');
+    inputs.forEach(input => {
+        input.style.setProperty('border', '0.5px solid rgba(255,255,255,0.07)', 'important');
+        input.style.setProperty('border-color', 'rgba(255,255,255,0.07)', 'important');
+        input.style.setProperty('box-shadow', 'none', 'important');
+        input.style.setProperty('outline', 'none', 'important');
+        input.style.setProperty('background', 'rgba(255,255,255,0.025)', 'important');
+        input.style.setProperty('-webkit-box-shadow', 'none', 'important');
+        input.style.setProperty('border-radius', '10px', 'important');
+        
+        input.removeAttribute('required');
+        input.removeAttribute('aria-invalid');
+        input.removeAttribute('aria-required');
+    });
+    console.log('✅ Estilos aplicados a los inputs de login');
+}
+
+// Ejecutar al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    aplicarEstilosLogin();
+});
+
+// También aplicar cuando se cambia de tab
+const originalSwitchTab = switchTab;
+switchTab = function(t) {
+    originalSwitchTab(t);
+    setTimeout(aplicarEstilosLogin, 50);
+};
   </script>
+  
 </body>
 </html>

@@ -321,8 +321,14 @@
       display: none; align-items: center; gap: 8px;
       line-height: 1.4;
     }
-    .msg.err  { display:flex; background:rgba(239,68,68,0.06);  border:0.5px solid rgba(239,68,68,0.2);  color:#FCA5A5; }
-    .msg.ok   { display:flex; background:rgba(34,197,94,0.06);  border:0.5px solid rgba(34,197,94,0.2);  color:#86EFAC; }
+    .msg {
+    display: none !important;
+}
+.msg.show {
+    display: flex !important;
+}
+.msg.err.show  { background:rgba(239,68,68,0.06);  border:0.5px solid rgba(239,68,68,0.2);  color:#FCA5A5; }
+.msg.ok.show   { background:rgba(34,197,94,0.06);  border:0.5px solid rgba(34,197,94,0.2);  color:#86EFAC; }
 
     /* Botón submit */
     .btn-submit {
@@ -519,19 +525,25 @@
     }
 
     function clearMsg() {
-      document.getElementById('msgErr').style.display = 'none';
-      document.getElementById('msgOk').style.display  = 'none';
-    }
-    function err(t) {
-      document.getElementById('errTxt').textContent = t;
-      document.getElementById('msgErr').style.display = 'flex';
-      document.getElementById('msgOk').style.display  = 'none';
-    }
-    function ok(t) {
-      document.getElementById('okTxt').textContent = t;
-      document.getElementById('msgOk').style.display  = 'flex';
-      document.getElementById('msgErr').style.display = 'none';
-    }
+    document.getElementById('msgErr').classList.remove('show');
+    document.getElementById('msgErr').style.display = 'none';
+    document.getElementById('msgOk').classList.remove('show');
+    document.getElementById('msgOk').style.display  = 'none';
+}
+function err(t) {
+    document.getElementById('errTxt').textContent = t;
+    document.getElementById('msgOk').classList.remove('show');
+    document.getElementById('msgOk').style.display  = 'none';
+    document.getElementById('msgErr').classList.add('show');
+    document.getElementById('msgErr').style.display = 'flex';
+}
+function ok(t) {
+    document.getElementById('okTxt').textContent = t;
+    document.getElementById('msgErr').classList.remove('show');
+    document.getElementById('msgErr').style.display = 'none';
+    document.getElementById('msgOk').classList.add('show');
+    document.getElementById('msgOk').style.display  = 'flex';
+}
     function load(btn, sp, lbl, on) {
       document.getElementById(btn).disabled = on;
       document.getElementById(sp).style.display = on ? 'block' : 'none';

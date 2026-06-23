@@ -780,3 +780,255 @@ body {
         gap: 4px;
     }
 }
+/* ============================================================
+   ADMIN - BOTÓN NOTIFICAR Y MODAL
+   ============================================================ */
+
+/* --- Botón Notificar --- */
+.action-buttons .btn-notificar {
+    background: rgba(249, 115, 22, 0.1);
+    color: #f5a623;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+    border-radius: 6px;
+    padding: 5px 10px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    font-size: 0.7rem;
+    font-weight: 500;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.action-buttons .btn-notificar:hover {
+    background: rgba(249, 115, 22, 0.2);
+    box-shadow: 0 0 16px rgba(249, 115, 22, 0.15);
+    transform: translateY(-1px);
+}
+
+.action-buttons .btn-notificar i {
+    font-size: 0.8rem;
+}
+
+/* --- Modal de Notificación --- */
+#modalNotificacion {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0,0,0,0.8);
+    backdrop-filter: blur(5px);
+    z-index: 1000;
+    display: none;
+    align-items: center;
+    justify-content: center;
+}
+
+#modalNotificacion.active {
+    display: flex;
+}
+
+#modalNotificacion .modal-content {
+    background: #0D0D16;
+    border: 1px solid rgba(249, 115, 22, 0.2);
+    border-radius: 16px;
+    max-width: 480px;
+    width: 90%;
+    box-shadow: 0 24px 64px rgba(0,0,0,0.6);
+    animation: modalFadeIn 0.3s ease;
+}
+
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        transform: scale(0.95) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+#modalNotificacion .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 1rem 1.5rem;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+}
+
+#modalNotificacion .modal-header h2 {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: #F9FAFB;
+}
+
+#modalNotificacion .modal-header h2 i {
+    color: #f5a623;
+    margin-right: 8px;
+}
+
+#modalNotificacion .modal-close {
+    background: none;
+    border: none;
+    color: #6B7280;
+    font-size: 1.5rem;
+    cursor: pointer;
+    transition: color 0.2s;
+}
+
+#modalNotificacion .modal-close:hover {
+    color: #F9FAFB;
+}
+
+#modalNotificacion .modal-body {
+    padding: 1.5rem;
+}
+
+#modalNotificacion .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+    padding: 1rem 1.5rem;
+    border-top: 1px solid rgba(255,255,255,0.05);
+}
+
+/* --- Campos del modal --- */
+#modalNotificacion .cfg-field {
+    margin-bottom: 16px;
+}
+
+#modalNotificacion .cfg-field:last-child {
+    margin-bottom: 0;
+}
+
+#modalNotificacion .cfg-label {
+    display: block;
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #6B7280;
+    margin-bottom: 6px;
+}
+
+#modalNotificacion .cfg-input {
+    width: 100%;
+    padding: 10px 14px;
+    background: #111118;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 8px;
+    color: #F9FAFB;
+    font-size: 0.85rem;
+    font-family: 'Inter', sans-serif;
+    transition: border-color 0.2s;
+}
+
+#modalNotificacion .cfg-input:focus {
+    outline: none;
+    border-color: rgba(249, 115, 22, 0.4);
+}
+
+#modalNotificacion .cfg-input::placeholder {
+    color: #4B5563;
+}
+
+#modalNotificacion textarea.cfg-input {
+    resize: vertical;
+    min-height: 100px;
+}
+
+/* --- Botones del modal --- */
+#modalNotificacion .btn-cancel {
+    padding: 8px 18px;
+    border-radius: 8px;
+    background: transparent;
+    border: 1px solid rgba(255,255,255,0.05);
+    color: #6B7280;
+    cursor: pointer;
+    font-size: 0.8rem;
+    font-weight: 500;
+    transition: all 0.2s;
+}
+
+#modalNotificacion .btn-cancel:hover {
+    background: rgba(255,255,255,0.05);
+    color: #F9FAFB;
+}
+
+#modalNotificacion .btn-registrar {
+    padding: 8px 20px;
+    border-radius: 8px;
+    background: linear-gradient(135deg, #e8622a, #f5a623);
+    border: none;
+    color: white;
+    font-weight: 600;
+    cursor: pointer;
+    font-size: 0.8rem;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    transition: all 0.2s ease;
+}
+
+#modalNotificacion .btn-registrar:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(249, 115, 22, 0.3);
+}
+
+#modalNotificacion .btn-registrar:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+#modalNotificacion .btn-registrar i {
+    font-size: 0.8rem;
+}
+
+/* --- Mensaje de error --- */
+#notifError {
+    display: none;
+    color: #F87171;
+    font-size: 0.75rem;
+    margin-top: 8px;
+    padding: 8px 12px;
+    background: rgba(239,68,68,0.08);
+    border-radius: 6px;
+}
+
+/* --- Nombre del usuario en el modal --- */
+#notifUserName {
+    color: #F9FAFB;
+    font-weight: 600;
+}
+
+/* ============================================================
+   RESPONSIVE - MODAL
+   ============================================================ */
+@media (max-width: 600px) {
+    #modalNotificacion .modal-content {
+        width: 95%;
+        max-width: 100%;
+        margin: 1rem;
+    }
+    
+    #modalNotificacion .modal-header {
+        padding: 0.75rem 1rem;
+    }
+    
+    #modalNotificacion .modal-body {
+        padding: 1rem;
+    }
+    
+    #modalNotificacion .modal-footer {
+        flex-direction: column;
+        padding: 0.75rem 1rem;
+    }
+    
+    #modalNotificacion .modal-footer button {
+        width: 100%;
+        justify-content: center;
+    }
+}

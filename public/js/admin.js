@@ -334,11 +334,15 @@ async function fetchPendientes() {
                     
                     <td style="vertical-align: middle;">${planHtml}</td>
                     
+                    <!-- ===== ACCIONES CON BOTÓN DE NOTIFICACIÓN ===== -->
                     <td class="text-right" style="vertical-align: middle;">
-                        <div class="action-buttons">
+                        <div class="action-buttons" style="display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap;">
                             ${botonesAccion}
-                            <button class="btn-ver-detalle" type="button" onclick="verDetalleUsuario('${user._id}')">
-                                <i class="fas fa-eye"></i> Detalle
+                            <button class="btn-ver-detalle" type="button" onclick="verDetalleUsuario('${user._id}')" title="Ver detalle">
+                                <i class="fas fa-eye"></i>
+                            </button>
+                            <button class="btn-notificar" type="button" onclick="abrirModalNotificacion('${user._id}', '${escapeHtml(user.nombre || user.email)}')" title="Enviar notificación">
+                                <i class="fas fa-bell"></i>
                             </button>
                         </div>
                     </td>
@@ -711,3 +715,161 @@ setInterval(() => {
     }
     loadStats();
 }, 1200000);
+// ============================================================
+//  NOTIFICACIONES - ADMIN
+// ============================================================
+
+let userIdNotificacion = null;
+
+// Abrir modal para enviar notificación a un usuario
+function abrirModalNotificacion(userId, userName) {
+    userIdNotificacion = userId;
+    
+    // Crear el modal si no existe
+    let modal = document.getElementById('modalNotificacion');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'modalNotificacion';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = `
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2><i class="fas fa-bell" style="color: #f5a623;"></i> Enviar notificación</h2>
+                    <button class="modal-close" id="closeNotifModalBtn">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <div style="margin-bottom: 16px;">
+                        <p style="font-size: 13px; color: #8888aa;">
+                            <strong id="notifUserName">Usuario</strong>
+                        </p>
+                    </div>
+                    <div class="cfg-field" style="margin-bottom: 16px;">
+                        <label class="cfg-label" style="font-size: 11px; font-weight: 700; color: #44445a; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">Tipo de notificación</label>
+                        <select id="notifTipo" class="cfg-input" style="width: 100%; padding: 10px 14px; background: #17172a; border: 1px solid rgba(255,255,255,0.055); border-radius: 8px; color: #f0f0fa; font-size: 13px;">
+                            <option value="info">ℹ️ Informativa</option>
+                            <option value="success">✅ Éxito</option>
+                            <option value="warning">⚠️ Advertencia</option>
+                            <option value="update">🔄 Actualización</option>
+                            <option value="promo">🎁 Promoción</option>
+                        </select>
+                    </div>
+                    <div class="cfg-field">
+                        <label class="cfg-label" style="font-size: 11px; font-weight: 700; color: #44445a; text-transform: uppercase; letter-spacing: 1.5px; display: block; margin-bottom: 6px;">Mensaje</label>
+                        <textarea id="notifMensaje" class="cfg-input" rows="4" placeholder="Escribe el mensaje que quieres enviar al usuario..." style="width: 100%; padding: 10px 14px; background: #17172a; border: 1px solid rgba(255,255,255,0.055); border-radius: 8px; color: #f0f0fa; font-size: 13px; resize: vertical; min-height: 100px; font-family: 'Inter', sans-serif;"></textarea>
+                    </div>
+                    <div id="notifError" style="display:none; color: #ff3d57; font-size: 12px; margin-top: 8px; padding: 8px 12px; background: rgba(255,61,87,0.08); border-radius: 6px;"></div>
+                </div>
+                <div class="modal-footer" style="display: flex; justify-content: flex-end; gap: 12px; padding: 16px 24px; border-top: 1px solid rgba(255,255,255,0.055);">
+                    <button class="btn-cancel" onclick="cerrarModalNotificacion()" style="padding: 9px 18px; border-radius: 8px; background: transparent; border: 1px solid rgba(255,255,255,0.055); color: #8888aa; cursor: pointer; font-size: 13px; font-weight: 600;">Cancelar</button>
+                    <button class="btn-registrar" id="btnEnviarNotif" onclick="enviarNotificacionAdmin()" style="padding: 9px 20px; border-radius: 8px; background: linear-gradient(135deg, #e8622a, #f5a623); border: none; color: white; font-weight: 700; cursor: pointer; font-size: 13px; display: inline-flex; align-items: center; gap: 8px; transition: all 0.2s ease;">
+                        <i class="fas fa-paper-plane"></i>
+                        Enviar notificación
+                    </button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        
+        // Cerrar al hacer clic fuera
+        modal.addEventListener('click', function(e) {
+            if (e.target === modal) {
+                cerrarModalNotificacion();
+            }
+        });
+        
+        // Cerrar con la X
+        const closeBtn = document.getElementById('closeNotifModalBtn');
+        if (closeBtn) {
+            closeBtn.addEventListener('click', cerrarModalNotificacion);
+        }
+    }
+    
+    // Actualizar datos
+    document.getElementById('notifUserName').textContent = `Enviando a: ${userName}`;
+    document.getElementById('notifMensaje').value = '';
+    document.getElementById('notifError').style.display = 'none';
+    
+    modal.classList.add('active');
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+    
+    setTimeout(() => {
+        document.getElementById('notifMensaje').focus();
+    }, 200);
+}
+
+// Cerrar modal de notificación
+function cerrarModalNotificacion() {
+    const modal = document.getElementById('modalNotificacion');
+    if (modal) {
+        modal.classList.remove('active');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+    }
+    userIdNotificacion = null;
+}
+
+// Enviar notificación desde el admin
+async function enviarNotificacionAdmin() {
+    const mensaje = document.getElementById('notifMensaje').value.trim();
+    const tipo = document.getElementById('notifTipo').value;
+    const errorDiv = document.getElementById('notifError');
+    const btn = document.getElementById('btnEnviarNotif');
+    
+    // Validar
+    if (!mensaje) {
+        errorDiv.textContent = 'Escribí un mensaje para enviar.';
+        errorDiv.style.display = 'block';
+        document.getElementById('notifMensaje').focus();
+        return;
+    }
+    
+    if (mensaje.length < 5) {
+        errorDiv.textContent = 'El mensaje debe tener al menos 5 caracteres.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    if (!userIdNotificacion) {
+        errorDiv.textContent = 'Error: No se identificó al usuario.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    // Deshabilitar botón
+    btn.disabled = true;
+    btn.innerHTML = '<i class="fas fa-spinner fa-pulse"></i> Enviando...';
+    errorDiv.style.display = 'none';
+    
+    try {
+        const response = await fetch('/api/admin/notifications/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ 
+                userId: userIdNotificacion, 
+                mensaje, 
+                tipo 
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.ok) {
+            showToast(`✅ Notificación enviada correctamente`, 'success');
+            cerrarModalNotificacion();
+            // Recargar la tabla para actualizar
+            fetchPendientes();
+        } else {
+            errorDiv.textContent = data.error || 'Error al enviar la notificación';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('Error:', error);
+        errorDiv.textContent = 'Error de conexión. Intentá de nuevo.';
+        errorDiv.style.display = 'block';
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-paper-plane"></i> Enviar notificación';
+    }
+}

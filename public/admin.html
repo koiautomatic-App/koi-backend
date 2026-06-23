@@ -208,6 +208,45 @@
         </div>
     </div>
 
+    <!-- ===== MODAL ENVIAR NOTIFICACIÓN ===== -->
+    <div class="modal-overlay" id="modalNotificacion">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-bell" style="color: #f5a623;"></i> Enviar notificación</h2>
+                <button class="modal-close" id="closeNotifModalBtn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div style="margin-bottom: 16px;">
+                    <p style="font-size: 13px; color: #8888aa;">
+                        <strong id="notifUserName">Usuario</strong>
+                    </p>
+                </div>
+                <div class="cfg-field" style="margin-bottom: 16px;">
+                    <label class="cfg-label">Tipo de notificación</label>
+                    <select id="notifTipo" class="cfg-input">
+                        <option value="info">ℹ️ Informativa</option>
+                        <option value="success">✅ Éxito</option>
+                        <option value="warning">⚠️ Advertencia</option>
+                        <option value="update">🔄 Actualización</option>
+                        <option value="promo">🎁 Promoción</option>
+                    </select>
+                </div>
+                <div class="cfg-field">
+                    <label class="cfg-label">Mensaje</label>
+                    <textarea id="notifMensaje" class="cfg-input" rows="4" placeholder="Escribe el mensaje que quieres enviar al usuario..."></textarea>
+                </div>
+                <div id="notifError" style="display:none; color: #ff3d57; font-size: 12px; margin-top: 8px; padding: 8px 12px; background: rgba(255,61,87,0.08); border-radius: 6px;"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn-cancel" onclick="cerrarModalNotificacion()">Cancelar</button>
+                <button class="btn-registrar" id="btnEnviarNotif" onclick="enviarNotificacionAdmin()">
+                    <i class="fas fa-paper-plane"></i>
+                    Enviar notificación
+                </button>
+            </div>
+        </div>
+    </div>
+
     <div id="toastContainer" class="toast-container"></div>
 
     <script src="/js/admin.js"></script>

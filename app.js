@@ -103,6 +103,38 @@ app.use(
 app.use(cookieParser());
 
 // ============================================================
+// HEALTH CHECK PARA RENDER
+// ============================================================
+app.get('/health', (req, res) => {
+  res.status(200).json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    memory: process.memoryUsage(),
+    env: config.NODE_ENV
+  });
+});
+
+// Health check detallado para diagnóstico
+app.get('/health/detailed', async (req, res) => {
+  const checks = {
+    mongodb: false,
+    timestamp: new Date().toISOString()
+  };
+  
+  try {
+    const mongoose = require('mongoose');
+    checks.mongodb = mongoose.connection.readyState === 1;
+    checks.mongodbState = mongoose.connection.readyState;
+  } catch (e) {
+    checks.mongodb = false;
+    checks.mongodbError = e.message;
+  }
+  
+  res.status(200).json(checks);
+});
+
+// ============================================================
 // SESSION & PASSPORT
 // ============================================================
 app.use(session({
@@ -131,10 +163,47 @@ app.use(express.static(path.join(__dirname, 'public'), {
 }));
 
 // ============================================================
+// RUTAS DE LA API
+// ============================================================
+
+// Auth routes
+app.use('/auth', require('./routes/auth'));
+
+// API routes - Usuarios
+app.use('/api/me', require('./routes/api/me'));
+app.use('/api/orders', require('./routes/api/orders'));
+app.use('/api/integrations', require('./routes/api/integrations'));
+app.use('/api/admin', require('./routes/api/admin'));
+
+// ============================================================
+// NOTIFICACIONES - RUTAS
+// ============================================================
+app.use('/api/notifications', require('./routes/api/notifications'));
+
+// ============================================================
 // VIEW ENGINE
 // ============================================================
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
+
+// ============================================================
+// RUTAS PRINCIPALES
+// ============================================================
+app.get('/', (req, res) => {
+  res.redirect('/dashboard');
+});
+
+app.get('/dashboard', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'dashboard.html'));
+});
+
+app.get('/login', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'login.html'));
+});
+
+app.get('/admin', (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+});
 
 logger.info('✅ App configurada correctamente');
 module.exports = app;

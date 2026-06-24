@@ -10,6 +10,7 @@ router.get('/', requireAuthAPI, async (req, res) => {
         console.log('🔔 GET /api/notifications - Iniciando...');
         console.log('📌 Usuario ID:', req.user?._id);
         console.log('📌 Usuario email:', req.user?.email);
+        console.log('📌 req.userId:', req.userId);
         
         // Importar modelo dentro de la función para ver si hay error
         let Notification;
@@ -24,7 +25,13 @@ router.get('/', requireAuthAPI, async (req, res) => {
             });
         }
 
-        const userId = req.user._id;
+        const userId = req.userId || req.user?._id;
+        
+        if (!userId) {
+            console.error('❌ No se encontró userId');
+            return res.status(401).json({ error: 'Usuario no autenticado' });
+        }
+        
         const { limit = 20, page = 1, soloNoLeidas = false } = req.query;
         
         console.log(`📋 Filtros: limit=${limit}, page=${page}, soloNoLeidas=${soloNoLeidas}`);
@@ -89,10 +96,15 @@ router.post('/:id/read', requireAuthAPI, async (req, res) => {
             });
         }
 
-        const userId = req.user._id;
+        const userId = req.userId || req.user?._id;
+        
+        if (!userId) {
+            return res.status(401).json({ error: 'Usuario no autenticado' });
+        }
+        
         const notificationId = req.params.id;
         
-        console.log(`📖 Marcando notificación ${notificationId} como leída`);
+        console.log(`📖 Marcando notificación ${notificationId} como leída para usuario ${userId}`);
         
         const notification = await Notification.findOne({
             _id: notificationId,
@@ -138,7 +150,11 @@ router.post('/read-all', requireAuthAPI, async (req, res) => {
             });
         }
 
-        const userId = req.user._id;
+        const userId = req.userId || req.user?._id;
+        
+        if (!userId) {
+            return res.status(401).json({ error: 'Usuario no autenticado' });
+        }
         
         console.log(`📖 Marcando todas las notificaciones como leídas para usuario ${userId}`);
         

@@ -4417,3 +4417,11 @@ select.cfg-input:focus {
         max-width: 380px;
     }
 }
+/* ==========================================
+   TOPBAR - CENTRO VACÍO
+   ========================================== */
+
+.topbar-center {
+    /* Elemento vacío para ocupar el centro del grid */
+    /* No necesita estilos, solo existe para ocupar espacio */
+}

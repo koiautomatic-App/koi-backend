@@ -1,15 +1,33 @@
 const express = require('express');
 const router = express.Router();
 const { requireAuthAPI } = require('../../middleware/auth');
-const Notification = require('../../models/Notification');
 
 // ============================================================
 //  GET /api/notifications - Obtener notificaciones del usuario
 // ============================================================
 router.get('/', requireAuthAPI, async (req, res) => {
     try {
+        console.log('🔔 GET /api/notifications - Iniciando...');
+        console.log('📌 Usuario ID:', req.user?._id);
+        console.log('📌 Usuario email:', req.user?.email);
+        
+        // Importar modelo dentro de la función para ver si hay error
+        let Notification;
+        try {
+            Notification = require('../../models/Notification');
+            console.log('✅ Modelo Notification cargado correctamente');
+        } catch (err) {
+            console.error('❌ Error cargando modelo Notification:', err.message);
+            return res.status(500).json({ 
+                error: 'Error cargando modelo',
+                details: err.message 
+            });
+        }
+
         const userId = req.user._id;
         const { limit = 20, page = 1, soloNoLeidas = false } = req.query;
+        
+        console.log(`📋 Filtros: limit=${limit}, page=${page}, soloNoLeidas=${soloNoLeidas}`);
         
         const skip = (parseInt(page) - 1) * parseInt(limit);
         
@@ -19,15 +37,21 @@ router.get('/', requireAuthAPI, async (req, res) => {
             filter.leida = false;
         }
         
+        console.log('🔍 Buscando con filtro:', JSON.stringify(filter));
+        
         // Obtener notificaciones
         const notifications = await Notification.find(filter)
             .sort({ fechaCreacion: -1 })
             .skip(skip)
             .limit(parseInt(limit));
         
+        console.log(`✅ Encontradas ${notifications.length} notificaciones`);
+        
         // Contar total y no leídas
         const total = await Notification.countDocuments({ userId });
         const noLeidas = await Notification.countDocuments({ userId, leida: false });
+        
+        console.log(`📊 Total: ${total}, No leídas: ${noLeidas}`);
         
         res.json({
             ok: true,
@@ -39,8 +63,14 @@ router.get('/', requireAuthAPI, async (req, res) => {
         });
         
     } catch (error) {
-        console.error('Error obteniendo notificaciones:', error);
-        res.status(500).json({ error: 'Error al obtener notificaciones' });
+        console.error('❌ ERROR DETALLADO:', error);
+        console.error('❌ Stack:', error.stack);
+        console.error('❌ Mensaje:', error.message);
+        res.status(500).json({ 
+            error: 'Error al obtener notificaciones',
+            details: error.message,
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        });
     }
 });
 
@@ -49,8 +79,20 @@ router.get('/', requireAuthAPI, async (req, res) => {
 // ============================================================
 router.post('/:id/read', requireAuthAPI, async (req, res) => {
     try {
+        let Notification;
+        try {
+            Notification = require('../../models/Notification');
+        } catch (err) {
+            return res.status(500).json({ 
+                error: 'Error cargando modelo',
+                details: err.message 
+            });
+        }
+
         const userId = req.user._id;
         const notificationId = req.params.id;
+        
+        console.log(`📖 Marcando notificación ${notificationId} como leída`);
         
         const notification = await Notification.findOne({
             _id: notificationId,
@@ -65,14 +107,19 @@ router.post('/:id/read', requireAuthAPI, async (req, res) => {
         notification.fechaLectura = new Date();
         await notification.save();
         
+        console.log('✅ Notificación marcada como leída');
+        
         res.json({
             ok: true,
             notification
         });
         
     } catch (error) {
-        console.error('Error marcando notificación:', error);
-        res.status(500).json({ error: 'Error al marcar la notificación' });
+        console.error('❌ Error marcando notificación:', error);
+        res.status(500).json({ 
+            error: 'Error al marcar la notificación',
+            details: error.message 
+        });
     }
 });
 
@@ -81,21 +128,39 @@ router.post('/:id/read', requireAuthAPI, async (req, res) => {
 // ============================================================
 router.post('/read-all', requireAuthAPI, async (req, res) => {
     try {
+        let Notification;
+        try {
+            Notification = require('../../models/Notification');
+        } catch (err) {
+            return res.status(500).json({ 
+                error: 'Error cargando modelo',
+                details: err.message 
+            });
+        }
+
         const userId = req.user._id;
         
-        await Notification.updateMany(
+        console.log(`📖 Marcando todas las notificaciones como leídas para usuario ${userId}`);
+        
+        const result = await Notification.updateMany(
             { userId, leida: false },
             { leida: true, fechaLectura: new Date() }
         );
         
+        console.log(`✅ ${result.modifiedCount} notificaciones marcadas como leídas`);
+        
         res.json({
             ok: true,
-            message: 'Todas las notificaciones marcadas como leídas'
+            message: 'Todas las notificaciones marcadas como leídas',
+            modifiedCount: result.modifiedCount
         });
         
     } catch (error) {
-        console.error('Error marcando todas:', error);
-        res.status(500).json({ error: 'Error al marcar notificaciones' });
+        console.error('❌ Error marcando todas:', error);
+        res.status(500).json({ 
+            error: 'Error al marcar notificaciones',
+            details: error.message 
+        });
     }
 });
 

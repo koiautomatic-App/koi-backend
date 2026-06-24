@@ -12,6 +12,8 @@ const {
   listarIntegraciones,
   desvincularUsuario
 } = require('../../controllers/adminController');
+const User = require('../../models/User');
+const Notification = require('../../models/Notification');
 
 // ============================================================
 //  RUTAS EXISTENTES
@@ -32,13 +34,20 @@ router.post('/desvincular', requireAuthAPI, requireAdmin, desvincularUsuario);
 // ============================================================
 router.post('/notifications/send', requireAuthAPI, requireAdmin, async (req, res) => {
     try {
-        const { userId, mensaje, tipo } = req.body;
-        const User = require('../../models/User');
-        const Notification = require('../../models/Notification');
+        const { userId, titulo, mensaje, tipo } = req.body;
+        
+        console.log('📨 Enviando notificación:');
+        console.log('  👤 userId:', userId);
+        console.log('  📌 titulo:', titulo);
+        console.log('  📝 mensaje:', mensaje);
+        console.log('  🏷️ tipo:', tipo);
         
         // Validar campos requeridos
         if (!userId) {
             return res.status(400).json({ error: 'El userId es requerido' });
+        }
+        if (!titulo || titulo.trim().length === 0) {
+            return res.status(400).json({ error: 'El titulo es requerido' });
         }
         if (!mensaje || mensaje.trim().length === 0) {
             return res.status(400).json({ error: 'El mensaje es requerido' });
@@ -56,6 +65,7 @@ router.post('/notifications/send', requireAuthAPI, requireAdmin, async (req, res
         // Crear notificación
         const notification = new Notification({
             userId,
+            titulo: titulo.trim(),
             mensaje: mensaje.trim(),
             tipo: tipo || 'info',
             leida: false,
@@ -64,11 +74,12 @@ router.post('/notifications/send', requireAuthAPI, requireAdmin, async (req, res
         
         await notification.save();
         
-        // Respuesta exitosa
+        console.log(`✅ Notificación enviada a ${user.nombre || user.email}: ${titulo}`);
+        
         res.json({
             ok: true,
             notification,
-            message: `Notificación enviada a ${user.nombre || user.email}`
+            message: `Notificación enviada a ${user.nombre || user.email || 'KOI-FACTURA'}`
         });
         
     } catch (error) {

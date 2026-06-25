@@ -5689,9 +5689,16 @@ function _reproducirTono() {
 function reproducirSonidoNotificacion() {
     const audio = new Audio('/sounds/notification.mp3');
     audio.volume = 0.5;
-    audio.play()
-        .then(() => console.log('🔊 Sonido reproducido (archivo)'))
-        .catch(() => _reproducirTono());
+
+    let fallbackUsado = false;
+    const fallback = () => {
+        if (fallbackUsado) return;
+        fallbackUsado = true;
+        _reproducirTono();
+    };
+
+    audio.onerror = fallback;      // archivo no encontrado / CORS / formato
+    audio.play().catch(fallback);  // autoplay bloqueado por el navegador
 }
 
 // Desbloquear el AudioContext compartido con el primer gesto del usuario

@@ -5644,7 +5644,7 @@ let _pollingInterval = null;
 const NOTIFICACIONES_POLLING_INTERVAL = 30000;
 
 // ============================================================
-//  REPRODUCIR SONIDO DE NOTIFICACIÓN (Web Audio API)
+//  SONIDO DE NOTIFICACIÓN (Web Audio API)
 // ============================================================
 function reproducirSonidoNotificacion() {
     try {
@@ -5979,6 +5979,48 @@ function iniciarPollingNotificaciones() {
         }
     }, NOTIFICACIONES_POLLING_INTERVAL);
 }
+
+// ============================================================
+//  ACTIVAR SONIDO CON INTERACCIÓN DEL USUARIO
+// ============================================================
+let audioActivado = false;
+
+function activarAudioContext() {
+    if (audioActivado) return;
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume().then(() => {
+                audioActivado = true;
+                console.log('🔊 AudioContext activado - las notificaciones sonarán');
+            }).catch(err => {
+                console.warn('⚠️ Error activando AudioContext:', err);
+            });
+        } else {
+            audioActivado = true;
+            console.log('🔊 AudioContext ya está activo');
+        }
+    } catch(e) {
+        console.warn('⚠️ Error con AudioContext:', e);
+    }
+}
+
+// Activar con el primer clic del usuario
+document.addEventListener('click', function activarConClick() {
+    activarAudioContext();
+    document.removeEventListener('click', activarConClick);
+}, { once: true });
+
+// Activar con el primer toque (móvil)
+document.addEventListener('touchstart', function activarConTouch() {
+    activarAudioContext();
+    document.removeEventListener('touchstart', activarConTouch);
+}, { once: true });
+
+// Intentar activar automáticamente
+setTimeout(() => {
+    activarAudioContext();
+}, 100);
 
 // ============================================================
 //  INICIALIZAR SISTEMA DE NOTIFICACIONES

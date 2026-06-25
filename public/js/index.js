@@ -5644,11 +5644,33 @@ let _pollingInterval = null;
 const NOTIFICACIONES_POLLING_INTERVAL = 30000;
 
 // ============================================================
-//  SONIDO DE NOTIFICACIÓN (Web Audio API)
+//  REPRODUCIR SONIDO DE NOTIFICACIÓN (CON ARCHIVO DE AUDIO)
 // ============================================================
 function reproducirSonidoNotificacion() {
     try {
+        // Intentar reproducir con archivo de audio
+        const audio = new Audio('/sounds/notification.mp3');
+        audio.volume = 0.5;
+        audio.play().catch(err => {
+            console.warn('⚠️ Error con archivo de audio, usando fallback:', err);
+            reproducirSonidoFallback();
+        });
+        console.log('🔊 Sonido reproducido con archivo');
+    } catch (error) {
+        console.warn('⚠️ Error en sonido:', error);
+        reproducirSonidoFallback();
+    }
+}
+
+// ============================================================
+//  FALLBACK: Sonido con Web Audio API (si el archivo falla)
+// ============================================================
+function reproducirSonidoFallback() {
+    try {
         const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        if (audioCtx.state === 'suspended') {
+            audioCtx.resume();
+        }
         const oscillator = audioCtx.createOscillator();
         const gainNode = audioCtx.createGain();
         oscillator.connect(gainNode);
@@ -5675,8 +5697,9 @@ function reproducirSonidoNotificacion() {
                 osc2.stop(audioCtx2.currentTime + 0.2);
             } catch(e) {}
         }, 200);
+        console.log('🔊 Sonido reproducido (fallback)');
     } catch (error) {
-        console.warn('⚠️ Error reproduciendo sonido:', error);
+        console.warn('⚠️ Error en sonido fallback:', error);
     }
 }
 
@@ -5731,7 +5754,11 @@ function mostrarToastNotificacion(notificacion) {
     if (!notificacion) return;
     
     // ✅ SONIDO
-    reproducirSonidoNotificacion();
+    try {
+        reproducirSonidoNotificacion();
+    } catch(e) {
+        console.warn('⚠️ Error reproduciendo sonido en toast:', e);
+    }
     
     if (typeof toast === 'function') {
         const icono = getIconoNotificacion(notificacion.tipo);

@@ -34,20 +34,18 @@ router.post('/desvincular', requireAuthAPI, requireAdmin, desvincularUsuario);
 // ============================================================
 router.post('/notifications/send', requireAuthAPI, requireAdmin, async (req, res) => {
     try {
-        const { userId, titulo, mensaje, tipo } = req.body;
-        
+        const { userId, mensaje, tipo } = req.body;
+        const User = require('../../models/User');
+        const Notification = require('../../models/Notification');
+
         console.log('📨 Enviando notificación:');
         console.log('  👤 userId:', userId);
-        console.log('  📌 titulo:', titulo);
         console.log('  📝 mensaje:', mensaje);
         console.log('  🏷️ tipo:', tipo);
-        
+
         // Validar campos requeridos
         if (!userId) {
             return res.status(400).json({ error: 'El userId es requerido' });
-        }
-        if (!titulo || titulo.trim().length === 0) {
-            return res.status(400).json({ error: 'El titulo es requerido' });
         }
         if (!mensaje || mensaje.trim().length === 0) {
             return res.status(400).json({ error: 'El mensaje es requerido' });
@@ -55,33 +53,49 @@ router.post('/notifications/send', requireAuthAPI, requireAdmin, async (req, res
         if (mensaje.trim().length < 5) {
             return res.status(400).json({ error: 'El mensaje debe tener al menos 5 caracteres' });
         }
-        
+
         // Verificar que el usuario existe
         const user = await User.findById(userId);
         if (!user) {
             return res.status(404).json({ error: 'Usuario no encontrado' });
         }
-        
-        // Crear notificación
+
+        // ✅ GENERAR TÍTULO AUTOMÁTICAMENTE SEGÚN EL TIPO
+        const titulosPorTipo = {
+            'info': 'ℹ️ Información',
+            'success': '✅ Éxito',
+            'warning': '⚠️ Advertencia',
+            'error': '❌ Error',
+            'factura': '📄 Factura',
+            'cae': '🏷️ CAE',
+            'sistema': '⚙️ Sistema',
+            'suscripcion': '💳 Suscripción',
+            'integracion': '🔗 Integración',
+            'arca': '🏛️ ARCA'
+        };
+
+        const titulo = titulosPorTipo[tipo] || '📬 Notificación';
+
+        // Crear notificación con título automático
         const notification = new Notification({
             userId,
-            titulo: titulo.trim(),
+            titulo: titulo,                     // ✅ TÍTULO GENERADO
             mensaje: mensaje.trim(),
             tipo: tipo || 'info',
             leida: false,
             fechaCreacion: new Date()
         });
-        
+
         await notification.save();
-        
+
         console.log(`✅ Notificación enviada a ${user.nombre || user.email}: ${titulo}`);
-        
+
         res.json({
             ok: true,
             notification,
             message: `Notificación enviada a ${user.nombre || user.email || 'KOI-FACTURA'}`
         });
-        
+
     } catch (error) {
         console.error('❌ Error enviando notificación:', error);
         res.status(500).json({ 

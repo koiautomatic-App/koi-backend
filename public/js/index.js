@@ -6121,7 +6121,55 @@ if (document.readyState === 'loading') {
 } else {
     setTimeout(initSistemaNotificaciones, 500);
 }
+// ============================================================
+//  INICIALIZAR FILTRO "TODOS" EN COMPROBANTES
+// ============================================================
 
+function initFiltroTodos() {
+    // Asegurar que _filtroTipo sea 'todos'
+    if (typeof _filtroTipo !== 'undefined') {
+        _filtroTipo = 'todos';
+    }
+    
+    // Activar visualmente el botón "Todos"
+    document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
+    const btnTodos = document.querySelector('.filtro-btn#ftodos') || 
+                     document.querySelector('.filtro-btn[onclick*="todos"]') ||
+                     document.querySelector('.filtro-btn:first-child');
+    if (btnTodos) {
+        btnTodos.classList.add('active');
+        console.log('✅ Filtro "Todos" activado por defecto');
+    }
+    
+    // Recargar comprobantes si la función existe
+    if (typeof cargarTodosComprobantes === 'function') {
+        cargarTodosComprobantes(1, '');
+    }
+}
+
+// Modificar mostrarVista para inicializar filtro al entrar a comprobantes
+const originalMostrarVista = window.mostrarVista || function() {};
+window.mostrarVista = function(vista) {
+    // Llamar a la función original
+    if (typeof originalMostrarVista === 'function') {
+        originalMostrarVista(vista);
+    }
+    
+    // Si es la vista de comprobantes, inicializar filtro
+    if (vista === 'comprobantes') {
+        setTimeout(initFiltroTodos, 150);
+    }
+};
+
+// Ejecutar al cargar la página
+document.addEventListener('DOMContentLoaded', function() {
+    setTimeout(function() {
+        const vistaComprobantes = document.getElementById('vista-comprobantes');
+        if (vistaComprobantes && vistaComprobantes.style.display !== 'none') {
+            initFiltroTodos();
+        }
+    }, 500);
+});
 // ============================================================
 //  EXPORTS GLOBALES
 // ============================================================

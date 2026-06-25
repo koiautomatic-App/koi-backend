@@ -5635,15 +5635,50 @@ function irAComprobantesPendientes() {
   }, 300);
 }
 // ============================================================
-//  SISTEMA DE NOTIFICACIONES - KOI (VERSIÓN ÚNICA)
-//  Endpoint: /api/notifications (con "s")
+//  SISTEMA DE NOTIFICACIONES - KOI (CON SONIDO Y BADGE)
 // ============================================================
 
-// Estado de notificaciones
 let _notificaciones = [];
 let _notificacionesNoLeidas = 0;
 let _pollingInterval = null;
 const NOTIFICACIONES_POLLING_INTERVAL = 30000;
+
+// ============================================================
+//  REPRODUCIR SONIDO DE NOTIFICACIÓN (Web Audio API)
+// ============================================================
+function reproducirSonidoNotificacion() {
+    try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const oscillator = audioCtx.createOscillator();
+        const gainNode = audioCtx.createGain();
+        oscillator.connect(gainNode);
+        gainNode.connect(audioCtx.destination);
+        oscillator.frequency.value = 800;
+        oscillator.type = 'sine';
+        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
+        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
+        oscillator.start(audioCtx.currentTime);
+        oscillator.stop(audioCtx.currentTime + 0.3);
+        
+        setTimeout(() => {
+            try {
+                const audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
+                const osc2 = audioCtx2.createOscillator();
+                const gain2 = audioCtx2.createGain();
+                osc2.connect(gain2);
+                gain2.connect(audioCtx2.destination);
+                osc2.frequency.value = 1000;
+                osc2.type = 'sine';
+                gain2.gain.setValueAtTime(0.2, audioCtx2.currentTime);
+                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx2.currentTime + 0.2);
+                osc2.start(audioCtx2.currentTime);
+                osc2.stop(audioCtx2.currentTime + 0.2);
+            } catch(e) {}
+        }, 200);
+    } catch (error) {
+        console.warn('⚠️ Error reproduciendo sonido:', error);
+    }
+}
 
 // ============================================================
 //  OBTENER NOTIFICACIONES
@@ -5673,7 +5708,7 @@ window.obtenerNotificaciones = async function() {
 };
 
 // ============================================================
-//  ACTUALIZAR BADGE
+//  ACTUALIZAR BADGE (CÍRCULO ROJO)
 // ============================================================
 function actualizarBadgeNotificaciones() {
     const badge = document.getElementById('notifBadge');
@@ -5686,6 +5721,23 @@ function actualizarBadgeNotificaciones() {
     } else {
         badge.style.display = 'none';
         badge.classList.add('hidden');
+    }
+}
+
+// ============================================================
+//  MOSTRAR TOAST CON SONIDO
+// ============================================================
+function mostrarToastNotificacion(notificacion) {
+    if (!notificacion) return;
+    
+    // ✅ SONIDO
+    reproducirSonidoNotificacion();
+    
+    if (typeof toast === 'function') {
+        const icono = getIconoNotificacion(notificacion.tipo);
+        toast(`${icono} ${notificacion.titulo}: ${notificacion.mensaje}`, notificacion.tipo || 'info');
+    } else {
+        console.log(`🔔 ${notificacion.titulo}: ${notificacion.mensaje}`);
     }
 }
 
@@ -5707,6 +5759,25 @@ function formatFechaNotificacion(fecha) {
     if (diffDias === 1) return 'Ayer';
     if (diffDias < 7) return `Hace ${diffDias} días`;
     return notifDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// ============================================================
+//  OBTENER ICONO
+// ============================================================
+function getIconoNotificacion(tipo) {
+    const iconos = {
+        'info': 'ℹ️',
+        'success': '✅',
+        'warning': '⚠️',
+        'error': '❌',
+        'factura': '📄',
+        'cae': '🏷️',
+        'sistema': '⚙️',
+        'suscripcion': '💳',
+        'integracion': '🔗',
+        'arca': '🏛️'
+    };
+    return iconos[tipo] || '📬';
 }
 
 // ============================================================
@@ -5755,7 +5826,7 @@ window.marcarTodasComoLeidas = async function() {
 };
 
 // ============================================================
-//  MOSTRAR MODAL DE NOTIFICACIONES (ESTILO KOI)
+//  MOSTRAR MODAL DE NOTIFICACIONES
 // ============================================================
 window.mostrarNotificacionesCentro = function() {
     document.querySelectorAll('.notif-centro, .notif-overlay-koi').forEach(el => el.remove());
@@ -5860,18 +5931,66 @@ window.mostrarNotificacionesCentro = function() {
 };
 
 // ============================================================
+//  POLLING DE NOTIFICACIONES
+// ============================================================
+function iniciarPollingNotificaciones() {
+    if (_pollingInterval) {
+        clearInterval(_pollingInterval);
+        _pollingInterval = null;
+    }
+    
+    obtenerNotificaciones();
+    
+    _pollingInterval = setInterval(async () => {
+        try {
+            const res = await fetch('/api/notifications', {
+                credentials: 'include',
+                headers: { 'Cache-Control': 'no-cache' }
+            });
+            
+            if (!res.ok) return;
+            
+            const data = await res.json();
+            const nuevasNotificaciones = data.notificaciones || [];
+            const nuevasNoLeidas = data.noLeidas || 0;
+            
+            const notificacionesActualesIds = new Set(_notificaciones.map(n => n._id));
+            const notificacionesNuevas = nuevasNotificaciones.filter(n => !notificacionesActualesIds.has(n._id));
+            
+            _notificaciones = nuevasNotificaciones;
+            const cambioNoLeidas = nuevasNoLeidas - _notificacionesNoLeidas;
+            _notificacionesNoLeidas = nuevasNoLeidas;
+            
+            actualizarBadgeNotificaciones();
+            
+            if (cambioNoLeidas > 0) {
+                notificacionesNuevas
+                    .filter(n => !n.leida)
+                    .forEach(n => mostrarToastNotificacion(n));
+            }
+            
+            const panel = document.getElementById('notifPanel');
+            if (panel && panel.classList.contains('open')) {
+                renderizarNotificacionesEnPanel(_notificaciones);
+            }
+            
+        } catch (error) {
+            console.warn('⚠️ Error en polling de notificaciones:', error.message);
+        }
+    }, NOTIFICACIONES_POLLING_INTERVAL);
+}
+
+// ============================================================
 //  INICIALIZAR SISTEMA DE NOTIFICACIONES
 // ============================================================
 function initSistemaNotificaciones() {
     console.log('🔔 Inicializando sistema de notificaciones...');
-    
     obtenerNotificaciones();
     
     const notifBtn = document.getElementById('notifBtn');
     if (notifBtn) {
         const newBtn = notifBtn.cloneNode(true);
         notifBtn.parentNode.replaceChild(newBtn, notifBtn);
-        
         newBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
@@ -5879,34 +5998,9 @@ function initSistemaNotificaciones() {
             mostrarNotificacionesCentro();
         });
         console.log('✅ Botón de notificaciones configurado');
-    } else {
-        console.warn('⚠️ Botón de notificaciones no encontrado');
-        const topbarRight = document.querySelector('.topbar-right') || document.querySelector('.topbar');
-        if (topbarRight) {
-            const btn = document.createElement('button');
-            btn.id = 'notifBtn';
-            btn.className = 'topbar-notif-btn';
-            btn.title = 'Notificaciones';
-            btn.innerHTML = `
-                <span class="material-icons" style="font-size:22px;">notifications</span>
-                <span id="notifBadge" class="notif-badge" style="display:none;position:absolute;top:2px;right:4px;background:#FF3B30;color:white;font-size:9px;font-weight:700;min-width:18px;height:18px;border-radius:10px;display:flex;align-items:center;justify-content:center;padding:0 5px;border:2px solid #0a0e1a;">0</span>
-            `;
-            topbarRight.prepend(btn);
-            btn.addEventListener('click', function(e) {
-                e.preventDefault();
-                mostrarNotificacionesCentro();
-            });
-            console.log('✅ Botón de notificaciones creado');
-        }
     }
     
-    if (_pollingInterval) {
-        clearInterval(_pollingInterval);
-    }
-    _pollingInterval = setInterval(() => {
-        obtenerNotificaciones();
-    }, NOTIFICACIONES_POLLING_INTERVAL);
-    
+    iniciarPollingNotificaciones();
     console.log('✅ Sistema de notificaciones inicializado');
 }
 

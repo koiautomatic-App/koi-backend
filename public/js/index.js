@@ -1523,13 +1523,21 @@ const DASH_PRESETS = {
   anio: 'Este año',
 };
 
+// ============================================================
+//  INICIALIZAR PERÍODO DEL DASHBOARD - "TODO EL TIEMPO"
+// ============================================================
 function _initDashPeriod() {
-  const hoy = new Date();
-  _rangoDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-  _rangoHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-  _syncDashInputs();
-  _updateTopbarBadge('Este mes');
-  _recargarDashConPeriodo();  // 👈 Agregar esta línea para cargar datos
+    // ✅ Cambiar a "Todo" por defecto"
+    _rangoDesde = null;
+    _rangoHasta = null;
+    _dashDesde = null;
+    _dashHasta = null;
+    
+    _syncDashInputs();
+    _updateTopbarBadge('Todo');
+    _recargarDashConPeriodo();
+    
+    console.log('📌 Dashboard inicializado con período: TODO');
 }
 
 function toggleDashCalendario() {

@@ -6131,6 +6131,253 @@ window.cerrarPanelNotificaciones = cerrarPanelNotificaciones;
 window.initNotificaciones = initNotificaciones;
 
 console.log('✅ Sistema de notificaciones cargado correctamente');
+// ============================================================
+//  SISTEMA DE NOTIFICACIONES - KOI
+// ============================================================
 
+// Estado de notificaciones
+let _notificaciones = [];
+let _notificacionesNoLeidas = 0;
+
+// ============================================================
+//  OBTENER NOTIFICACIONES
+// ============================================================
+window.obtenerNotificaciones = async function() {
+    try {
+        const res = await fetch('/api/notifications', {
+            credentials: 'include',
+            headers: { 'Cache-Control': 'no-cache' }
+        });
+        
+        if (!res.ok) {
+            if (res.status === 401) return [];
+            throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        _notificaciones = data.notifications || [];
+        _notificacionesNoLeidas = data.noLeidas || 0;
+        
+        actualizarBadgeNotificaciones();
+        return _notificaciones;
+    } catch (error) {
+        console.warn('⚠️ Error obteniendo notificaciones:', error.message);
+        return [];
+    }
+};
+
+// ============================================================
+//  ACTUALIZAR BADGE
+// ============================================================
+function actualizarBadgeNotificaciones() {
+    const badge = document.getElementById('notifBadge');
+    if (!badge) return;
+    
+    if (_notificacionesNoLeidas > 0) {
+        badge.textContent = _notificacionesNoLeidas > 99 ? '99+' : _notificacionesNoLeidas;
+        badge.style.display = 'flex';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+
+// ============================================================
+//  FORMATO DE FECHA
+// ============================================================
+function formatFechaNotificacion(fecha) {
+    if (!fecha) return 'Recién';
+    const ahora = new Date();
+    const notifDate = new Date(fecha);
+    const diffMs = ahora - notifDate;
+    const diffMin = Math.floor(diffMs / 60000);
+    const diffHoras = Math.floor(diffMs / 3600000);
+    const diffDias = Math.floor(diffMs / 86400000);
+    
+    if (diffMin < 1) return 'Ahora mismo';
+    if (diffMin < 60) return `Hace ${diffMin} min`;
+    if (diffHoras < 24) return `Hace ${diffHoras} h`;
+    if (diffDias === 1) return 'Ayer';
+    if (diffDias < 7) return `Hace ${diffDias} días`;
+    return notifDate.toLocaleDateString('es-AR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+}
+
+// ============================================================
+//  MARCAR NOTIFICACIÓN COMO LEÍDA
+// ============================================================
+window.marcarNotificacionComoLeida = async function(id) {
+    if (!id) return;
+    try {
+        const res = await fetch(`/api/notifications/${id}/read`, {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+            const notif = _notificaciones.find(n => n._id === id);
+            if (notif && !notif.leida) {
+                notif.leida = true;
+                _notificacionesNoLeidas = Math.max(0, _notificacionesNoLeidas - 1);
+                actualizarBadgeNotificaciones();
+            }
+        }
+    } catch (error) {
+        console.warn('Error marcando notificación:', error);
+    }
+};
+
+// ============================================================
+//  MARCAR TODAS COMO LEÍDAS
+// ============================================================
+window.marcarTodasComoLeidas = async function() {
+    if (_notificacionesNoLeidas === 0) return;
+    try {
+        const res = await fetch('/api/notifications/read-all', {
+            method: 'POST',
+            credentials: 'include',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (res.ok) {
+            _notificaciones.forEach(n => { n.leida = true; });
+            _notificacionesNoLeidas = 0;
+            actualizarBadgeNotificaciones();
+        }
+    } catch (error) {
+        console.warn('Error marcando todas:', error);
+    }
+};
+
+// ============================================================
+//  MOSTRAR MODAL DE NOTIFICACIONES
+// ============================================================
+window.mostrarNotificacionesCentro = function() {
+    document.querySelectorAll('.notif-centro, .notif-overlay-koi').forEach(el => el.remove());
+    
+    if (!_notificaciones || _notificaciones.length === 0) {
+        // Mostrar mensaje de no hay notificaciones
+        const overlay = document.createElement('div');
+        overlay.className = 'notif-overlay-koi';
+        overlay.onclick = function() { this.remove(); document.querySelector('.notif-centro')?.remove(); };
+        document.body.appendChild(overlay);
+        
+        const modal = document.createElement('div');
+        modal.className = 'notif-centro';
+        modal.innerHTML = `
+            <div style="padding:40px;text-align:center;">
+                <div style="font-size:48px;margin-bottom:16px;">🔔</div>
+                <div style="color:#e8e8f0;font-size:18px;font-weight:600;">No hay notificaciones</div>
+                <div style="color:#6a6f82;font-size:14px;margin-top:8px;">Las notificaciones aparecerán aquí</div>
+                <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();" style="margin-top:20px;background:linear-gradient(135deg,#ff6b00,#e05500);border:none;border-radius:10px;color:#fff;font-weight:600;font-size:14px;cursor:pointer;padding:10px 24px;">Cerrar</button>
+            </div>
+        `;
+        document.body.appendChild(modal);
+        return;
+    }
+    
+    // Overlay
+    const overlay = document.createElement('div');
+    overlay.className = 'notif-overlay-koi';
+    overlay.onclick = function() { this.remove(); document.querySelector('.notif-centro')?.remove(); };
+    document.body.appendChild(overlay);
+    
+    // Modal
+    const modal = document.createElement('div');
+    modal.className = 'notif-centro';
+    
+    // Header
+    const header = document.createElement('div');
+    header.className = 'notif-header';
+    header.innerHTML = `
+        <div class="notif-title">
+            <span style="font-size:18px;">🔔</span>
+            Notificaciones
+            <span class="notif-badge">${_notificacionesNoLeidas || 0} nuevas</span>
+        </div>
+        <button class="notif-close" onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();">✕</button>
+    `;
+    modal.appendChild(header);
+    
+    // Lista
+    const list = document.createElement('div');
+    list.className = 'notif-list';
+    
+    const iconMap = { success: '✅', warning: '⚠️', error: '❌', info: 'ℹ️' };
+    
+    _notificaciones.forEach(n => {
+        const item = document.createElement('div');
+        item.className = `notif-item ${!n.leida ? 'unread' : ''}`;
+        item.onclick = () => {
+            marcarNotificacionComoLeida(n._id);
+            setTimeout(() => {
+                obtenerNotificaciones().then(() => {
+                    document.querySelector('.notif-centro')?.remove();
+                    document.querySelector('.notif-overlay-koi')?.remove();
+                    mostrarNotificacionesCentro();
+                });
+            }, 300);
+        };
+        
+        const tipo = n.tipo || 'info';
+        const iconColor = tipo === 'success' ? '#ff8c00' : tipo === 'warning' ? '#ff6b00' : tipo === 'error' ? '#f87171' : '#63b3ed';
+        const iconBg = tipo === 'success' ? 'rgba(255,140,0,0.10)' : tipo === 'warning' ? 'rgba(255,107,0,0.10)' : tipo === 'error' ? 'rgba(248,113,113,0.10)' : 'rgba(99,179,237,0.10)';
+        
+        item.innerHTML = `
+            <div class="notif-icon ${tipo}" style="background:${iconBg};color:${iconColor};">${iconMap[tipo] || 'ℹ️'}</div>
+            <div class="notif-content">
+                <div class="notif-title-item">${n.titulo || 'Sin título'}</div>
+                <div class="notif-message">${n.mensaje || 'Sin mensaje'}</div>
+                <div class="notif-time">${formatFechaNotificacion(n.fechaCreacion)}</div>
+            </div>
+            ${!n.leida ? '<div class="notif-dot"></div>' : ''}
+        `;
+        list.appendChild(item);
+    });
+    
+    modal.appendChild(list);
+    
+    // Footer
+    const footer = document.createElement('div');
+    footer.className = 'notif-footer';
+    footer.innerHTML = `
+        <span class="notif-count">${_notificaciones.length} notificaciones · ${_notificacionesNoLeidas || 0} sin leer</span>
+        <div class="notif-actions">
+            <button class="notif-btn-primary" onclick="marcarTodasComoLeidas();setTimeout(()=>{document.querySelector('.notif-centro')?.remove();document.querySelector('.notif-overlay-koi')?.remove();mostrarNotificacionesCentro();},300);">✓ Marcar todas</button>
+            <button class="notif-btn-secondary" onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();">Cerrar</button>
+        </div>
+    `;
+    modal.appendChild(footer);
+    
+    document.body.appendChild(modal);
+};
+
+// ============================================================
+//  INICIALIZAR NOTIFICACIONES
+// ============================================================
+function initNotificaciones() {
+    console.log('🔔 Inicializando sistema de notificaciones...');
+    obtenerNotificaciones();
+    
+    // Configurar botón de campana
+    const notifBtn = document.getElementById('notifBtn');
+    if (notifBtn) {
+        notifBtn.onclick = function(e) {
+            e.preventDefault();
+            mostrarNotificacionesCentro();
+        };
+    } else {
+        console.warn('⚠️ Botón de notificaciones no encontrado');
+    }
+    
+    // Configurar polling cada 30 segundos
+    setInterval(() => {
+        obtenerNotificaciones();
+    }, 30000);
+}
+
+// Inicializar cuando el DOM esté listo
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initNotificaciones);
+} else {
+    initNotificaciones();
+}
 // Al final de tu archivo .js, asegurate de exportarla globalmente:
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;

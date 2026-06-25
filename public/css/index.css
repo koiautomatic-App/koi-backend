@@ -4425,3 +4425,441 @@ select.cfg-input:focus {
     /* Elemento vacío para ocupar el centro del grid */
     /* No necesita estilos, solo existe para ocupar espacio */
 }
+/* ============================================================
+   NOTIFICACIONES - ESTILO KOI
+   Paleta naranja (#ff6b00, #ff8c00)
+   ============================================================ */
+
+/* ============================================================
+   OVERLAY
+   ============================================================ */
+.notif-overlay-koi {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(6, 8, 16, 0.75);
+    backdrop-filter: blur(8px);
+    z-index: 99998;
+    animation: koiFadeIn 0.25s ease;
+}
+
+/* ============================================================
+   MODAL PRINCIPAL
+   ============================================================ */
+.notif-centro {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 520px;
+    max-width: 94vw;
+    max-height: 82vh;
+    background: #0e1119;
+    border: 1px solid rgba(255, 107, 0, 0.18);
+    border-radius: 18px;
+    z-index: 99999;
+    box-shadow:
+        0 0 0 1px rgba(255, 107, 0, 0.06),
+        0 32px 64px rgba(0, 0, 0, 0.65),
+        0 0 40px rgba(255, 107, 0, 0.04) inset;
+    font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+    overflow: hidden;
+    animation: koiModalIn 0.3s cubic-bezier(0.34, 1.4, 0.64, 1);
+    outline: none;
+}
+
+/* Línea naranja superior — acento KOI */
+.notif-centro::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 10%;
+    right: 10%;
+    height: 2px;
+    background: linear-gradient(90deg,
+        transparent,
+        rgba(255, 107, 0, 0.7) 40%,
+        rgba(255, 140, 0, 0.9) 50%,
+        rgba(255, 107, 0, 0.7) 60%,
+        transparent
+    );
+    border-radius: 0 0 4px 4px;
+    z-index: 3;
+}
+
+.notif-centro::after {
+    display: none;
+}
+
+/* ============================================================
+   HEADER
+   ============================================================ */
+.notif-centro .notif-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 22px 16px 22px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    background: transparent;
+    position: relative;
+    z-index: 2;
+}
+
+.notif-centro .notif-header .notif-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 700;
+    font-size: 16px;
+    color: #f0f0f5;
+    letter-spacing: -0.3px;
+}
+
+.notif-centro .notif-header .notif-title .notif-icon-header {
+    width: 36px;
+    height: 36px;
+    background: rgba(255, 107, 0, 0.10);
+    border: 1px solid rgba(255, 107, 0, 0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px;
+}
+
+.notif-centro .notif-header .notif-badge {
+    background: linear-gradient(135deg, #ff6b00, #ff8c00);
+    color: #fff;
+    padding: 3px 12px;
+    border-radius: 20px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    box-shadow: 0 2px 10px rgba(255, 107, 0, 0.3);
+}
+
+.notif-centro .notif-header .notif-close {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    color: #555a6e;
+    width: 34px;
+    height: 34px;
+    font-size: 15px;
+    cursor: pointer;
+    border-radius: 10px;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.notif-centro .notif-header .notif-close:hover {
+    background: rgba(255, 107, 0, 0.10);
+    border-color: rgba(255, 107, 0, 0.20);
+    color: #ff6b00;
+}
+
+/* ============================================================
+   LISTA
+   ============================================================ */
+.notif-centro .notif-list {
+    padding: 10px 14px 8px 14px;
+    max-height: 350px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: #ff6b00 rgba(255, 255, 255, 0.05);
+    position: relative;
+    z-index: 2;
+}
+
+/* Scrollbar personalizada - WebKit (Chrome, Safari, Edge) */
+.notif-centro .notif-list::-webkit-scrollbar {
+    width: 5px;
+}
+
+.notif-centro .notif-list::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 10px;
+    margin: 4px 0;
+}
+
+.notif-centro .notif-list::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #ff6b00, #ff8c00);
+    border-radius: 10px;
+    min-height: 30px;
+    transition: all 0.2s;
+}
+
+.notif-centro .notif-list::-webkit-scrollbar-thumb:hover {
+    background: linear-gradient(180deg, #ff8c00, #ff6b00);
+    box-shadow: 0 0 12px rgba(255, 107, 0, 0.3);
+}
+
+/* ============================================================
+   ITEMS - Notificaciones
+   ============================================================ */
+.notif-centro .notif-item {
+    display: flex;
+    align-items: flex-start;
+    gap: 12px;
+    padding: 12px 14px;
+    margin-bottom: 4px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: background 0.2s ease, transform 0.15s ease;
+    background: transparent;
+    border: 1px solid transparent;
+    position: relative;
+    outline: none;
+    box-shadow: none;
+    min-height: 55px;
+}
+
+/* Notificación no leída */
+.notif-centro .notif-item.unread {
+    background: rgba(255, 107, 0, 0.04);
+    border-color: rgba(255, 107, 0, 0.08);
+}
+
+/* Barra naranja izquierda en notificación no leída */
+.notif-centro .notif-item.unread::before {
+    content: '';
+    position: absolute;
+    top: 10px;
+    left: 0;
+    bottom: 10px;
+    width: 3px;
+    background: linear-gradient(180deg,
+        rgba(255, 107, 0, 0.2),
+        rgba(255, 140, 0, 0.7),
+        rgba(255, 107, 0, 0.2)
+    );
+    border-radius: 0 3px 3px 0;
+}
+
+/* Hover */
+.notif-centro .notif-item:hover {
+    background: rgba(255, 255, 255, 0.04);
+    border-color: rgba(255, 255, 255, 0.06);
+    transform: translateX(2px);
+}
+
+.notif-centro .notif-item.unread:hover {
+    background: rgba(255, 107, 0, 0.07);
+    border-color: rgba(255, 107, 0, 0.12);
+}
+
+/* ============================================================
+   ICONOS
+   ============================================================ */
+.notif-centro .notif-icon {
+    width: 36px;
+    height: 36px;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 15px;
+    flex-shrink: 0;
+    transition: transform 0.2s;
+    font-weight: 700;
+}
+
+.notif-centro .notif-item:hover .notif-icon {
+    transform: scale(1.06);
+}
+
+/* Tipos de iconos */
+.notif-centro .notif-icon.info {
+    background: rgba(99, 179, 237, 0.10);
+    color: #63b3ed;
+}
+
+.notif-centro .notif-icon.success {
+    background: rgba(255, 140, 0, 0.10);
+    color: #ff8c00;
+}
+
+.notif-centro .notif-icon.warning {
+    background: rgba(255, 107, 0, 0.10);
+    color: #ff6b00;
+}
+
+.notif-centro .notif-icon.error {
+    background: rgba(248, 113, 113, 0.10);
+    color: #f87171;
+}
+
+/* ============================================================
+   CONTENIDO
+   ============================================================ */
+.notif-centro .notif-content {
+    flex: 1;
+    min-width: 0;
+}
+
+.notif-centro .notif-title-item {
+    font-weight: 600;
+    font-size: 13.5px;
+    color: #e8e8f0;
+    margin-bottom: 2px;
+    letter-spacing: -0.2px;
+}
+
+.notif-centro .notif-message {
+    font-size: 12.5px;
+    color: #6a6f82;
+    line-height: 1.5;
+}
+
+.notif-centro .notif-time {
+    font-size: 11px;
+    color: #3d4055;
+    margin-top: 4px;
+    font-weight: 500;
+}
+
+/* ============================================================
+   PUNTO DE NO LEÍDO
+   ============================================================ */
+.notif-centro .notif-dot {
+    width: 7px;
+    height: 7px;
+    background: #ff6b00;
+    border-radius: 50%;
+    flex-shrink: 0;
+    margin-top: 9px;
+    box-shadow: 0 0 8px rgba(255, 107, 0, 0.5);
+    animation: koiPulse 2.5s ease-in-out infinite;
+}
+
+@keyframes koiPulse {
+    0%, 100% {
+        opacity: 1;
+        box-shadow: 0 0 8px rgba(255, 107, 0, 0.5);
+    }
+    50% {
+        opacity: 0.5;
+        box-shadow: 0 0 4px rgba(255, 107, 0, 0.2);
+    }
+}
+
+/* ============================================================
+   FOOTER
+   ============================================================ */
+.notif-centro .notif-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 22px 18px 22px;
+    border-top: 1px solid rgba(255, 255, 255, 0.04);
+    background: rgba(0, 0, 0, 0.15);
+    flex-wrap: wrap;
+    gap: 8px;
+    position: relative;
+    z-index: 2;
+}
+
+.notif-centro .notif-count {
+    font-size: 12.5px;
+    color: #4a4f62;
+    font-weight: 500;
+}
+
+.notif-centro .notif-actions {
+    display: flex;
+    gap: 8px;
+}
+
+/* Botón primario - naranja */
+.notif-centro .notif-btn-primary {
+    background: linear-gradient(135deg, #ff6b00, #e05500);
+    border: none;
+    border-radius: 10px;
+    color: #fff;
+    font-weight: 600;
+    font-size: 12.5px;
+    cursor: pointer;
+    padding: 8px 18px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+    box-shadow: 0 2px 10px rgba(255, 107, 0, 0.2);
+}
+
+.notif-centro .notif-btn-primary:hover {
+    box-shadow: 0 6px 20px rgba(255, 107, 0, 0.35);
+    transform: translateY(-1px);
+}
+
+/* Botón secundario */
+.notif-centro .notif-btn-secondary {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.07);
+    border-radius: 10px;
+    color: #55596a;
+    font-weight: 500;
+    font-size: 12.5px;
+    cursor: pointer;
+    padding: 8px 18px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.notif-centro .notif-btn-secondary:hover {
+    background: rgba(255, 107, 0, 0.06);
+    border-color: rgba(255, 107, 0, 0.15);
+    color: #e8e8f0;
+    transform: translateY(-1px);
+}
+
+/* ============================================================
+   ANIMACIONES
+   ============================================================ */
+@keyframes koiModalIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.96) translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1) translateY(0);
+    }
+}
+
+@keyframes koiFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+@media (max-width: 540px) {
+    .notif-centro {
+        width: 96vw;
+        max-height: 90vh;
+        border-radius: 16px;
+    }
+
+    .notif-centro .notif-header {
+        padding: 16px 16px 12px 16px;
+    }
+
+    .notif-centro .notif-list {
+        padding: 6px 10px 4px 10px;
+        max-height: 250px;
+    }
+
+    .notif-centro .notif-footer {
+        padding: 10px 16px 14px 16px;
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .notif-centro .notif-actions {
+        justify-content: center;
+    }
+}

@@ -5644,64 +5644,71 @@ let _pollingInterval = null;
 const NOTIFICACIONES_POLLING_INTERVAL = 30000;
 
 // ============================================================
-//  REPRODUCIR SONIDO DE NOTIFICACIÓN (CON ARCHIVO DE AUDIO)
+//  AUDIO — CONTEXTO ÚNICO COMPARTIDO
 // ============================================================
-function reproducirSonidoNotificacion() {
+
+let _audioCtx = null;
+
+function _getAudioCtx() {
+    if (!_audioCtx) {
+        _audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    return _audioCtx;
+}
+
+function _tocarNota(ctx, frecuencia, inicioOffset, duracion) {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.type = 'sine';
+    osc.frequency.value = frecuencia;
+    const t = ctx.currentTime + inicioOffset;
+    gain.gain.setValueAtTime(0, t);
+    gain.gain.linearRampToValueAtTime(0.25, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + duracion);
+    osc.start(t);
+    osc.stop(t + duracion);
+}
+
+function _reproducirTono() {
     try {
-        // Intentar reproducir con archivo de audio
-        const audio = new Audio('/sounds/notification.mp3');
-        audio.volume = 0.5;
-        audio.play().catch(err => {
-            console.warn('⚠️ Error con archivo de audio, usando fallback:', err);
-            reproducirSonidoFallback();
-        });
-        console.log('🔊 Sonido reproducido con archivo');
-    } catch (error) {
-        console.warn('⚠️ Error en sonido:', error);
-        reproducirSonidoFallback();
+        const ctx = _getAudioCtx();
+        if (ctx.state === 'suspended') {
+            console.warn('⚠️ AudioContext suspendido: el usuario aún no interactuó con la página.');
+            return;
+        }
+        _tocarNota(ctx, 880, 0, 0.18);
+        _tocarNota(ctx, 1100, 0.18, 0.15);
+        console.log('🔊 Sonido reproducido (Web Audio API)');
+    } catch (e) {
+        console.warn('⚠️ Error reproduciendo tono:', e);
     }
 }
 
-// ============================================================
-//  FALLBACK: Sonido con Web Audio API (si el archivo falla)
-// ============================================================
-function reproducirSonidoFallback() {
+function reproducirSonidoNotificacion() {
+    const audio = new Audio('/sounds/notification.mp3');
+    audio.volume = 0.5;
+    audio.play()
+        .then(() => console.log('🔊 Sonido reproducido (archivo)'))
+        .catch(() => _reproducirTono());
+}
+
+// Desbloquear el AudioContext compartido con el primer gesto del usuario
+function _activarAudioCtx() {
     try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume();
+        const ctx = _getAudioCtx();
+        if (ctx.state === 'suspended') {
+            ctx.resume().then(() => console.log('🔊 AudioContext desbloqueado'));
         }
-        const oscillator = audioCtx.createOscillator();
-        const gainNode = audioCtx.createGain();
-        oscillator.connect(gainNode);
-        gainNode.connect(audioCtx.destination);
-        oscillator.frequency.value = 800;
-        oscillator.type = 'sine';
-        gainNode.gain.setValueAtTime(0.3, audioCtx.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + 0.3);
-        oscillator.start(audioCtx.currentTime);
-        oscillator.stop(audioCtx.currentTime + 0.3);
-        
-        setTimeout(() => {
-            try {
-                const audioCtx2 = new (window.AudioContext || window.webkitAudioContext)();
-                const osc2 = audioCtx2.createOscillator();
-                const gain2 = audioCtx2.createGain();
-                osc2.connect(gain2);
-                gain2.connect(audioCtx2.destination);
-                osc2.frequency.value = 1000;
-                osc2.type = 'sine';
-                gain2.gain.setValueAtTime(0.2, audioCtx2.currentTime);
-                gain2.gain.exponentialRampToValueAtTime(0.01, audioCtx2.currentTime + 0.2);
-                osc2.start(audioCtx2.currentTime);
-                osc2.stop(audioCtx2.currentTime + 0.2);
-            } catch(e) {}
-        }, 200);
-        console.log('🔊 Sonido reproducido (fallback)');
-    } catch (error) {
-        console.warn('⚠️ Error en sonido fallback:', error);
+    } catch (e) {
+        console.warn('⚠️ Error activando AudioContext:', e);
     }
 }
+
+document.addEventListener('click', _activarAudioCtx, { once: true });
+document.addEventListener('touchstart', _activarAudioCtx, { once: true });
+document.addEventListener('keydown', _activarAudioCtx, { once: true });
 
 // ============================================================
 //  OBTENER NOTIFICACIONES
@@ -5712,16 +5719,16 @@ window.obtenerNotificaciones = async function() {
             credentials: 'include',
             headers: { 'Cache-Control': 'no-cache' }
         });
-        
+
         if (!res.ok) {
             if (res.status === 401) return [];
             throw new Error(`HTTP ${res.status}`);
         }
-        
+
         const data = await res.json();
         _notificaciones = data.notifications || [];
         _notificacionesNoLeidas = data.noLeidas || 0;
-        
+
         actualizarBadgeNotificaciones();
         return _notificaciones;
     } catch (error) {
@@ -5731,12 +5738,12 @@ window.obtenerNotificaciones = async function() {
 };
 
 // ============================================================
-//  ACTUALIZAR BADGE (CÍRCULO ROJO)
+//  ACTUALIZAR BADGE
 // ============================================================
 function actualizarBadgeNotificaciones() {
     const badge = document.getElementById('notifBadge');
     if (!badge) return;
-    
+
     if (_notificacionesNoLeidas > 0) {
         badge.textContent = _notificacionesNoLeidas > 99 ? '99+' : _notificacionesNoLeidas;
         badge.style.display = 'flex';
@@ -5752,14 +5759,13 @@ function actualizarBadgeNotificaciones() {
 // ============================================================
 function mostrarToastNotificacion(notificacion) {
     if (!notificacion) return;
-    
-    // ✅ SONIDO
+
     try {
         reproducirSonidoNotificacion();
-    } catch(e) {
+    } catch (e) {
         console.warn('⚠️ Error reproduciendo sonido en toast:', e);
     }
-    
+
     if (typeof toast === 'function') {
         const icono = getIconoNotificacion(notificacion.tipo);
         toast(`${icono} ${notificacion.titulo}: ${notificacion.mensaje}`, notificacion.tipo || 'info');
@@ -5779,7 +5785,7 @@ function formatFechaNotificacion(fecha) {
     const diffMin = Math.floor(diffMs / 60000);
     const diffHoras = Math.floor(diffMs / 3600000);
     const diffDias = Math.floor(diffMs / 86400000);
-    
+
     if (diffMin < 1) return 'Ahora mismo';
     if (diffMin < 60) return `Hace ${diffMin} min`;
     if (diffHoras < 24) return `Hace ${diffHoras} h`;
@@ -5793,16 +5799,16 @@ function formatFechaNotificacion(fecha) {
 // ============================================================
 function getIconoNotificacion(tipo) {
     const iconos = {
-        'info': 'ℹ️',
-        'success': '✅',
-        'warning': '⚠️',
-        'error': '❌',
-        'factura': '📄',
-        'cae': '🏷️',
-        'sistema': '⚙️',
-        'suscripcion': '💳',
-        'integracion': '🔗',
-        'arca': '🏛️'
+        info: 'ℹ️',
+        success: '✅',
+        warning: '⚠️',
+        error: '❌',
+        factura: '📄',
+        cae: '🏷️',
+        sistema: '⚙️',
+        suscripcion: '💳',
+        integracion: '🔗',
+        arca: '🏛️'
     };
     return iconos[tipo] || '📬';
 }
@@ -5857,14 +5863,18 @@ window.marcarTodasComoLeidas = async function() {
 // ============================================================
 window.mostrarNotificacionesCentro = function() {
     document.querySelectorAll('.notif-centro, .notif-overlay-koi').forEach(el => el.remove());
-    
+
+    const overlay = document.createElement('div');
+    overlay.className = 'notif-overlay-koi';
+    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(6,8,16,0.75);backdrop-filter:blur(8px);z-index:99998;';
+    overlay.onclick = function() {
+        this.remove();
+        document.querySelector('.notif-centro')?.remove();
+    };
+    document.body.appendChild(overlay);
+
+    // Estado vacío
     if (!_notificaciones || _notificaciones.length === 0) {
-        const overlay = document.createElement('div');
-        overlay.className = 'notif-overlay-koi';
-        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(6,8,16,0.75);backdrop-filter:blur(8px);z-index:99998;';
-        overlay.onclick = function() { this.remove(); document.querySelector('.notif-centro')?.remove(); };
-        document.body.appendChild(overlay);
-        
         const modal = document.createElement('div');
         modal.className = 'notif-centro';
         modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:400px;max-width:94vw;background:#0e1119;border:1px solid rgba(255,107,0,0.18);border-radius:18px;z-index:99999;padding:40px;text-align:center;';
@@ -5872,49 +5882,121 @@ window.mostrarNotificacionesCentro = function() {
             <div style="font-size:48px;margin-bottom:16px;">🔔</div>
             <div style="color:#e8e8f0;font-size:18px;font-weight:600;">No hay notificaciones</div>
             <div style="color:#6a6f82;font-size:14px;margin-top:8px;">Las notificaciones aparecerán aquí</div>
-            <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();" style="margin-top:20px;background:linear-gradient(135deg,#ff6b00,#e05500);border:none;border-radius:10px;color:#fff;font-weight:600;font-size:14px;cursor:pointer;padding:10px 24px;">Cerrar</button>
+            <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();"
+                style="margin-top:20px;background:linear-gradient(135deg,#ff6b00,#e05500);border:none;border-radius:10px;color:#fff;font-weight:600;font-size:14px;cursor:pointer;padding:10px 24px;">
+                Cerrar
+            </button>
         `;
         document.body.appendChild(modal);
         return;
     }
-    
-    const overlay = document.createElement('div');
-    overlay.className = 'notif-overlay-koi';
-    overlay.style.cssText = 'position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(6,8,16,0.75);backdrop-filter:blur(8px);z-index:99998;';
-    overlay.onclick = function() { this.remove(); document.querySelector('.notif-centro')?.remove(); };
-    document.body.appendChild(overlay);
-    
+
     const modal = document.createElement('div');
     modal.className = 'notif-centro';
-    modal.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);width:520px;max-width:94vw;max-height:82vh;background:#0e1119;border:1px solid rgba(255,107,0,0.18);border-radius:18px;z-index:99999;box-shadow:0 32px 64px rgba(0,0,0,0.65);overflow:hidden;display:flex;flex-direction:column;';
-    
+    modal.style.cssText = [
+        'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);',
+        'width:520px;max-width:94vw;max-height:82vh;',
+        'background:#0e1119;',
+        'border:1px solid rgba(255,107,0,0.18);',
+        'border-radius:18px;z-index:99999;',
+        'box-shadow:0 32px 64px rgba(0,0,0,0.65),0 0 0 1px rgba(255,107,0,0.06);',
+        'overflow:hidden;display:flex;flex-direction:column;'
+    ].join('');
+
+    // — Header —
     const header = document.createElement('div');
     header.className = 'notif-header';
-    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:20px 22px 16px 22px;border-bottom:1px solid rgba(255,255,255,0.04);flex-shrink:0;';
+    header.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:20px 22px 16px;border-bottom:1px solid rgba(255,255,255,0.04);flex-shrink:0;';
     header.innerHTML = `
         <div style="display:flex;align-items:center;gap:10px;font-weight:700;font-size:16px;color:#f0f0f5;">
             <span style="font-size:18px;">🔔</span>
             Notificaciones
-            <span style="background:linear-gradient(135deg,#ff6b00,#ff8c00);color:#fff;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;">${_notificacionesNoLeidas || 0} nuevas</span>
+            <span style="background:linear-gradient(135deg,#ff6b00,#ff8c00);color:#fff;padding:3px 12px;border-radius:20px;font-size:11px;font-weight:700;box-shadow:0 2px 10px rgba(255,107,0,0.3);">
+                ${_notificacionesNoLeidas || 0} nuevas
+            </span>
         </div>
-        <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();" style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:#555a6e;width:34px;height:34px;font-size:15px;cursor:pointer;border-radius:10px;">✕</button>
+        <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();"
+            style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.06);color:#555a6e;width:34px;height:34px;font-size:15px;cursor:pointer;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+            ✕
+        </button>
     `;
     modal.appendChild(header);
-    
+
+    // — Lista —
     const list = document.createElement('div');
     list.className = 'notif-list';
-    list.style.cssText = 'padding:10px 14px 8px 14px;overflow-y:auto;flex:1;scrollbar-width:thin;scrollbar-color:#ff6b00 rgba(255,255,255,0.05);';
-    
-    const iconMap = { success: '✅', warning: '⚠️', error: '❌', info: 'ℹ️' };
-    
+    list.style.cssText = [
+        'padding:10px 8px 8px 14px;',
+        'overflow-y:auto;flex:1;',
+        'scrollbar-width:thin;',
+        'scrollbar-color:#ff6b00 rgba(255,255,255,0.03);'
+    ].join('');
+
+    // Scrollbar webkit
+    const scrollStyle = document.createElement('style');
+    scrollStyle.textContent = `
+        .notif-list::-webkit-scrollbar { width: 4px; }
+        .notif-list::-webkit-scrollbar-track { background: rgba(255,255,255,0.03); border-radius: 4px; margin: 8px 0; }
+        .notif-list::-webkit-scrollbar-thumb { background: #ff6b00; border-radius: 4px; }
+        .notif-list::-webkit-scrollbar-thumb:hover { background: #ff8c00; }
+    `;
+    document.head.appendChild(scrollStyle);
+
+    const iconColorMap = {
+        success: { color: '#ff8c00', bg: 'rgba(255,140,0,0.10)' },
+        warning: { color: '#ff6b00', bg: 'rgba(255,107,0,0.10)' },
+        error: { color: '#f87171', bg: 'rgba(248,113,113,0.10)' },
+        info: { color: '#63b3ed', bg: 'rgba(99,179,237,0.10)' }
+    };
+    const iconEmojiMap = { success: '✅', warning: '⚠️', error: '❌', info: 'ℹ️' };
+
     _notificaciones.forEach(n => {
-        const item = document.createElement('div');
         const isUnread = !n.leida;
-        item.className = `notif-item ${isUnread ? 'unread' : ''}`;
-        item.style.cssText = `
-            display:flex;align-items:flex-start;gap:12px;padding:12px 14px;margin-bottom:4px;border-radius:12px;cursor:pointer;transition:background 0.2s;
-            ${isUnread ? 'background:rgba(255,107,0,0.04);border-left:3px solid #ff6b00;' : ''}
+        const tipo = n.tipo || 'info';
+        const { color, bg } = iconColorMap[tipo] || iconColorMap.info;
+
+        const item = document.createElement('div');
+        item.className = `notif-item${isUnread ? ' unread' : ''}`;
+        item.style.cssText = [
+            'display:flex;align-items:flex-start;gap:12px;',
+            'padding:12px 14px;',
+            isUnread ? 'padding-left:18px;' : '',
+            'margin-bottom:4px;border-radius:12px;cursor:pointer;',
+            'transition:background 0.2s;position:relative;',
+            isUnread
+                ? 'background:rgba(255,107,0,0.035);border:1px solid rgba(255,107,0,0.08);'
+                : 'border:1px solid transparent;'
+        ].join('');
+
+        if (isUnread) {
+            const bar = document.createElement('div');
+            bar.style.cssText = 'position:absolute;top:10px;left:0;bottom:10px;width:3px;background:linear-gradient(180deg,rgba(255,107,0,0.2),rgba(255,140,0,0.7),rgba(255,107,0,0.2));border-radius:0 3px 3px 0;';
+            item.appendChild(bar);
+        }
+
+        item.innerHTML += `
+            <div style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;background:${bg};color:${color};">
+                ${iconEmojiMap[tipo] || 'ℹ️'}
+            </div>
+            <div style="flex:1;min-width:0;">
+                <div style="font-weight:600;font-size:13.5px;color:#e8e8f0;margin-bottom:2px;">${n.titulo || 'Sin título'}</div>
+                <div style="font-size:12.5px;color:#6a6f82;line-height:1.5;">${n.mensaje || ''}</div>
+                <div style="font-size:11px;color:#3d4055;margin-top:4px;font-weight:500;">${formatFechaNotificacion(n.fechaCreacion)}</div>
+            </div>
+            ${isUnread ? '<div style="width:7px;height:7px;background:#ff6b00;border-radius:50%;flex-shrink:0;margin-top:9px;box-shadow:0 0 8px rgba(255,107,0,0.5);"></div>' : ''}
         `;
+
+        item.addEventListener('mouseenter', () => {
+            item.style.background = isUnread
+                ? 'rgba(255,107,0,0.07)'
+                : 'rgba(255,255,255,0.04)';
+        });
+        item.addEventListener('mouseleave', () => {
+            item.style.background = isUnread
+                ? 'rgba(255,107,0,0.035)'
+                : 'transparent';
+        });
+
         item.onclick = () => {
             marcarNotificacionComoLeida(n._id);
             setTimeout(() => {
@@ -5923,36 +6005,33 @@ window.mostrarNotificacionesCentro = function() {
                 mostrarNotificacionesCentro();
             }, 300);
         };
-        
-        const tipo = n.tipo || 'info';
-        const iconColor = tipo === 'success' ? '#ff8c00' : tipo === 'warning' ? '#ff6b00' : tipo === 'error' ? '#f87171' : '#63b3ed';
-        const iconBg = tipo === 'success' ? 'rgba(255,140,0,0.10)' : tipo === 'warning' ? 'rgba(255,107,0,0.10)' : tipo === 'error' ? 'rgba(248,113,113,0.10)' : 'rgba(99,179,237,0.10)';
-        
-        item.innerHTML = `
-            <div class="notif-icon ${tipo}" style="width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;background:${iconBg};color:${iconColor};">${iconMap[tipo] || 'ℹ️'}</div>
-            <div class="notif-content" style="flex:1;min-width:0;">
-                <div class="notif-title-item" style="font-weight:600;font-size:13.5px;color:#e8e8f0;margin-bottom:2px;">${n.titulo || 'Sin título'}</div>
-                <div class="notif-message" style="font-size:12.5px;color:#6a6f82;line-height:1.5;">${n.mensaje || 'Sin mensaje'}</div>
-                <div class="notif-time" style="font-size:11px;color:#3d4055;margin-top:4px;font-weight:500;">${formatFechaNotificacion(n.fechaCreacion)}</div>
-            </div>
-            ${isUnread ? '<div class="notif-dot" style="width:7px;height:7px;background:#ff6b00;border-radius:50%;flex-shrink:0;margin-top:9px;box-shadow:0 0 8px rgba(255,107,0,0.5);"></div>' : ''}
-        `;
+
         list.appendChild(item);
     });
+
     modal.appendChild(list);
-    
+
+    // — Footer —
     const footer = document.createElement('div');
     footer.className = 'notif-footer';
-    footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 22px 18px 22px;border-top:1px solid rgba(255,255,255,0.04);background:rgba(0,0,0,0.15);flex-shrink:0;flex-wrap:wrap;gap:8px;';
+    footer.style.cssText = 'display:flex;justify-content:space-between;align-items:center;padding:12px 22px 18px;border-top:1px solid rgba(255,255,255,0.04);background:rgba(0,0,0,0.15);flex-shrink:0;flex-wrap:wrap;gap:8px;';
     footer.innerHTML = `
-        <span class="notif-count" style="font-size:12.5px;color:#4a4f62;font-weight:500;">${_notificaciones.length} notificaciones · ${_notificacionesNoLeidas || 0} sin leer</span>
-        <div class="notif-actions" style="display:flex;gap:8px;">
-            <button class="notif-btn-primary" onclick="marcarTodasComoLeidas();setTimeout(()=>{document.querySelector('.notif-centro')?.remove();document.querySelector('.notif-overlay-koi')?.remove();mostrarNotificacionesCentro();},300);" style="background:linear-gradient(135deg,#ff6b00,#e05500);border:none;border-radius:10px;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;padding:8px 18px;box-shadow:0 2px 10px rgba(255,107,0,0.2);">✓ Marcar todas</button>
-            <button class="notif-btn-secondary" onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();" style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;color:#55596a;font-weight:500;font-size:12.5px;cursor:pointer;padding:8px 18px;">Cerrar</button>
+        <span style="font-size:12.5px;color:#4a4f62;font-weight:500;">
+            ${_notificaciones.length} notificaciones · ${_notificacionesNoLeidas || 0} sin leer
+        </span>
+        <div style="display:flex;gap:8px;">
+            <button onclick="marcarTodasComoLeidas().then(()=>{setTimeout(()=>{document.querySelector('.notif-centro')?.remove();document.querySelector('.notif-overlay-koi')?.remove();mostrarNotificacionesCentro();},300)})"
+                style="background:linear-gradient(135deg,#ff6b00,#e05500);border:none;border-radius:10px;color:#fff;font-weight:600;font-size:12.5px;cursor:pointer;padding:8px 18px;box-shadow:0 2px 10px rgba(255,107,0,0.2);">
+                ✓ Marcar todas
+            </button>
+            <button onclick="this.closest('.notif-centro').remove();document.querySelector('.notif-overlay-koi')?.remove();"
+                style="background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.07);border-radius:10px;color:#55596a;font-weight:500;font-size:12.5px;cursor:pointer;padding:8px 18px;">
+                Cerrar
+            </button>
         </div>
     `;
     modal.appendChild(footer);
-    
+
     document.body.appendChild(modal);
     console.log('✅ Modal de notificaciones mostrado');
 };
@@ -5965,42 +6044,42 @@ function iniciarPollingNotificaciones() {
         clearInterval(_pollingInterval);
         _pollingInterval = null;
     }
-    
+
     obtenerNotificaciones();
-    
+
     _pollingInterval = setInterval(async () => {
         try {
             const res = await fetch('/api/notifications', {
                 credentials: 'include',
                 headers: { 'Cache-Control': 'no-cache' }
             });
-            
+
             if (!res.ok) return;
-            
+
             const data = await res.json();
             const nuevasNotificaciones = data.notificaciones || [];
             const nuevasNoLeidas = data.noLeidas || 0;
-            
-            const notificacionesActualesIds = new Set(_notificaciones.map(n => n._id));
-            const notificacionesNuevas = nuevasNotificaciones.filter(n => !notificacionesActualesIds.has(n._id));
-            
+
+            const idsActuales = new Set(_notificaciones.map(n => n._id));
+            const notificacionesNuevas = nuevasNotificaciones.filter(n => !idsActuales.has(n._id));
+
             _notificaciones = nuevasNotificaciones;
             const cambioNoLeidas = nuevasNoLeidas - _notificacionesNoLeidas;
             _notificacionesNoLeidas = nuevasNoLeidas;
-            
+
             actualizarBadgeNotificaciones();
-            
+
             if (cambioNoLeidas > 0) {
                 notificacionesNuevas
                     .filter(n => !n.leida)
                     .forEach(n => mostrarToastNotificacion(n));
             }
-            
+
             const panel = document.getElementById('notifPanel');
             if (panel && panel.classList.contains('open')) {
                 renderizarNotificacionesEnPanel(_notificaciones);
             }
-            
+
         } catch (error) {
             console.warn('⚠️ Error en polling de notificaciones:', error.message);
         }
@@ -6008,54 +6087,12 @@ function iniciarPollingNotificaciones() {
 }
 
 // ============================================================
-//  ACTIVAR SONIDO CON INTERACCIÓN DEL USUARIO
-// ============================================================
-let audioActivado = false;
-
-function activarAudioContext() {
-    if (audioActivado) return;
-    try {
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-        if (audioCtx.state === 'suspended') {
-            audioCtx.resume().then(() => {
-                audioActivado = true;
-                console.log('🔊 AudioContext activado - las notificaciones sonarán');
-            }).catch(err => {
-                console.warn('⚠️ Error activando AudioContext:', err);
-            });
-        } else {
-            audioActivado = true;
-            console.log('🔊 AudioContext ya está activo');
-        }
-    } catch(e) {
-        console.warn('⚠️ Error con AudioContext:', e);
-    }
-}
-
-// Activar con el primer clic del usuario
-document.addEventListener('click', function activarConClick() {
-    activarAudioContext();
-    document.removeEventListener('click', activarConClick);
-}, { once: true });
-
-// Activar con el primer toque (móvil)
-document.addEventListener('touchstart', function activarConTouch() {
-    activarAudioContext();
-    document.removeEventListener('touchstart', activarConTouch);
-}, { once: true });
-
-// Intentar activar automáticamente
-setTimeout(() => {
-    activarAudioContext();
-}, 100);
-
-// ============================================================
-//  INICIALIZAR SISTEMA DE NOTIFICACIONES
+//  INICIALIZAR
 // ============================================================
 function initSistemaNotificaciones() {
     console.log('🔔 Inicializando sistema de notificaciones...');
     obtenerNotificaciones();
-    
+
     const notifBtn = document.getElementById('notifBtn');
     if (notifBtn) {
         const newBtn = notifBtn.cloneNode(true);
@@ -6063,34 +6100,29 @@ function initSistemaNotificaciones() {
         newBtn.addEventListener('click', function(e) {
             e.preventDefault();
             e.stopPropagation();
-            console.log('🔔 Click en notificaciones');
             mostrarNotificacionesCentro();
         });
         console.log('✅ Botón de notificaciones configurado');
     }
-    
+
     iniciarPollingNotificaciones();
     console.log('✅ Sistema de notificaciones inicializado');
 }
 
-// ============================================================
-//  INICIALIZAR CUANDO EL DOM ESTÉ LISTO
-// ============================================================
 if (document.readyState === 'loading') {
-    document.addEventListener('DOMContentLoaded', function() {
-        setTimeout(initSistemaNotificaciones, 500);
-    });
+    document.addEventListener('DOMContentLoaded', () => setTimeout(initSistemaNotificaciones, 500));
 } else {
     setTimeout(initSistemaNotificaciones, 500);
 }
 
 // ============================================================
-//  EXPONER FUNCIONES GLOBALMENTE
+//  EXPORTS GLOBALES
 // ============================================================
 window.obtenerNotificaciones = obtenerNotificaciones;
 window.marcarNotificacionComoLeida = marcarNotificacionComoLeida;
 window.marcarTodasComoLeidas = marcarTodasComoLeidas;
 window.mostrarNotificacionesCentro = mostrarNotificacionesCentro;
-
+window.reproducirSonidoNotificacion = reproducirSonidoNotificacion;
+window.cargarDatosSuscripcion = cargarDatosSuscripcion;
 // Al final de tu archivo .js, asegurate de exportarla globalmente:
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;

@@ -1,55 +1,87 @@
 /* ============================================================
    COUNTRY SELECTOR - KOI STYLE
    ============================================================ */
+
+/* Contenedor principal */
 .country-selector-wrapper {
   position: relative;
-  margin-bottom: 20px;
+  margin-bottom: 24px;
   z-index: 50;
 }
 
+/* Botón selector - Estilo KOI */
 .country-selector-btn {
   width: 100%;
-  padding: 12px 16px;
-  background: rgba(255,255,255,0.025);
-  border: 0.5px solid rgba(255,255,255,0.07);
-  border-radius: 10px;
+  padding: 14px 18px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 0.5px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
   color: #F9FAFB;
-  font-family: 'Inter', sans-serif;
-  font-size: 13px;
+  font-family: 'Inter', -apple-system, sans-serif;
+  font-size: 14px;
+  font-weight: 500;
   cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  transition: border-color .18s;
+  transition: all 0.2s ease;
+  user-select: none;
 }
 
 .country-selector-btn:hover {
-  border-color: rgba(249,115,22,0.3);
+  border-color: rgba(249, 115, 22, 0.35);
+  background: rgba(249, 115, 22, 0.04);
 }
 
 .country-selector-btn.open {
-  border-color: rgba(249,115,22,0.5);
+  border-color: rgba(249, 115, 22, 0.5);
+  background: rgba(249, 115, 22, 0.06);
+  box-shadow: 0 0 0 3px rgba(249, 115, 22, 0.08);
 }
 
+/* Placeholder cuando no hay país seleccionado */
 .country-selector-btn .country-placeholder {
   color: #4B5563;
+  font-weight: 400;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
+.country-selector-btn .country-placeholder .icon {
+  font-size: 18px;
+}
+
+/* País seleccionado */
 .country-selector-btn .country-selected {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   flex-wrap: wrap;
+}
+
+.country-selector-btn .country-flag {
+  font-size: 22px;
+  line-height: 1;
+}
+
+.country-selector-btn .country-name {
+  font-weight: 600;
+  color: #F9FAFB;
 }
 
 .country-selector-btn .country-blocked {
   color: #F87171;
   font-size: 11px;
   font-weight: 600;
+  background: rgba(239, 68, 68, 0.1);
+  padding: 2px 10px;
+  border-radius: 20px;
+  border: 0.5px solid rgba(239, 68, 68, 0.15);
 }
 
 .country-chevron {
-  transition: transform .2s;
+  transition: transform 0.25s ease;
   color: #4B5563;
   flex-shrink: 0;
 }
@@ -58,78 +90,179 @@
   transform: rotate(180deg);
 }
 
+/* Dropdown - Lista de países */
 .country-dropdown {
   display: none;
   position: absolute;
-  top: calc(100% + 4px);
+  top: calc(100% + 6px);
   left: 0;
   right: 0;
-  max-height: 200px;
+  max-height: 240px;
   overflow-y: auto;
   background: #0D0D16;
-  border: 0.5px solid rgba(255,255,255,0.07);
-  border-radius: 10px;
+  border: 0.5px solid rgba(255, 255, 255, 0.07);
+  border-radius: 12px;
   z-index: 100;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+  padding: 6px;
 }
 
 .country-dropdown.open {
   display: block;
 }
 
+/* Scrollbar personalizada */
+.country-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.country-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.country-dropdown::-webkit-scrollbar-thumb {
+  background: rgba(249, 115, 22, 0.3);
+  border-radius: 10px;
+}
+
+.country-dropdown::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.5);
+}
+
+/* Opción de país */
 .country-option {
   width: 100%;
   padding: 10px 14px;
   background: none;
   border: none;
+  border-radius: 8px;
   color: #F9FAFB;
-  font-family: 'Inter', sans-serif;
+  font-family: 'Inter', -apple-system, sans-serif;
   font-size: 13px;
   cursor: pointer;
   display: flex;
   align-items: center;
   gap: 10px;
-  transition: background .15s;
+  transition: all 0.15s ease;
 }
 
 .country-option:hover {
-  background: rgba(249,115,22,0.05);
+  background: rgba(249, 115, 22, 0.06);
+}
+
+.country-option .country-flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.country-option .country-name {
+  font-weight: 500;
+  color: #F9FAFB;
 }
 
 .country-option .country-badge {
   margin-left: auto;
   font-size: 10px;
   font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  background: rgba(34,197,94,0.1);
+  padding: 2px 10px;
+  border-radius: 20px;
+  background: rgba(34, 197, 94, 0.1);
   color: #22C55E;
+  border: 0.5px solid rgba(34, 197, 94, 0.15);
 }
 
+/* Mensaje de bloqueo - Estilo KOI */
 .country-message {
-  margin-top: 12px;
-  padding: 16px;
-  border-radius: 10px;
+  margin-top: 16px;
+  padding: 20px 24px;
+  border-radius: 12px;
   font-size: 13px;
   line-height: 1.6;
+  display: none;
 }
 
 .country-message-blocked {
-  background: rgba(239,68,68,0.06);
-  border: 0.5px solid rgba(239,68,68,0.2);
-  color: #FCA5A5;
+  background: rgba(239, 68, 68, 0.05);
+  border: 0.5px solid rgba(239, 68, 68, 0.15);
+  color: #F9FAFB;
 }
 
-.country-message-blocked strong {
+.country-message-blocked .blocked-icon {
+  font-size: 28px;
+}
+
+.country-message-blocked .blocked-title {
   display: block;
-  font-size: 15px;
+  font-size: 16px;
+  font-weight: 700;
+  color: #F87171;
   margin-bottom: 4px;
 }
 
-.country-message-blocked p {
+.country-message-blocked .blocked-text {
+  color: #9CA3AF;
   margin: 4px 0;
 }
 
-.country-message-blocked p:last-child {
+.country-message-blocked .blocked-highlight {
   color: #FBBF24;
+  font-weight: 600;
+}
+
+.country-message-blocked .blocked-sub {
+  color: #FBBF24;
+  font-size: 13px;
+  margin-top: 4px;
+}
+
+/* Botón de reintento */
+.country-message-blocked .btn-retry {
+  margin-top: 12px;
+  padding: 8px 20px;
+  background: rgba(249, 115, 22, 0.12);
+  border: 0.5px solid rgba(249, 115, 22, 0.25);
+  border-radius: 8px;
+  color: #FB923C;
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13px;
+  transition: all 0.2s ease;
+}
+
+.country-message-blocked .btn-retry:hover {
+  background: rgba(249, 115, 22, 0.2);
+  border-color: rgba(249, 115, 22, 0.4);
+}
+
+/* Ocultar elementos cuando país bloqueado */
+.hidden-when-blocked {
+  transition: opacity 0.3s ease;
+}
+
+/* ============================================================
+   RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 480px) {
+  .country-selector-btn {
+    padding: 12px 14px;
+    font-size: 13px;
+  }
+  
+  .country-selector-btn .country-flag {
+    font-size: 18px;
+  }
+  
+  .country-dropdown {
+    max-height: 180px;
+  }
+  
+  .country-option {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  
+  .country-message-blocked {
+    padding: 16px 18px;
+  }
 }

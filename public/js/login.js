@@ -40,7 +40,10 @@ function initCountrySelector() {
   container.innerHTML = `
     <div class="country-selector-wrapper">
       <button class="country-selector-btn" id="countryBtn">
-        <span class="country-placeholder">🌎 Selecciona tu país</span>
+        <span class="country-placeholder">
+          <span class="icon">🌎</span>
+          Selecciona tu país
+        </span>
         <svg class="country-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M6 9l6 6 6-6"/>
         </svg>
@@ -55,7 +58,7 @@ function initCountrySelector() {
         `).join('')}
       </div>
     </div>
-    <div class="country-message" id="countryMessage" style="display:none;"></div>
+    <div class="country-message" id="countryMessage"></div>
   `;
 
   const btn = document.getElementById('countryBtn');
@@ -86,7 +89,7 @@ function initCountrySelector() {
 }
 
 // ============================================================
-// SELECCIONAR PAÍS - CORREGIDO
+// SELECCIONAR PAÍS
 // ============================================================
 
 function selectCountry(country) {
@@ -96,10 +99,11 @@ function selectCountry(country) {
   const btn = document.getElementById('countryBtn');
   const msg = document.getElementById('countryMessage');
   
-  // 🔍 IMPORTANTE: Buscar los formularios correctamente
   const pLogin = document.getElementById('pLogin');
   const pReg = document.getElementById('pReg');
   const tabs = document.querySelector('.tabs');
+  const googleBtn = document.querySelector('.btn-google');
+  const orSep = document.querySelector('.or-sep');
 
   // Actualizar botón
   btn.innerHTML = `
@@ -118,28 +122,22 @@ function selectCountry(country) {
     msg.style.display = 'block';
     msg.className = 'country-message country-message-blocked';
     msg.innerHTML = `
-      <div style="display:flex;align-items:flex-start;gap:12px;padding:4px 0;">
-        <span style="font-size:24px;">⛔</span>
+      <div style="display:flex;align-items:flex-start;gap:14px;">
+        <span class="blocked-icon">⛔</span>
         <div>
-          <strong style="display:block;font-size:16px;color:#F87171;">País no disponible</strong>
-          <p style="margin:4px 0;color:#9CA3AF;">Koi se encuentra en fase de desarrollo y por el momento solo está disponible en <strong style="color:#F9FAFB;">Argentina</strong>.</p>
-          <p style="margin:4px 0;color:#FBBF24;font-size:13px;">¡Pronto llegaremos a más países!</p>
-          <button onclick="location.reload()" style="margin-top:10px;padding:8px 18px;background:rgba(249,115,22,0.15);border:0.5px solid rgba(249,115,22,0.3);border-radius:8px;color:#FB923C;cursor:pointer;font-weight:600;">Intentar de nuevo</button>
+          <span class="blocked-title">País no disponible</span>
+          <p class="blocked-text">Koi se encuentra en fase de desarrollo y por el momento solo está disponible en <strong style="color:#F9FAFB;">Argentina</strong>.</p>
+          <p class="blocked-sub">¡Pronto llegaremos a más países!</p>
+          <button class="btn-retry" onclick="location.reload()">Intentar de nuevo</button>
         </div>
       </div>
     `;
     
-    // ❌ OCULTAR formularios y tabs
+    // Ocultar formularios
     if (pLogin) pLogin.style.display = 'none';
     if (pReg) pReg.style.display = 'none';
     if (tabs) tabs.style.display = 'none';
-    
-    // Ocultar también "Continuar con Google"
-    const googleBtn = document.querySelector('.btn-google');
     if (googleBtn) googleBtn.style.display = 'none';
-    
-    // Ocultar separador "o"
-    const orSep = document.querySelector('.or-sep');
     if (orSep) orSep.style.display = 'none';
 
   } else {
@@ -150,14 +148,10 @@ function selectCountry(country) {
     if (pLogin) pLogin.style.display = 'block';
     if (pReg) pReg.style.display = 'block';
     if (tabs) tabs.style.display = 'flex';
-    
-    const googleBtn = document.querySelector('.btn-google');
     if (googleBtn) googleBtn.style.display = 'flex';
-    
-    const orSep = document.querySelector('.or-sep');
     if (orSep) orSep.style.display = 'flex';
     
-    // Activar el tab de login por defecto
+    // Activar tab de login por defecto
     switchTab('login');
   }
 }
@@ -165,10 +159,6 @@ function selectCountry(country) {
 // ============================================================
 // MODIFICAR LOGIN Y REGISTER PARA ENVIAR PAÍS
 // ============================================================
-
-// Guardar referencia a las funciones originales
-const originalLogin = window.login;
-const originalRegister = window.register;
 
 // Modificar login
 window.login = async function() {

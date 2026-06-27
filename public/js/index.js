@@ -5876,7 +5876,17 @@ window.marcarTodasComoLeidas = async function() {
 // ============================================================
 //  MOSTRAR MODAL DE NOTIFICACIONES
 // ============================================================
-window.mostrarNotificacionesCentro = function() {
+// ============================================================
+//  MOSTRAR MODAL DE NOTIFICACIONES (SIEMPRE ACTUALIZADO)
+// ============================================================
+
+window.mostrarNotificacionesCentro = async function() {
+    console.log('🔔 [NOTIF] Abriendo panel de notificaciones...');
+    
+    // 👇 SIEMPRE OBTENER DATOS FRESCOS
+    await obtenerNotificaciones();
+    
+    // Eliminar modales anteriores
     document.querySelectorAll('.notif-centro, .notif-overlay-koi').forEach(el => el.remove());
 
     const overlay = document.createElement('div');
@@ -5903,6 +5913,7 @@ window.mostrarNotificacionesCentro = function() {
             </button>
         `;
         document.body.appendChild(modal);
+        console.log('✅ [NOTIF] Modal vacío mostrado');
         return;
     }
 
@@ -6048,9 +6059,8 @@ window.mostrarNotificacionesCentro = function() {
     modal.appendChild(footer);
 
     document.body.appendChild(modal);
-    console.log('✅ Modal de notificaciones mostrado');
+    console.log('✅ [NOTIF] Modal mostrado con', _notificaciones.length, 'notificaciones');
 };
-
 // ============================================================
 //  POLLING DE NOTIFICACIONES
 // ============================================================

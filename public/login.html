@@ -5,373 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>KOI · Acceso</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
-  <style>
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    html, body { height: 100%; }
-
-    body {
-      font-family: 'Inter', -apple-system, sans-serif;
-      background: #080810;
-      color: #F9FAFB;
-      min-height: 100vh;
-      display: flex;
-      overflow: hidden;
-    }
-
-    /* ── PANEL IZQUIERDO ── */
-    .left {
-      width: 420px;
-      flex-shrink: 0;
-      background: #080810;
-      border-right: 0.5px solid rgba(255,255,255,0.05);
-      display: flex;
-      flex-direction: column;
-      padding: 48px 52px;
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* línea naranja vertical izquierda */
-    .left::before {
-      content: '';
-      position: absolute;
-      left: 0; top: 15%; bottom: 15%;
-      width: 2px;
-      background: linear-gradient(180deg, transparent, #F97316 30%, #FB923C 70%, transparent);
-      opacity: 0.5;
-    }
-
-    .left-logo {
-      display: flex;
-      align-items: center;
-      gap: 11px;
-      margin-bottom: auto;
-    }
-
-    .logo-mark {
-      width: 34px; height: 34px;
-      border-radius: 9px;
-      background: linear-gradient(135deg, #1a1a24, #111118);
-      border: 0.5px solid rgba(249,115,22,0.3);
-      display: flex; align-items: center; justify-content: center;
-      font-size: 16px; font-weight: 900; color: #F97316;
-    }
-
-    .logo-name {
-      font-size: 15px; font-weight: 800;
-      color: #F9FAFB; letter-spacing: -0.3px;
-    }
-    .logo-name span { color: #F97316; }
-
-    /* Texto central izquierdo */
-    .left-body {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      padding: 48px 0;
-    }
-
-    .left-eyebrow {
-      display: inline-flex;
-      align-items: center;
-      gap: 7px;
-      margin-bottom: 28px;
-    }
-
-    .eyebrow-dot {
-      width: 5px; height: 5px;
-      border-radius: 50%;
-      background: #22C55E;
-      box-shadow: 0 0 8px rgba(34,197,94,0.7);
-      animation: pulse 2.5s ease-in-out infinite;
-    }
-    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.3} }
-
-    .eyebrow-text {
-      font-size: 10px; font-weight: 700;
-      letter-spacing: 0.12em; text-transform: uppercase;
-      color: #4B5563;
-    }
-
-    .left-heading {
-      font-size: 42px; font-weight: 900;
-      line-height: 1.05; letter-spacing: -0.04em;
-      color: #F9FAFB;
-      margin-bottom: 20px;
-    }
-
-    .left-heading .orange { color: #F97316; }
-
-    .left-desc {
-      font-size: 13px; color: #4B5563;
-      line-height: 1.75; max-width: 290px;
-      margin-bottom: 40px;
-    }
-
-    /* Stats row */
-    .left-stats {
-      display: flex;
-      flex-direction: column;
-      gap: 12px;
-    }
-
-    .stat-row {
-      display: flex;
-      align-items: center;
-      gap: 14px;
-    }
-
-    .stat-line {
-      width: 20px; height: 1px;
-      background: rgba(249,115,22,0.35);
-      flex-shrink: 0;
-    }
-
-    .stat-text {
-      font-size: 12px; color: #374151;
-      letter-spacing: 0.01em;
-    }
-    .stat-text b { color: #6B7280; font-weight: 600; }
-
-    /* Footer izquierdo */
-    .left-footer {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-
-    .afip-badge {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 5px 11px;
-      border-radius: 999px;
-      background: rgba(34,197,94,0.05);
-      border: 0.5px solid rgba(34,197,94,0.15);
-      font-size: 10px; font-weight: 700;
-      letter-spacing: 0.08em; text-transform: uppercase;
-      color: #16A34A;
-    }
-
-    /* ── PANEL DERECHO ── */
-    .right {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      background: #050509;
-      position: relative;
-      overflow: hidden;
-    }
-
-    /* Glow de fondo */
-    .right::before {
-      content: '';
-      position: absolute;
-      width: 500px; height: 500px;
-      border-radius: 50%;
-      background: radial-gradient(circle, rgba(249,115,22,0.055) 0%, transparent 65%);
-      top: 50%; left: 50%;
-      transform: translate(-50%, -50%);
-      pointer-events: none;
-    }
-
-    /* Grid de puntos */
-    .right::after {
-      content: '';
-      position: absolute; inset: 0;
-      background-image: radial-gradient(circle, rgba(255,255,255,0.02) 1px, transparent 1px);
-      background-size: 28px 28px;
-      mask-image: radial-gradient(ellipse 70% 70% at 50% 50%, black 20%, transparent 100%);
-      pointer-events: none;
-    }
-
-    /* Caja del form */
-    .form-box {
-      width: 100%;
-      max-width: 380px;
-      position: relative;
-      z-index: 1;
-      padding: 20px;
-    }
-
-    .form-header {
-      margin-bottom: 32px;
-    }
-
-    .form-title {
-      font-size: 24px; font-weight: 800;
-      letter-spacing: -0.04em; color: #F9FAFB;
-      margin-bottom: 5px;
-    }
-
-    .form-sub {
-      font-size: 13px; color: #374151;
-    }
-
-    /* Tabs minimalistas */
-    .tabs {
-      display: flex;
-      gap: 0;
-      margin-bottom: 28px;
-      border-bottom: 0.5px solid rgba(255,255,255,0.06);
-    }
-
-    .tab {
-      padding: 0 0 12px;
-      margin-right: 24px;
-      font-size: 13px; font-weight: 600;
-      color: #374151;
-      background: none; border: none;
-      cursor: pointer;
-      position: relative;
-      transition: color .2s;
-      letter-spacing: -0.01em;
-    }
-    .tab:hover { color: #6B7280; }
-    .tab.active { color: #F9FAFB; }
-    .tab.active::after {
-      content: '';
-      position: absolute;
-      bottom: -0.5px; left: 0; right: 0;
-      height: 1.5px;
-      background: linear-gradient(90deg, #F97316, #FB923C);
-    }
-
-    /* Panels */
-    .panel { display: none; }
-    .panel.active { display: block; animation: up .2s ease; }
-    @keyframes up { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:translateY(0)} }
-
-    /* Google */
-    .btn-google {
-      display: flex; align-items: center; justify-content: center; gap: 10px;
-      width: 100%; padding: 11px 16px;
-      border-radius: 10px;
-      background: rgba(255,255,255,0.03);
-      border: 0.5px solid rgba(255,255,255,0.08);
-      color: #9CA3AF; font-size: 13px; font-weight: 600;
-      text-decoration: none;
-      transition: all .18s;
-      margin-bottom: 22px;
-    }
-    .btn-google:hover {
-      background: rgba(255,255,255,0.06);
-      border-color: rgba(255,255,255,0.13);
-      color: #F9FAFB;
-    }
-
-    .or-sep {
-      display: flex; align-items: center; gap: 12px;
-      margin-bottom: 20px;
-      font-size: 11px; color: #1F2937;
-      letter-spacing: 0.06em; font-weight: 600;
-    }
-    .or-sep::before, .or-sep::after {
-      content: ''; flex: 1; height: 0.5px;
-      background: rgba(255,255,255,0.05);
-    }
-
-    /* Campos */
-    .field { margin-bottom: 12px; }
-
-    .field label {
-      display: block;
-      font-size: 11px; font-weight: 600;
-      letter-spacing: 0.04em; color: #374151;
-      margin-bottom: 6px;
-    }
-
-    .field input {
-      width: 100%;
-      background: rgba(255,255,255,0.025);
-      border: 0.5px solid rgba(255,255,255,0.07);
-      border-radius: 10px;
-      color: #F9FAFB;
-      font-family: 'Inter', sans-serif;
-      font-size: 13px;
-      padding: 11px 14px;
-      outline: none;
-      transition: border-color .18s, background .18s;
-    }
-    .field input::placeholder { color: #1F2937; }
-    .field input:focus {
-      border-color: rgba(249,115,22,0.4);
-      background: rgba(249,115,22,0.025);
-    }
-
-    .field-2col { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-
-    .pass-wrap { position: relative; }
-    .pass-wrap input { padding-right: 42px; }
-    .eye {
-      position: absolute; right: 12px; top: 50%; transform: translateY(-50%);
-      background: none; border: none; color: #1F2937;
-      cursor: pointer; padding: 4px; display: flex;
-      transition: color .15s;
-    }
-    .eye:hover { color: #4B5563; }
-
-    /* Error / success */
-    .msg {
-      padding: 10px 13px; border-radius: 9px;
-      font-size: 12px; font-weight: 500;
-      margin-bottom: 14px;
-      display: none; align-items: center; gap: 8px;
-      line-height: 1.4;
-    }
-    .msg {
-    display: none !important;
-}
-.msg.show {
-    display: flex !important;
-}
-.msg.err.show  { background:rgba(239,68,68,0.06);  border:0.5px solid rgba(239,68,68,0.2);  color:#FCA5A5; }
-.msg.ok.show   { background:rgba(34,197,94,0.06);  border:0.5px solid rgba(34,197,94,0.2);  color:#86EFAC; }
-
-    /* Botón submit */
-    .btn-submit {
-      width: 100%; padding: 13px;
-      border-radius: 10px; border: none;
-      background: linear-gradient(90deg, #F97316, #FB923C);
-      color: #fff;
-      font-family: 'Inter', sans-serif;
-      font-size: 14px; font-weight: 700;
-      cursor: pointer;
-      margin-top: 16px;
-      display: flex; align-items: center; justify-content: center; gap: 8px;
-      transition: opacity .2s, transform .15s;
-      letter-spacing: -0.01em;
-    }
-    .btn-submit:hover { opacity: 0.9; transform: translateY(-1px); }
-    .btn-submit:active { transform: scale(.98); }
-    .btn-submit:disabled { opacity: .4; pointer-events: none; }
-
-    .btn-spinner {
-      width: 14px; height: 14px;
-      border: 2px solid rgba(255,255,255,.3);
-      border-top-color: #fff;
-      border-radius: 50%;
-      animation: spin .6s linear infinite;
-      display: none;
-    }
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .terms {
-      font-size: 11px; color: #1F2937;
-      text-align: center; margin-top: 14px; line-height: 1.6;
-    }
-    .terms a { color: #374151; text-decoration: underline; text-underline-offset: 2px; }
-    .terms a:hover { color: #6B7280; }
-
-    /* ── RESPONSIVE ── */
-    @media (max-width: 680px) {
-      .left { display: none; }
-      .right { min-height: 100vh; }
-      .form-box { padding: 40px 28px; }
-    }
-  </style>
+  <link rel="stylesheet" href="/css/login.css"/>
 </head>
 <body>
 
@@ -442,13 +76,30 @@
         <button class="tab" onclick="switchTab('register')">Crear cuenta</button>
       </div>
 
-      <div class="msg err" id="msgErr"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><path d="M6.5 4v3M6.5 8.5h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg><span id="errTxt"></span></div>
-      <div class="msg ok" id="msgOk"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/><path d="M4 6.5l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="okTxt"></span></div>
+      <div class="msg err" id="msgErr">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M6.5 4v3M6.5 8.5h.01" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/>
+        </svg>
+        <span id="errTxt"></span>
+      </div>
+      <div class="msg ok" id="msgOk">
+        <svg width="13" height="13" viewBox="0 0 13 13" fill="none">
+          <circle cx="6.5" cy="6.5" r="5.5" stroke="currentColor" stroke-width="1.2"/>
+          <path d="M4 6.5l2 2 3-3" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        <span id="okTxt"></span>
+      </div>
 
       <!-- LOGIN -->
       <div class="panel active" id="pLogin">
         <a class="btn-google" href="/auth/google">
-          <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+          <svg width="16" height="16" viewBox="0 0 18 18">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
           Continuar con Google
         </a>
         <div class="or-sep">o</div>
@@ -461,7 +112,10 @@
           <div class="pass-wrap">
             <input id="lPass" type="password" placeholder="••••••••" autocomplete="current-password"/>
             <button class="eye" type="button" onclick="togglePass('lPass',this)">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5s2.5-4.5 6.5-4.5S14 7.5 14 7.5s-2.5 4.5-6.5 4.5S1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.2"/><circle cx="7.5" cy="7.5" r="1.8" stroke="currentColor" stroke-width="1.2"/></svg>
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M1 7.5s2.5-4.5 6.5-4.5S14 7.5 14 7.5s-2.5 4.5-6.5 4.5S1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="7.5" cy="7.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
             </button>
           </div>
         </div>
@@ -474,7 +128,12 @@
       <!-- REGISTER -->
       <div class="panel" id="pReg">
         <a class="btn-google" href="/auth/google">
-          <svg width="16" height="16" viewBox="0 0 18 18"><path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/><path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/><path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/><path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/></svg>
+          <svg width="16" height="16" viewBox="0 0 18 18">
+            <path d="M17.64 9.2c0-.637-.057-1.251-.164-1.84H9v3.481h4.844c-.209 1.125-.843 2.078-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.875 2.684-6.615z" fill="#4285F4"/>
+            <path d="M9 18c2.43 0 4.467-.806 5.956-2.184l-2.908-2.258c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332C2.438 15.983 5.482 18 9 18z" fill="#34A853"/>
+            <path d="M3.964 10.707c-.18-.54-.282-1.117-.282-1.707s.102-1.167.282-1.707V4.961H.957C.347 6.175 0 7.55 0 9s.348 2.825.957 4.039l3.007-2.332z" fill="#FBBC05"/>
+            <path d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0 5.482 0 2.438 2.017.957 4.961L3.964 7.293C4.672 5.163 6.656 3.58 9 3.58z" fill="#EA4335"/>
+          </svg>
           Registrarse con Google
         </a>
         <div class="or-sep">o</div>
@@ -497,7 +156,10 @@
           <div class="pass-wrap">
             <input id="rPass" type="password" placeholder="Mínimo 8 caracteres" autocomplete="new-password"/>
             <button class="eye" type="button" onclick="togglePass('rPass',this)">
-              <svg width="15" height="15" viewBox="0 0 15 15" fill="none"><path d="M1 7.5s2.5-4.5 6.5-4.5S14 7.5 14 7.5s-2.5 4.5-6.5 4.5S1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.2"/><circle cx="7.5" cy="7.5" r="1.8" stroke="currentColor" stroke-width="1.2"/></svg>
+              <svg width="15" height="15" viewBox="0 0 15 15" fill="none">
+                <path d="M1 7.5s2.5-4.5 6.5-4.5S14 7.5 14 7.5s-2.5 4.5-6.5 4.5S1 7.5 1 7.5z" stroke="currentColor" stroke-width="1.2"/>
+                <circle cx="7.5" cy="7.5" r="1.8" stroke="currentColor" stroke-width="1.2"/>
+              </svg>
             </button>
           </div>
         </div>
@@ -529,30 +191,34 @@
     }
 
     function clearMsg() {
-    document.getElementById('msgErr').classList.remove('show');
-    document.getElementById('msgErr').style.display = 'none';
-    document.getElementById('msgOk').classList.remove('show');
-    document.getElementById('msgOk').style.display  = 'none';
-}
-function err(t) {
-    document.getElementById('errTxt').textContent = t;
-    document.getElementById('msgOk').classList.remove('show');
-    document.getElementById('msgOk').style.display  = 'none';
-    document.getElementById('msgErr').classList.add('show');
-    document.getElementById('msgErr').style.display = 'flex';
-}
-function ok(t) {
-    document.getElementById('okTxt').textContent = t;
-    document.getElementById('msgErr').classList.remove('show');
-    document.getElementById('msgErr').style.display = 'none';
-    document.getElementById('msgOk').classList.add('show');
-    document.getElementById('msgOk').style.display  = 'flex';
-}
+      document.getElementById('msgErr').classList.remove('show');
+      document.getElementById('msgErr').style.display = 'none';
+      document.getElementById('msgOk').classList.remove('show');
+      document.getElementById('msgOk').style.display = 'none';
+    }
+
+    function err(t) {
+      document.getElementById('errTxt').textContent = t;
+      document.getElementById('msgOk').classList.remove('show');
+      document.getElementById('msgOk').style.display = 'none';
+      document.getElementById('msgErr').classList.add('show');
+      document.getElementById('msgErr').style.display = 'flex';
+    }
+
+    function ok(t) {
+      document.getElementById('okTxt').textContent = t;
+      document.getElementById('msgErr').classList.remove('show');
+      document.getElementById('msgErr').style.display = 'none';
+      document.getElementById('msgOk').classList.add('show');
+      document.getElementById('msgOk').style.display = 'flex';
+    }
+
     function load(btn, sp, lbl, on) {
       document.getElementById(btn).disabled = on;
       document.getElementById(sp).style.display = on ? 'block' : 'none';
       document.getElementById(lbl).style.opacity = on ? 0 : 1;
     }
+
     function togglePass(id, btn) {
       const el = document.getElementById(id);
       el.type = el.type === 'password' ? 'text' : 'password';
@@ -562,11 +228,11 @@ function ok(t) {
     async function login() {
       clearMsg();
       const email = document.getElementById('lEmail').value.trim();
-      const pass  = document.getElementById('lPass').value;
+      const pass = document.getElementById('lPass').value;
       if (!email || !pass) return err('Completá email y contraseña.');
       load('btnL','spL','lblL', true);
       try {
-        const res  = await fetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass}) });
+        const res = await fetch('/auth/login', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({email, password: pass}) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al ingresar');
         ok('¡Bienvenido! Redirigiendo…');
@@ -577,16 +243,16 @@ function ok(t) {
 
     async function register() {
       clearMsg();
-      const nombre   = document.getElementById('rNombre').value.trim();
+      const nombre = document.getElementById('rNombre').value.trim();
       const apellido = document.getElementById('rApellido').value.trim();
-      const email    = document.getElementById('rEmail').value.trim();
-      const pass     = document.getElementById('rPass').value;
+      const email = document.getElementById('rEmail').value.trim();
+      const pass = document.getElementById('rPass').value;
       if (!nombre || !email || !pass) return err('Completá todos los campos.');
       if (pass.length < 8) return err('La contraseña debe tener al menos 8 caracteres.');
       if (!email.includes('@')) return err('El email no es válido.');
       load('btnR','spR','lblR', true);
       try {
-        const res  = await fetch('/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, apellido, email, password: pass}) });
+        const res = await fetch('/auth/register', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({nombre, apellido, email, password: pass}) });
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || 'Error al registrarse');
         ok('¡Cuenta creada! Ya podés ingresar.');
@@ -604,13 +270,10 @@ function ok(t) {
     if (p.get('error') === 'auth_failed') err('No se pudo autenticar con Google.');
     if (p.get('registered')) ok('Cuenta creada. Ya podés ingresar.');
     if (p.get('tab') === 'register') switchTab('register');
-  // ============================================================
-//  APLICAR ESTILOS A LOS INPUTS DE LOGIN
-// ============================================================
 
-function aplicarEstilosLogin() {
-    const inputs = document.querySelectorAll('#pLogin input');
-    inputs.forEach(input => {
+    function aplicarEstilosLogin() {
+      const inputs = document.querySelectorAll('#pLogin input');
+      inputs.forEach(input => {
         input.style.setProperty('border', '0.5px solid rgba(255,255,255,0.07)', 'important');
         input.style.setProperty('border-color', 'rgba(255,255,255,0.07)', 'important');
         input.style.setProperty('box-shadow', 'none', 'important');
@@ -618,28 +281,25 @@ function aplicarEstilosLogin() {
         input.style.setProperty('background', 'rgba(255,255,255,0.025)', 'important');
         input.style.setProperty('-webkit-box-shadow', 'none', 'important');
         input.style.setProperty('border-radius', '10px', 'important');
-        
         input.removeAttribute('required');
         input.removeAttribute('aria-invalid');
         input.removeAttribute('aria-required');
+      });
+      console.log('✅ Estilos aplicados a los inputs de login');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+      aplicarEstilosLogin();
     });
-    console.log('✅ Estilos aplicados a los inputs de login');
-}
 
-// Ejecutar al cargar la página
-document.addEventListener('DOMContentLoaded', function() {
-    aplicarEstilosLogin();
-});
-
-// También aplicar cuando se cambia de tab
-const originalSwitchTab = switchTab;
-switchTab = function(t) {
-    originalSwitchTab(t);
-    setTimeout(aplicarEstilosLogin, 50);
-};
+    const originalSwitchTab = switchTab;
+    switchTab = function(t) {
+      originalSwitchTab(t);
+      setTimeout(aplicarEstilosLogin, 50);
+    };
   </script>
 
- <script src="/js/login.js"></script> 
- 
+  <script src="/js/login.js"></script>
+
 </body>
 </html>

@@ -30,12 +30,61 @@ let selectedCountry = null;
 let isBlocked = false;
 
 // ============================================================
+// OCULTAR/MOSTRAR FORMULARIOS
+// ============================================================
+
+function hideAllForms() {
+  console.log('🔍 [LOGIN] Ocultando todos los formularios');
+  
+  const pLogin = document.getElementById('pLogin');
+  const pReg = document.getElementById('pReg');
+  const tabs = document.querySelector('.tabs');
+  const googleBtn = document.querySelector('.btn-google');
+  const orSep = document.querySelector('.or-sep');
+
+  if (pLogin) pLogin.style.display = 'none';
+  if (pReg) pReg.style.display = 'none';
+  if (tabs) tabs.style.display = 'none';
+  if (googleBtn) googleBtn.style.display = 'none';
+  if (orSep) orSep.style.display = 'none';
+  
+  console.log('✅ [LOGIN] Formularios ocultados');
+}
+
+function showAllForms() {
+  console.log('🔍 [LOGIN] Mostrando todos los formularios');
+  
+  const pLogin = document.getElementById('pLogin');
+  const pReg = document.getElementById('pReg');
+  const tabs = document.querySelector('.tabs');
+  const googleBtn = document.querySelector('.btn-google');
+  const orSep = document.querySelector('.or-sep');
+
+  if (pLogin) pLogin.style.display = 'block';
+  if (pReg) pReg.style.display = 'block';
+  if (tabs) tabs.style.display = 'flex';
+  if (googleBtn) googleBtn.style.display = 'flex';
+  if (orSep) orSep.style.display = 'flex';
+  
+  console.log('✅ [LOGIN] Formularios mostrados');
+}
+
+// ============================================================
 // INICIALIZAR SELECTOR
 // ============================================================
 
 function initCountrySelector() {
+  console.log('🚀 [LOGIN] initCountrySelector() iniciado');
+  
   const container = document.getElementById('countrySelector');
-  if (!container) return;
+  if (!container) {
+    console.error('❌ [LOGIN] No se encontró #countrySelector');
+    return;
+  }
+  console.log('✅ [LOGIN] #countrySelector encontrado');
+
+  // 👇 OCULTAR FORMULARIOS AL CARGAR LA PÁGINA
+  hideAllForms();
 
   container.innerHTML = `
     <div class="country-selector-wrapper">
@@ -60,6 +109,7 @@ function initCountrySelector() {
     </div>
     <div class="country-message" id="countryMessage"></div>
   `;
+  console.log('✅ [LOGIN] Selector HTML inyectado');
 
   const btn = document.getElementById('countryBtn');
   const dropdown = document.getElementById('countryDropdown');
@@ -68,17 +118,22 @@ function initCountrySelector() {
     e.stopPropagation();
     dropdown.classList.toggle('open');
     btn.classList.toggle('open');
+    console.log(`🔄 [LOGIN] Dropdown ${dropdown.classList.contains('open') ? 'abierto' : 'cerrado'}`);
   });
 
   document.addEventListener('click', () => {
-    dropdown.classList.remove('open');
-    btn.classList.remove('open');
+    if (dropdown.classList.contains('open')) {
+      dropdown.classList.remove('open');
+      btn.classList.remove('open');
+      console.log('🔄 [LOGIN] Dropdown cerrado por click fuera');
+    }
   });
 
   document.querySelectorAll('.country-option').forEach(opt => {
     opt.addEventListener('click', () => {
       const code = opt.dataset.code;
       const country = COUNTRIES.find(c => c.code === code);
+      console.log(`🖱️ [LOGIN] País seleccionado: ${code} - ${country?.name}`);
       if (country) {
         selectCountry(country);
         dropdown.classList.remove('open');
@@ -86,6 +141,8 @@ function initCountrySelector() {
       }
     });
   });
+  
+  console.log('✅ [LOGIN] Event listeners configurados');
 }
 
 // ============================================================
@@ -93,17 +150,16 @@ function initCountrySelector() {
 // ============================================================
 
 function selectCountry(country) {
+  console.log(`📌 [LOGIN] selectCountry() - País: ${country.code} - ${country.name}`);
+  
   selectedCountry = country;
   isBlocked = !SUPPORTED_COUNTRIES.includes(country.code);
+  
+  console.log(`   isBlocked: ${isBlocked}`);
+  console.log(`   SUPPORTED_COUNTRIES:`, SUPPORTED_COUNTRIES);
 
   const btn = document.getElementById('countryBtn');
   const msg = document.getElementById('countryMessage');
-  
-  const pLogin = document.getElementById('pLogin');
-  const pReg = document.getElementById('pReg');
-  const tabs = document.querySelector('.tabs');
-  const googleBtn = document.querySelector('.btn-google');
-  const orSep = document.querySelector('.or-sep');
 
   // Actualizar botón
   btn.innerHTML = `
@@ -116,9 +172,12 @@ function selectCountry(country) {
       <path d="M6 9l6 6 6-6"/>
     </svg>
   `;
+  console.log('✅ [LOGIN] Botón actualizado');
 
   if (isBlocked) {
     // 🔒 PAÍS BLOQUEADO - OCULTAR TODO
+    console.log('🚫 [LOGIN] PAÍS BLOQUEADO - Ocultando formularios');
+    
     msg.style.display = 'block';
     msg.className = 'country-message country-message-blocked';
     msg.innerHTML = `
@@ -132,27 +191,27 @@ function selectCountry(country) {
         </div>
       </div>
     `;
+    console.log('✅ [LOGIN] Mensaje de bloqueo mostrado');
     
-    // Ocultar formularios
-    if (pLogin) pLogin.style.display = 'none';
-    if (pReg) pReg.style.display = 'none';
-    if (tabs) tabs.style.display = 'none';
-    if (googleBtn) googleBtn.style.display = 'none';
-    if (orSep) orSep.style.display = 'none';
+    hideAllForms();
 
   } else {
     // ✅ PAÍS VÁLIDO - MOSTRAR TODO
+    console.log('✅ [LOGIN] PAÍS VÁLIDO - Mostrando formularios');
+    
     msg.style.display = 'none';
     msg.innerHTML = '';
+    console.log('✅ [LOGIN] Mensaje ocultado');
     
-    if (pLogin) pLogin.style.display = 'block';
-    if (pReg) pReg.style.display = 'block';
-    if (tabs) tabs.style.display = 'flex';
-    if (googleBtn) googleBtn.style.display = 'flex';
-    if (orSep) orSep.style.display = 'flex';
+    showAllForms();
     
     // Activar tab de login por defecto
-    switchTab('login');
+    if (typeof switchTab === 'function') {
+      switchTab('login');
+      console.log('✅ [LOGIN] Tab login activado');
+    } else {
+      console.warn('⚠️ [LOGIN] switchTab no está definido');
+    }
   }
 }
 
@@ -160,9 +219,13 @@ function selectCountry(country) {
 // MODIFICAR LOGIN Y REGISTER PARA ENVIAR PAÍS
 // ============================================================
 
-// Modificar login
 window.login = async function() {
+  console.log('🔑 [LOGIN] login() ejecutado');
+  console.log(`   isBlocked: ${isBlocked}`);
+  console.log(`   selectedCountry: ${selectedCountry?.code || 'null'}`);
+  
   if (isBlocked || !selectedCountry) {
+    console.warn('⚠️ [LOGIN] Bloqueado o sin país seleccionado');
     err('Selecciona un país válido antes de continuar.');
     return;
   }
@@ -170,10 +233,16 @@ window.login = async function() {
   const email = document.getElementById('lEmail').value.trim();
   const pass = document.getElementById('lPass').value;
   
-  if (!email || !pass) return err('Completá email y contraseña.');
+  console.log(`   Email: ${email}`);
+  
+  if (!email || !pass) {
+    console.warn('⚠️ [LOGIN] Email o contraseña vacíos');
+    return err('Completá email y contraseña.');
+  }
   
   load('btnL','spL','lblL', true);
   try {
+    console.log(`📤 [LOGIN] Enviando petición con país: ${selectedCountry.code}`);
     const res = await fetch('/auth/login', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -184,16 +253,24 @@ window.login = async function() {
       })
     });
     const data = await res.json();
+    console.log(`📥 [LOGIN] Respuesta:`, data);
     if (!res.ok) throw new Error(data.error || 'Error al ingresar');
     ok('¡Bienvenido! Redirigiendo…');
     setTimeout(() => location.href = '/dashboard', 800);
-  } catch(e) { err(e.message); }
+  } catch(e) { 
+    console.error(`❌ [LOGIN] Error: ${e.message}`);
+    err(e.message); 
+  }
   finally { load('btnL','spL','lblL', false); }
 };
 
-// Modificar register
 window.register = async function() {
+  console.log('📝 [REGISTER] register() ejecutado');
+  console.log(`   isBlocked: ${isBlocked}`);
+  console.log(`   selectedCountry: ${selectedCountry?.code || 'null'}`);
+  
   if (isBlocked || !selectedCountry) {
+    console.warn('⚠️ [REGISTER] Bloqueado o sin país seleccionado');
     err('Selecciona un país válido antes de continuar.');
     return;
   }
@@ -203,12 +280,24 @@ window.register = async function() {
   const email = document.getElementById('rEmail').value.trim();
   const pass = document.getElementById('rPass').value;
   
-  if (!nombre || !email || !pass) return err('Completá todos los campos.');
-  if (pass.length < 8) return err('La contraseña debe tener al menos 8 caracteres.');
-  if (!email.includes('@')) return err('El email no es válido.');
+  console.log(`   Email: ${email}`);
+  
+  if (!nombre || !email || !pass) {
+    console.warn('⚠️ [REGISTER] Campos obligatorios faltantes');
+    return err('Completá todos los campos.');
+  }
+  if (pass.length < 8) {
+    console.warn('⚠️ [REGISTER] Contraseña muy corta');
+    return err('La contraseña debe tener al menos 8 caracteres.');
+  }
+  if (!email.includes('@')) {
+    console.warn('⚠️ [REGISTER] Email inválido');
+    return err('El email no es válido.');
+  }
   
   load('btnR','spR','lblR', true);
   try {
+    console.log(`📤 [REGISTER] Enviando petición con país: ${selectedCountry.code}`);
     const res = await fetch('/auth/register', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
@@ -221,13 +310,17 @@ window.register = async function() {
       })
     });
     const data = await res.json();
+    console.log(`📥 [REGISTER] Respuesta:`, data);
     if (!res.ok) throw new Error(data.error || 'Error al registrarse');
     ok('¡Cuenta creada! Ya podés ingresar.');
     setTimeout(() => {
       switchTab('login');
       document.getElementById('lEmail').value = email;
     }, 1200);
-  } catch(e) { err(e.message); }
+  } catch(e) { 
+    console.error(`❌ [REGISTER] Error: ${e.message}`);
+    err(e.message); 
+  }
   finally { load('btnR','spR','lblR', false); }
 };
 
@@ -235,4 +328,5 @@ window.register = async function() {
 // INICIALIZAR
 // ============================================================
 
+console.log('🚀 [LOGIN] Script login.js cargado');
 document.addEventListener('DOMContentLoaded', initCountrySelector);

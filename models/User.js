@@ -1,3 +1,4 @@
+// models/User.js
 const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
@@ -9,6 +10,22 @@ const UserSchema = new mongoose.Schema({
   googleId: { type: String, sparse: true },
   avatar: { type: String },
   plan: { type: String, default: 'free', enum: ['free', 'pro'] },
+  
+  // 👇 NUEVOS CAMPOS DE PAÍS
+  pais: {
+    type: String,
+    default: 'AR',
+    enum: ['AR', 'MX', 'CO', 'CL', 'PE', 'BR', 'UY', 'PY', 'BO', 'VE', 'EC', 'GT', 'HN', 'NI', 'CR', 'PA', 'DO', 'PR']
+  },
+  paisSeleccionado: {
+    type: Boolean,
+    default: false
+  },
+  paisSeleccionadoEn: {
+    type: Date,
+    default: null
+  },
+  
   settings: {
     factAuto: { type: Boolean, default: true },
     envioAuto: { type: Boolean, default: true },

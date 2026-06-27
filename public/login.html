@@ -433,6 +433,10 @@
         <div class="form-sub" id="formSub">Ingresá a tu cuenta</div>
       </div>
 
+      <!-- Selector de país -->
+      <div id="countrySelector"></div>
+      <div id="countryMessage" style="display:none;"></div>
+
       <div class="tabs">
         <button class="tab active" onclick="switchTab('login')">Ingresar</button>
         <button class="tab" onclick="switchTab('register')">Crear cuenta</button>
@@ -634,6 +638,8 @@ switchTab = function(t) {
     setTimeout(aplicarEstilosLogin, 50);
 };
   </script>
-  
+
+ <script src="/js/login.js"></script> 
+ 
 </body>
 </html>

@@ -181,6 +181,12 @@ app.use('/api/admin', require('./routes/api/admin'));
 app.use('/api/notifications', require('./routes/api/notifications'));
 
 // ============================================================
+// PAIS
+// ============================================================
+
+app.use('/api/pais', require('./routes/api/pais'));
+
+// ============================================================
 // VIEW ENGINE
 // ============================================================
 app.set('view engine', 'ejs');

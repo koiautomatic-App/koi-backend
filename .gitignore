@@ -1,1 +1,5 @@
 node_modules/
+bucket-policy.json
+lambda-code.zip
+main
+response.json

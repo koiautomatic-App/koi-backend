@@ -1,0 +1,135 @@
+/* ============================================================
+   COUNTRY SELECTOR - KOI STYLE
+   ============================================================ */
+.country-selector-wrapper {
+  position: relative;
+  margin-bottom: 20px;
+  z-index: 50;
+}
+
+.country-selector-btn {
+  width: 100%;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.025);
+  border: 0.5px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  color: #F9FAFB;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: border-color .18s;
+}
+
+.country-selector-btn:hover {
+  border-color: rgba(249,115,22,0.3);
+}
+
+.country-selector-btn.open {
+  border-color: rgba(249,115,22,0.5);
+}
+
+.country-selector-btn .country-placeholder {
+  color: #4B5563;
+}
+
+.country-selector-btn .country-selected {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.country-selector-btn .country-blocked {
+  color: #F87171;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.country-chevron {
+  transition: transform .2s;
+  color: #4B5563;
+  flex-shrink: 0;
+}
+
+.country-selector-btn.open .country-chevron {
+  transform: rotate(180deg);
+}
+
+.country-dropdown {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 200px;
+  overflow-y: auto;
+  background: #0D0D16;
+  border: 0.5px solid rgba(255,255,255,0.07);
+  border-radius: 10px;
+  z-index: 100;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+
+.country-dropdown.open {
+  display: block;
+}
+
+.country-option {
+  width: 100%;
+  padding: 10px 14px;
+  background: none;
+  border: none;
+  color: #F9FAFB;
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background .15s;
+}
+
+.country-option:hover {
+  background: rgba(249,115,22,0.05);
+}
+
+.country-option .country-badge {
+  margin-left: auto;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: rgba(34,197,94,0.1);
+  color: #22C55E;
+}
+
+.country-message {
+  margin-top: 12px;
+  padding: 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.country-message-blocked {
+  background: rgba(239,68,68,0.06);
+  border: 0.5px solid rgba(239,68,68,0.2);
+  color: #FCA5A5;
+}
+
+.country-message-blocked strong {
+  display: block;
+  font-size: 15px;
+  margin-bottom: 4px;
+}
+
+.country-message-blocked p {
+  margin: 4px 0;
+}
+
+.country-message-blocked p:last-child {
+  color: #FBBF24;
+}

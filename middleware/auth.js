@@ -81,10 +81,52 @@ const requireAdmin = async (req, res, next) => {
   }
 };
 
+// ============================================================
+// NUEVO: VERIFICACIÓN DE PAÍS
+// ============================================================
+
+const SUPPORTED_COUNTRIES = ['AR']; // Solo Argentina por ahora
+
+const requirePaisValido = async (req, res, next) => {
+  try {
+    const user = await User.findById(req.userId).select('pais paisSeleccionado');
+    
+    if (!user) {
+      return res.status(401).json({ error: 'Usuario no encontrado' });
+    }
+    
+    if (!user.paisSeleccionado) {
+      return res.status(403).json({ 
+        error: 'Debes seleccionar tu país',
+        codigo: 'PAIS_NO_SELECCIONADO',
+        redirect: '/login'
+      });
+    }
+    
+    if (!SUPPORTED_COUNTRIES.includes(user.pais)) {
+      return res.status(403).json({ 
+        error: 'Koi solo está disponible en Argentina por el momento',
+        codigo: 'PAIS_NO_SOPORTADO',
+        redirect: '/bloqueado'
+      });
+    }
+    
+    next();
+  } catch (error) {
+    console.error('❌ requirePaisValido error:', error.message);
+    res.status(500).json({ error: 'Error al verificar país' });
+  }
+};
+
+// 👇 COMBINAR MIDDLEWARES (autenticación + país)
+const requireAuthWithPais = [requireAuthAPI, requirePaisValido];
+
 module.exports = {
   signToken,
   setTokenCookie,
   requireAuth,
   requireAuthAPI,
   requireAdmin,
+  requirePaisValido,       // 👈 NUEVO
+  requireAuthWithPais,    // 👈 NUEVO
 };

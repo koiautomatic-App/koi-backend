@@ -52,7 +52,7 @@ function hideAllForms() {
 }
 
 function showAllForms() {
-  console.log('🔍 [LOGIN] Mostrando todos los formularios');
+  console.log('🔍 [LOGIN] Mostrando formularios');
   
   const pLogin = document.getElementById('pLogin');
   const pReg = document.getElementById('pReg');
@@ -60,13 +60,28 @@ function showAllForms() {
   const googleBtn = document.querySelector('.btn-google');
   const orSep = document.querySelector('.or-sep');
 
-  if (pLogin) pLogin.style.display = 'block';
-  if (pReg) pReg.style.display = 'block';
+  // Mostrar tabs y elementos comunes
   if (tabs) tabs.style.display = 'flex';
   if (googleBtn) googleBtn.style.display = 'flex';
   if (orSep) orSep.style.display = 'flex';
   
-  console.log('✅ [LOGIN] Formularios mostrados');
+  // 👇 SOLO MOSTRAR EL PANEL ACTIVO
+  // Verificar cuál tiene la clase 'active'
+  const loginActive = pLogin?.classList.contains('active');
+  const regActive = pReg?.classList.contains('active');
+  
+  console.log(`   loginActive: ${loginActive}, regActive: ${regActive}`);
+  
+  if (pLogin) {
+    pLogin.style.display = loginActive ? 'block' : 'none';
+    console.log(`   pLogin: ${loginActive ? 'mostrado' : 'ocultado'}`);
+  }
+  if (pReg) {
+    pReg.style.display = regActive ? 'block' : 'none';
+    console.log(`   pReg: ${regActive ? 'mostrado' : 'ocultado'}`);
+  }
+  
+  console.log('✅ [LOGIN] Formularios mostrados correctamente');
 }
 
 // ============================================================
@@ -206,14 +221,61 @@ function selectCountry(country) {
     showAllForms();
     
     // Activar tab de login por defecto
-    if (typeof switchTab === 'function') {
-      switchTab('login');
-      console.log('✅ [LOGIN] Tab login activado');
-    } else {
-      console.warn('⚠️ [LOGIN] switchTab no está definido');
-    }
+    switchTab('login');
+    console.log('✅ [LOGIN] Tab login activado');
   }
 }
+
+// ============================================================
+// FUNCIONES DE SWITCH TAB - CORREGIDAS
+// ============================================================
+
+// Sobrescribir switchTab
+window.switchTab = function(tab) {
+  console.log(`🔄 [LOGIN] switchTab() - ${tab}`);
+  
+  const pLogin = document.getElementById('pLogin');
+  const pReg = document.getElementById('pReg');
+  const tabs = document.querySelectorAll('.tab');
+  
+  // Solo cambiar si Argentina está seleccionado
+  if (selectedCountry && !isBlocked) {
+    if (tab === 'login') {
+      // Mostrar login, ocultar registro
+      if (pLogin) {
+        pLogin.style.display = 'block';
+        pLogin.classList.add('active');
+      }
+      if (pReg) {
+        pReg.style.display = 'none';
+        pReg.classList.remove('active');
+      }
+      if (tabs[0]) tabs[0].classList.add('active');
+      if (tabs[1]) tabs[1].classList.remove('active');
+      document.getElementById('formTitle').textContent = 'Bienvenido';
+      document.getElementById('formSub').textContent = 'Ingresá a tu cuenta';
+      console.log('✅ [LOGIN] Mostrando formulario de login');
+    } else if (tab === 'register') {
+      // Mostrar registro, ocultar login
+      if (pLogin) {
+        pLogin.style.display = 'none';
+        pLogin.classList.remove('active');
+      }
+      if (pReg) {
+        pReg.style.display = 'block';
+        pReg.classList.add('active');
+      }
+      if (tabs[0]) tabs[0].classList.remove('active');
+      if (tabs[1]) tabs[1].classList.add('active');
+      document.getElementById('formTitle').textContent = 'Empezá gratis';
+      document.getElementById('formSub').textContent = '30 días de cortesía, sin tarjeta';
+      console.log('✅ [LOGIN] Mostrando formulario de registro');
+    }
+    clearMsg();
+  } else {
+    console.warn('⚠️ [LOGIN] No se puede cambiar tab sin país seleccionado');
+  }
+};
 
 // ============================================================
 // MODIFICAR LOGIN Y REGISTER PARA ENVIAR PAÍS

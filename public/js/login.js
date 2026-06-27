@@ -58,7 +58,6 @@ function initCountrySelector() {
     <div class="country-message" id="countryMessage" style="display:none;"></div>
   `;
 
-  // Eventos
   const btn = document.getElementById('countryBtn');
   const dropdown = document.getElementById('countryDropdown');
 
@@ -87,7 +86,7 @@ function initCountrySelector() {
 }
 
 // ============================================================
-// SELECCIONAR PAÍS
+// SELECCIONAR PAÍS - CORREGIDO
 // ============================================================
 
 function selectCountry(country) {
@@ -96,8 +95,11 @@ function selectCountry(country) {
 
   const btn = document.getElementById('countryBtn');
   const msg = document.getElementById('countryMessage');
+  
+  // 🔍 IMPORTANTE: Buscar los formularios correctamente
   const pLogin = document.getElementById('pLogin');
   const pReg = document.getElementById('pReg');
+  const tabs = document.querySelector('.tabs');
 
   // Actualizar botón
   btn.innerHTML = `
@@ -112,20 +114,51 @@ function selectCountry(country) {
   `;
 
   if (isBlocked) {
+    // 🔒 PAÍS BLOQUEADO - OCULTAR TODO
     msg.style.display = 'block';
     msg.className = 'country-message country-message-blocked';
     msg.innerHTML = `
-      <strong>⛔ País no disponible</strong>
-      <p>Koi se encuentra en fase de desarrollo y por el momento solo está disponible en Argentina.</p>
-      <p><strong>¡Pronto llegaremos a más países!</strong></p>
-      <button onclick="location.reload()" style="margin-top:12px;padding:8px 16px;background:rgba(249,115,22,0.2);border:0.5px solid rgba(249,115,22,0.3);border-radius:8px;color:#FB923C;cursor:pointer;">Intentar de nuevo</button>
+      <div style="display:flex;align-items:flex-start;gap:12px;padding:4px 0;">
+        <span style="font-size:24px;">⛔</span>
+        <div>
+          <strong style="display:block;font-size:16px;color:#F87171;">País no disponible</strong>
+          <p style="margin:4px 0;color:#9CA3AF;">Koi se encuentra en fase de desarrollo y por el momento solo está disponible en <strong style="color:#F9FAFB;">Argentina</strong>.</p>
+          <p style="margin:4px 0;color:#FBBF24;font-size:13px;">¡Pronto llegaremos a más países!</p>
+          <button onclick="location.reload()" style="margin-top:10px;padding:8px 18px;background:rgba(249,115,22,0.15);border:0.5px solid rgba(249,115,22,0.3);border-radius:8px;color:#FB923C;cursor:pointer;font-weight:600;">Intentar de nuevo</button>
+        </div>
+      </div>
     `;
+    
+    // ❌ OCULTAR formularios y tabs
     if (pLogin) pLogin.style.display = 'none';
     if (pReg) pReg.style.display = 'none';
+    if (tabs) tabs.style.display = 'none';
+    
+    // Ocultar también "Continuar con Google"
+    const googleBtn = document.querySelector('.btn-google');
+    if (googleBtn) googleBtn.style.display = 'none';
+    
+    // Ocultar separador "o"
+    const orSep = document.querySelector('.or-sep');
+    if (orSep) orSep.style.display = 'none';
+
   } else {
+    // ✅ PAÍS VÁLIDO - MOSTRAR TODO
     msg.style.display = 'none';
+    msg.innerHTML = '';
+    
     if (pLogin) pLogin.style.display = 'block';
     if (pReg) pReg.style.display = 'block';
+    if (tabs) tabs.style.display = 'flex';
+    
+    const googleBtn = document.querySelector('.btn-google');
+    if (googleBtn) googleBtn.style.display = 'flex';
+    
+    const orSep = document.querySelector('.or-sep');
+    if (orSep) orSep.style.display = 'flex';
+    
+    // Activar el tab de login por defecto
+    switchTab('login');
   }
 }
 
@@ -157,7 +190,7 @@ window.login = async function() {
       body: JSON.stringify({
         email,
         password: pass,
-        pais: selectedCountry.code  // 👈 ENVIAR PAÍS
+        pais: selectedCountry.code
       })
     });
     const data = await res.json();
@@ -194,7 +227,7 @@ window.register = async function() {
         apellido,
         email,
         password: pass,
-        pais: selectedCountry.code  // 👈 ENVIAR PAÍS
+        pais: selectedCountry.code
       })
     });
     const data = await res.json();

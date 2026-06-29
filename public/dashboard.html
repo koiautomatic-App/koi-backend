@@ -38,9 +38,9 @@
       <span class="material-icons nav-icon">add_business</span> Conectar Mi Negocio
     </div>
     <div class="nav-section">Reportes</div>
-    <div class="nav-item">
-      <span class="material-icons nav-icon">bar_chart</span> IVA Ventas
-    </div>
+<div class="nav-item" id="nav-reporte" onclick="mostrarVista('reporte')">
+  <span class="material-icons nav-icon">description</span> Mensual
+</div>
     <div class="nav-section">Sistema</div>
     <div class="nav-item" id="nav-arca" onclick="mostrarVista('arca')">
       <span class="material-icons nav-icon">sync</span> Sincronizar con ARCA
@@ -1303,6 +1303,213 @@
 
   </div><!-- /main -->
 </div><!-- /shell -->
+<!-- ── VISTA REPORTE MENSUAL ── -->
+<div class="content" id="vista-reporte" style="display:none;">
+
+  <!-- HEADER -->
+  <div class="report-header">
+    <div>
+      <p class="sec-label" style="margin:0;">Reportes</p>
+      <h2 style="font-size:18px;font-weight:700;color:var(--text-1);margin:4px 0 0;">Reporte mensual para el contador</h2>
+    </div>
+  </div>
+
+  <!-- MONTH BAR -->
+  <div class="month-bar-report">
+    <button class="month-btn-report" data-mes="0" onclick="cambiarMesReporte(0, this)">Ene</button>
+    <button class="month-btn-report" data-mes="1" onclick="cambiarMesReporte(1, this)">Feb</button>
+    <button class="month-btn-report" data-mes="2" onclick="cambiarMesReporte(2, this)">Mar</button>
+    <button class="month-btn-report" data-mes="3" onclick="cambiarMesReporte(3, this)">Abr</button>
+    <button class="month-btn-report" data-mes="4" onclick="cambiarMesReporte(4, this)">May</button>
+    <button class="month-btn-report active" data-mes="5" onclick="cambiarMesReporte(5, this)">Jun</button>
+    <button class="month-btn-report" data-mes="6" onclick="cambiarMesReporte(6, this)">Jul</button>
+    <button class="month-btn-report" data-mes="7" onclick="cambiarMesReporte(7, this)">Ago</button>
+    <button class="month-btn-report" data-mes="8" onclick="cambiarMesReporte(8, this)">Sep</button>
+    <button class="month-btn-report" data-mes="9" onclick="cambiarMesReporte(9, this)">Oct</button>
+    <button class="month-btn-report" data-mes="10" onclick="cambiarMesReporte(10, this)">Nov</button>
+    <button class="month-btn-report" data-mes="11" onclick="cambiarMesReporte(11, this)">Dic</button>
+  </div>
+
+  <!-- LAYOUT -->
+  <div class="report-layout-component">
+
+    <!-- LEFT PANEL -->
+    <div class="report-panel-left">
+
+      <!-- Periodo info -->
+      <div class="report-panel-section">
+        <div class="period-badge-report">
+          <span class="material-icons" style="font-size:14px;">calendar_today</span>
+          Reporte mensual · <span id="rptCondicionFiscal">Monotributista</span>
+        </div>
+        <div class="period-title-report" id="rptPeriodTitle">Junio 2026</div>
+        <div class="period-sub-report" id="rptNegocioNombre">Cargando...</div>
+      </div>
+
+      <!-- Enviar a -->
+      <div class="report-panel-section">
+        <div class="report-panel-label">Enviar a</div>
+        <div class="contador-card-report" onclick="editarContador()">
+          <div class="contador-avatar-report" id="rptContadorAvatar">CG</div>
+          <div>
+            <div class="contador-name-report" id="rptContadorNombre">Carlos García</div>
+            <div class="contador-email-report" id="rptContadorEmail">cgarcia@estudio.com.ar</div>
+          </div>
+        </div>
+        <div class="change-link-report" onclick="editarContador()">+ Cambiar contador</div>
+      </div>
+
+      <!-- Incluir -->
+      <div class="report-panel-section">
+        <div class="report-panel-label">Incluir en el reporte</div>
+        <div class="report-check-list">
+          <label class="report-check-item">
+            <input type="checkbox" id="rptChkComprobantes" checked onchange="actualizarPreviewReporte()">
+            Comprobantes del mes
+          </label>
+          <label class="report-check-item">
+            <input type="checkbox" id="rptChkCategoria" checked onchange="actualizarPreviewReporte()">
+            Posición en categoría
+          </label>
+          <label class="report-check-item">
+            <input type="checkbox" id="rptChkNC" onchange="actualizarPreviewReporte()">
+            Notas de crédito
+          </label>
+        </div>
+      </div>
+
+      <!-- Nota -->
+      <div class="report-panel-section" style="flex:1;">
+        <div class="report-panel-label">Nota para el contador</div>
+        <textarea class="nota-textarea-report" id="rptNotaContador" placeholder="Ej: Este mes tuve una devolución..." oninput="actualizarNotaReporte()"></textarea>
+      </div>
+
+      <!-- Actions -->
+      <div class="report-panel-actions">
+        <div class="last-send-report">
+          <span class="material-icons" style="font-size:14px;">schedule</span>
+          Último envío: <span id="rptUltimoEnvio">No enviado</span>
+        </div>
+        <button class="btn-send-report" id="rptBtnEnviar" onclick="enviarReporteContador()">
+          <span class="material-icons" style="font-size:16px;">send</span>
+          Enviar reporte por email
+        </button>
+        <div class="pdf-notice-report">
+          <span class="material-icons" style="font-size:13px;">picture_as_pdf</span>
+          <span>El reporte se adjunta en PDF automáticamente</span>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- RIGHT PANEL -->
+    <div class="report-panel-right">
+
+      <div class="preview-bar-report">
+        <div class="preview-bar-label-report">
+          <span class="material-icons" style="font-size:14px;">visibility</span>
+          Vista previa · lo que recibe el contador
+        </div>
+        <div class="preview-bar-right-report">PDF generado por KOI</div>
+      </div>
+
+      <div class="preview-scroll-report" id="reportPreviewScroll">
+
+        <!-- DOC -->
+        <div class="doc-report" id="reportDocContainer">
+
+          <div class="doc-header-report">
+            <div class="doc-logo-report">
+              <div class="doc-logo-mark-report">K</div>
+              <div class="doc-logo-text-report">KOI<span>·FACTURA</span></div>
+            </div>
+            <div class="doc-header-sub-report">Reporte automático mensual</div>
+          </div>
+
+          <div class="doc-title-row-report">
+            <div class="doc-title-report" id="rptDocTitle">Reporte de junio 2026</div>
+            <div class="doc-subtitle-report" id="rptDocSubtitle">Cargando datos...</div>
+          </div>
+
+          <div class="doc-stats-report">
+            <div class="doc-stat-report">
+              <div class="doc-stat-label-report">Total facturado</div>
+              <div class="doc-stat-value-report" id="rptTotalFacturado">$0</div>
+              <div class="doc-stat-sub-report" id="rptTotalComprobantes">0 comprobantes</div>
+            </div>
+            <div class="doc-stat-report">
+              <div class="doc-stat-label-report">Acum. 12 meses</div>
+              <div class="doc-stat-value-report" id="rptAcumulado">$0</div>
+              <div class="doc-stat-sub-report" id="rptPorcentajeCategoria">0% del límite</div>
+            </div>
+            <div class="doc-stat-report">
+              <div class="doc-stat-label-report">Pendientes CAE</div>
+              <div class="doc-stat-value-report warn" id="rptPendientesCAE">0</div>
+              <div class="doc-stat-sub-report">Requiere atención</div>
+            </div>
+          </div>
+
+          <!-- Comprobantes -->
+          <div id="rptSeccionComprobantes">
+            <div class="doc-table-header-report">
+              <div class="doc-table-title-report">Comprobantes emitidos · <span id="rptTableMes">Junio 2026</span></div>
+            </div>
+            <div style="padding: 20px; text-align: center; color: #888; font-size: 13px;" id="rptLoadingComprobantes">
+              Cargando comprobantes...
+            </div>
+            <table class="comp-table-report" id="rptComprobantesTable" style="display:none;">
+              <thead>
+                <tr>
+                  <th>N° Comp.</th>
+                  <th>Cliente</th>
+                  <th>CAE</th>
+                  <th>Vto. CAE</th>
+                  <th style="text-align:right;">Monto</th>
+                </tr>
+              </thead>
+              <tbody id="rptComprobantesBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Nota -->
+          <div class="doc-nota-report" id="rptSeccionNota" style="display:none;">
+            <div class="doc-nota-label-report">Nota de <span id="rptNotaNegocio">KOI</span></div>
+            <div class="doc-nota-text-report" id="rptNotaPreview"></div>
+          </div>
+
+          <!-- Posición en categoría -->
+          <div class="doc-cat-report" id="rptSeccionCategoria">
+            <div class="doc-cat-title-report">Posición en categoría</div>
+            <div class="doc-cat-row-report">
+              <span>Facturado últimos 12 meses</span>
+              <span id="rptCatFacturado">$0</span>
+            </div>
+            <div class="doc-cat-row-report">
+              <span>Límite Categoría <span id="rptCatLimiteLabel">C</span></span>
+              <span id="rptCatLimite">$0</span>
+            </div>
+            <div class="doc-progress-track-report">
+              <div class="doc-progress-fill-report" id="rptCatProgress" style="width:0%;"></div>
+            </div>
+            <div class="doc-cat-pct-report" id="rptCatPct">0% utilizado · Margen disponible: $0</div>
+          </div>
+
+          <div class="doc-footer-report">
+            Generado automáticamente por KOI · koi-factura.lat · Los datos son de carácter informativo
+          </div>
+
+        </div>
+
+        <div class="preview-foot-report">
+          Así se ve el PDF adjunto que recibe tu contador
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+</div>
 
 <!-- ── MODAL NUEVA EMISIÓN ──────────────────────────── -->
 <div class="modal-overlay" id="modalOverlay" onclick="cerrarNuevaEmision()"></div>

@@ -6189,6 +6189,335 @@ document.addEventListener('DOMContentLoaded', function() {
     }, 500);
 });
 // ============================================================
+//  REPORTE MENSUAL PARA EL CONTADOR
+//  Agregar al final de index.js
+// ============================================================
+
+let _reporteMes = new Date().getMonth();
+let _reporteAnio = new Date().getFullYear();
+let _reporteDatos = null;
+let _reporteComprobantes = [];
+
+// Cargar reporte
+async function cargarReporte() {
+  console.log('📊 Cargando reporte mensual...');
+  await cargarDatosUsuarioReporte();
+  await cargarDatosReporte();
+}
+
+// Cargar datos del usuario
+async function cargarDatosUsuarioReporte() {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' });
+    const data = await res.json();
+    const user = data.user;
+    const settings = user?.settings || {};
+    
+    const nombreNegocio = user?.nombre || settings?.razonSocial || 'Mi Negocio';
+    const cuit = settings?.cuit || 'XX-XXXXXXXX-X';
+    const categoria = settings?.categoria || 'C';
+    const condicionFiscal = settings?.condicionFiscal || 'responsable_inscripto';
+    
+    const elNegocio = document.getElementById('rptNegocioNombre');
+    const elCondicion = document.getElementById('rptCondicionFiscal');
+    const elSubtitle = document.getElementById('rptDocSubtitle');
+    const elNotaNegocio = document.getElementById('rptNotaNegocio');
+    const elCatLimite = document.getElementById('rptCatLimiteLabel');
+    
+    if (elNegocio) elNegocio.textContent = `${nombreNegocio} · Categoría ${categoria}`;
+    if (elCondicion) elCondicion.textContent = condicionFiscal === 'monotributo' ? 'Monotributista' : 'Responsable Inscripto';
+    if (elSubtitle) elSubtitle.textContent = `${nombreNegocio} · CUIT ${cuit} · ${condicionFiscal === 'monotributo' ? 'Monotributista Cat. ' + categoria : 'Responsable Inscripto'}`;
+    if (elNotaNegocio) elNotaNegocio.textContent = nombreNegocio;
+    if (elCatLimite) elCatLimite.textContent = categoria;
+    
+    window._reporteUsuario = { nombreNegocio, cuit, categoria, condicionFiscal };
+    
+  } catch (error) {
+    console.error('Error cargando usuario:', error);
+  }
+}
+
+// Cargar datos del reporte
+async function cargarDatosReporte() {
+  const mes = _reporteMes;
+  const anio = _reporteAnio;
+  
+  const fechaInicio = new Date(anio, mes, 1);
+  const fechaFin = new Date(anio, mes + 1, 0);
+  
+  const desde = fechaInicio.toISOString().split('T')[0];
+  const hasta = fechaFin.toISOString().split('T')[0];
+  
+  const nombreMes = fechaInicio.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
+  const mesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+  
+  const elPeriodTitle = document.getElementById('rptPeriodTitle');
+  const elDocTitle = document.getElementById('rptDocTitle');
+  const elTableMes = document.getElementById('rptTableMes');
+  
+  if (elPeriodTitle) elPeriodTitle.textContent = mesCapitalizado;
+  if (elDocTitle) elDocTitle.textContent = `Reporte de ${mesCapitalizado}`;
+  if (elTableMes) elTableMes.textContent = mesCapitalizado;
+  
+  try {
+    // Obtener comprobantes del mes
+    const ordersRes = await fetch(`/api/orders?desde=${desde}&hasta=${hasta}&limit=200`, { credentials: 'include' });
+    const ordersData = await ordersRes.json();
+    const orders = ordersData.orders || [];
+    
+    // Obtener estadísticas
+    const statsRes = await fetch('/api/stats/dashboard', { credentials: 'include' });
+    const statsData = await statsRes.json();
+    
+    // Filtrar comprobantes emitidos
+    const comprobantes = orders.filter(o => o.status === 'invoiced' || o.caeNumber);
+    const pendientes = orders.filter(o => o.status === 'pending_invoice' || o.status === 'error_afip');
+    
+    const totalFacturado = comprobantes.reduce((sum, o) => sum + (o.amount || 0), 0);
+    const totalPendientes = pendientes.length;
+    
+    const acumulado12 = statsData.facturacionAcumulada || 0;
+    const limiteCategoria = statsData.limiteAnual || 21113697;
+    const porcentaje = limiteCategoria > 0 ? (acumulado12 / limiteCategoria) * 100 : 0;
+    const margen = limiteCategoria - acumulado12;
+    const categoria = statsData.categoria || window._reporteUsuario?.categoria || 'C';
+    
+    // Actualizar stats
+    const elTotalFacturado = document.getElementById('rptTotalFacturado');
+    const elTotalComprobantes = document.getElementById('rptTotalComprobantes');
+    const elAcumulado = document.getElementById('rptAcumulado');
+    const elPorcentajeCategoria = document.getElementById('rptPorcentajeCategoria');
+    const elPendientesCAE = document.getElementById('rptPendientesCAE');
+    
+    if (elTotalFacturado) elTotalFacturado.textContent = `$${totalFacturado.toLocaleString()}`;
+    if (elTotalComprobantes) elTotalComprobantes.textContent = `${comprobantes.length} comprobantes`;
+    if (elAcumulado) elAcumulado.textContent = `$${acumulado12.toLocaleString()}`;
+    if (elPorcentajeCategoria) elPorcentajeCategoria.textContent = `${porcentaje.toFixed(1)}% del límite Cat. ${categoria}`;
+    if (elPendientesCAE) elPendientesCAE.textContent = totalPendientes;
+    
+    // Actualizar categoría
+    const elCatFacturado = document.getElementById('rptCatFacturado');
+    const elCatLimite = document.getElementById('rptCatLimite');
+    const elCatProgress = document.getElementById('rptCatProgress');
+    const elCatPct = document.getElementById('rptCatPct');
+    
+    if (elCatFacturado) elCatFacturado.textContent = `$${acumulado12.toLocaleString()}`;
+    if (elCatLimite) elCatLimite.textContent = `$${limiteCategoria.toLocaleString()}`;
+    if (elCatProgress) elCatProgress.style.width = `${Math.min(porcentaje, 100)}%`;
+    if (elCatPct) elCatPct.textContent = `${porcentaje.toFixed(1)}% utilizado · Margen disponible: $${margen.toLocaleString()}`;
+    
+    renderizarTablaReporte(comprobantes);
+    
+    _reporteDatos = {
+      mes: mesCapitalizado,
+      anio,
+      totalFacturado,
+      totalComprobantes: comprobantes.length,
+      acumulado12,
+      limiteCategoria,
+      porcentaje,
+      margen,
+      categoria,
+      comprobantes,
+      pendientes: totalPendientes
+    };
+    
+  } catch (error) {
+    console.error('Error cargando datos del reporte:', error);
+    const loading = document.getElementById('rptLoadingComprobantes');
+    if (loading) loading.innerHTML = '❌ Error al cargar los datos';
+  }
+}
+
+// Renderizar tabla de comprobantes
+function renderizarTablaReporte(comprobantes) {
+  const tbody = document.getElementById('rptComprobantesBody');
+  const loading = document.getElementById('rptLoadingComprobantes');
+  const table = document.getElementById('rptComprobantesTable');
+  
+  if (!comprobantes || comprobantes.length === 0) {
+    if (loading) {
+      loading.style.display = 'block';
+      loading.innerHTML = 'No hay comprobantes emitidos en este período';
+    }
+    if (table) table.style.display = 'none';
+    return;
+  }
+  
+  if (loading) loading.style.display = 'none';
+  if (table) table.style.display = 'table';
+  
+  let html = '';
+  let total = 0;
+  
+  comprobantes.forEach((o, i) => {
+    const monto = o.amount || 0;
+    total += monto;
+    const nroComp = o.nroFormatted || o.externalId || '—';
+    const cliente = o.customerName || 'Sin nombre';
+    const caeDisplay = o.caeNumber || '—';
+    const caeVto = o.caeExpiry ? new Date(o.caeExpiry).toLocaleDateString('es-AR') : '—';
+    const altClass = i % 2 === 0 ? '' : 'alt';
+    
+    html += `
+      <tr class="${altClass}">
+        <td>${nroComp}</td>
+        <td>${cliente}</td>
+        <td class="mono">${caeDisplay}</td>
+        <td class="date">${caeVto}</td>
+        <td>$${monto.toLocaleString()}</td>
+      </tr>
+    `;
+  });
+  
+  html += `
+    <tr class="total">
+      <td colspan="4">Total del período</td>
+      <td>$${total.toLocaleString()}</td>
+    </tr>
+  `;
+  
+  if (tbody) tbody.innerHTML = html;
+}
+
+// Cambiar mes
+function cambiarMesReporte(mes, btn) {
+  _reporteMes = mes;
+  
+  document.querySelectorAll('.month-btn-report').forEach(b => b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  
+  const ahora = new Date();
+  if (mes > ahora.getMonth() && _reporteAnio === ahora.getFullYear()) {
+    console.log('⚠️ Mes futuro, no hay datos');
+    return;
+  }
+  
+  cargarDatosReporte();
+}
+
+// Actualizar preview
+function actualizarPreviewReporte() {
+  const chkComp = document.getElementById('rptChkComprobantes');
+  const chkCat = document.getElementById('rptChkCategoria');
+  const chkNC = document.getElementById('rptChkNC');
+  
+  const seccionComp = document.getElementById('rptSeccionComprobantes');
+  const seccionCat = document.getElementById('rptSeccionCategoria');
+  
+  if (seccionComp) seccionComp.style.display = chkComp?.checked ? '' : 'none';
+  if (seccionCat) seccionCat.style.display = chkCat?.checked ? '' : 'none';
+  
+  // Notas de crédito
+  const rows = document.querySelectorAll('#rptComprobantesBody tr');
+  rows.forEach(row => {
+    if (row.classList.contains('total')) return;
+    const firstTd = row.querySelector('td');
+    if (firstTd) {
+      const isNC = firstTd.textContent?.startsWith('NC');
+      if (isNC) {
+        row.style.display = chkNC?.checked ? '' : 'none';
+      }
+    }
+  });
+}
+
+// Actualizar nota
+function actualizarNotaReporte() {
+  const texto = document.getElementById('rptNotaContador')?.value.trim() || '';
+  const seccion = document.getElementById('rptSeccionNota');
+  const preview = document.getElementById('rptNotaPreview');
+  
+  if (seccion && preview) {
+    if (texto) {
+      preview.textContent = texto;
+      seccion.style.display = '';
+    } else {
+      seccion.style.display = 'none';
+    }
+  }
+}
+
+// Editar contador
+function editarContador() {
+  alert('Podés cambiar el email del contador en Configuración > Contador');
+}
+
+// Enviar reporte
+async function enviarReporteContador() {
+  const btn = document.getElementById('rptBtnEnviar');
+  if (!btn) return;
+  
+  const originalText = btn.innerHTML;
+  
+  btn.disabled = true;
+  btn.innerHTML = '<span class="material-icons" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Enviando...';
+  
+  try {
+    const nota = document.getElementById('rptNotaContador')?.value.trim() || '';
+    const emailContador = document.getElementById('rptContadorEmail')?.textContent || '';
+    const nombreNegocio = window._reporteUsuario?.nombreNegocio || 'KOI';
+    
+    const reporteData = {
+      mes: _reporteMes,
+      anio: _reporteAnio,
+      nota: nota,
+      contadorEmail: emailContador,
+    };
+    
+    const res = await fetch('/api/reports/send', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify(reporteData)
+    });
+    
+    const data = await res.json();
+    
+    if (data.ok) {
+      btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Reporte enviado';
+      btn.style.background = 'rgba(61,184,122,0.2)';
+      btn.style.border = '1px solid rgba(61,184,122,0.3)';
+      btn.style.color = '#3db87a';
+      
+      const ultimoEnvio = document.getElementById('rptUltimoEnvio');
+      if (ultimoEnvio) ultimoEnvio.textContent = new Date().toLocaleDateString('es-AR');
+      
+      setTimeout(() => {
+        btn.style.background = '';
+        btn.style.border = '';
+        btn.style.color = '';
+        btn.innerHTML = originalText;
+        btn.disabled = false;
+      }, 3000);
+    } else {
+      throw new Error(data.error || 'Error al enviar');
+    }
+  } catch (error) {
+    console.error('Error enviando reporte:', error);
+    btn.innerHTML = '<span class="material-icons" style="font-size:16px;">error</span> Error al enviar';
+    btn.style.background = 'rgba(239,68,68,0.2)';
+    btn.style.border = '1px solid rgba(239,68,68,0.3)';
+    btn.style.color = '#f87171';
+    
+    setTimeout(() => {
+      btn.style.background = '';
+      btn.style.border = '';
+      btn.style.color = '';
+      btn.innerHTML = originalText;
+      btn.disabled = false;
+    }, 3000);
+  }
+}
+
+// Inicializar reporte
+function initReporte() {
+  const vistaReporte = document.getElementById('vista-reporte');
+  if (vistaReporte && vistaReporte.style.display !== 'none') {
+    cargarReporte();
+  }
+}
+// ============================================================
 //  EXPORTS GLOBALES
 // ============================================================
 window.obtenerNotificaciones = obtenerNotificaciones;

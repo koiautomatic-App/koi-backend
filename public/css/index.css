@@ -4869,7 +4869,7 @@ select.cfg-input:focus {
 
 /* ── CONTENEDOR PRINCIPAL ── */
 #vista-reporte {
-  display: block !important;
+  display: none;  /* 👈 CAMBIAR: de block a none */
   width: 100% !important;
   height: auto !important;
   min-height: 500px !important;
@@ -5578,9 +5578,10 @@ table.comp-table-report tr.total td:last-child {
     padding: 12px !important;
   }
   
-  #vista-reporte {
-    padding: 12px 14px 16px !important;
-  }
+ #vista-reporte {
+  display: none !important;  /* 👈 ESTO PERMITE QUE JS LO CONTROLE */
+  padding: 12px 14px 16px !important;
+}
   
   .btn-send-report {
     font-size: 11px !important;

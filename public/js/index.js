@@ -6180,19 +6180,6 @@ function initFiltroTodos() {
     }
 }
 
-// Modificar mostrarVista para inicializar filtro al entrar a comprobantes
-const originalMostrarVista = window.mostrarVista || function() {};
-window.mostrarVista = function(vista) {
-    // Llamar a la función original
-    if (typeof originalMostrarVista === 'function') {
-        originalMostrarVista(vista);
-    }
-    
-    // Si es la vista de comprobantes, inicializar filtro
-    if (vista === 'comprobantes') {
-        setTimeout(initFiltroTodos, 150);
-    }
-};
 
 // Ejecutar al cargar la página
 document.addEventListener('DOMContentLoaded', function() {

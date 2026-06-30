@@ -468,58 +468,73 @@ function mostrarVista(v) {
   vistaActual = v;
   document.querySelectorAll('.content').forEach(el => el.style.display = 'none');
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
-  if (v === 'dashboard') {
-    document.querySelector('.content').style.display = 'block';
-    document.getElementById('nav-dashboard').classList.add('active');
-  } else if (v === 'comprobantes') {
-    document.getElementById('vista-comprobantes').style.display = 'block';
-    document.getElementById('nav-comprobantes').classList.add('active');
+  
+  // Mapa de vistas
+  const map = {
+    dashboard: { id: 'vista-dashboard', nav: 'nav-dashboard' },
+    comprobantes: { id: 'vista-comprobantes', nav: 'nav-comprobantes' },
+    negocio: { id: 'vista-negocio', nav: 'nav-negocio' },
+    arca: { id: 'vista-arca', nav: 'nav-arca' },
+    config: { id: 'vista-config', nav: 'nav-config' },
+    estado: { id: 'vista-estado', nav: 'nav-estado' },
+    reporte: { id: 'vista-reporte', nav: 'nav-reporte' }
+  };
+  
+  const vista = map[v];
+  if (!vista) {
+    console.warn('⚠️ Vista no encontrada:', v);
+    return;
+  }
+  
+  // Mostrar la vista
+  const el = document.getElementById(vista.id);
+  if (el) {
+    el.style.display = 'block';
+    console.log(`✅ Vista ${v} mostrada`);
+  } else {
+    console.warn(`⚠️ Elemento #${vista.id} no encontrado`);
+  }
+  
+  // Activar nav
+  const nav = document.getElementById(vista.nav);
+  if (nav) nav.classList.add('active');
+  
+  // Ejecutar función específica según la vista
+  if (v === 'comprobantes') {
     if (!_rangoDesde) _iniciarPeriodo();
-    cargarTodosComprobantes();
+    if (typeof cargarTodosComprobantes === 'function') cargarTodosComprobantes();
   } else if (v === 'negocio') {
-    document.getElementById('vista-negocio').style.display = 'block';
-    document.getElementById('nav-negocio').classList.add('active');
-    mostrarVistaNormalNegocio();
+    if (typeof mostrarVistaNormalNegocio === 'function') mostrarVistaNormalNegocio();
   } else if (v === 'arca') {
-    document.getElementById('vista-arca').style.display = 'block';
-    document.getElementById('nav-arca').classList.add('active');
-    if (typeof cargarEstadoARCA === 'function') {
-      cargarEstadoARCA();
-    }
+    if (typeof cargarEstadoARCA === 'function') cargarEstadoARCA();
   } else if (v === 'config') {
-    document.getElementById('vista-config').style.display = 'block';
-    document.getElementById('nav-config').classList.add('active');
-    cargarConfigVista();
+    if (typeof cargarConfigVista === 'function') cargarConfigVista();
   } else if (v === 'estado') {
-    // 👇 NUEVA LÓGICA: Verificar si el usuario está suscripto
+    // Verificar estado de suscripción
     const vistaEstado = document.getElementById('vista-estado');
     if (vistaEstado) vistaEstado.style.display = 'none';
     
-    // Verificar estado de suscripción
-    verificarEstadoSuscripcion().then(activa => {
-      if (activa) {
-        console.log('✅ Usuario suscripto → Mostrando vista de Suscripción Activa');
-        mostrarSuscripcionActiva();
-      } else {
-        console.log('⚠️ Usuario no suscripto → Mostrando onboarding de MI PLAN');
-        if (typeof mostrarOnboardingPlan === 'function') {
-          mostrarOnboardingPlan();
+    if (typeof verificarEstadoSuscripcion === 'function') {
+      verificarEstadoSuscripcion().then(activa => {
+        if (activa) {
+          console.log('✅ Usuario suscripto → Mostrando vista de Suscripción Activa');
+          if (typeof mostrarSuscripcionActiva === 'function') mostrarSuscripcionActiva();
         } else {
-          if (vistaEstado) vistaEstado.style.display = 'block';
-          if (typeof verificarSuscripcion === 'function') {
-            verificarSuscripcion();
+          console.log('⚠️ Usuario no suscripto → Mostrando onboarding de MI PLAN');
+          if (typeof mostrarOnboardingPlan === 'function') {
+            mostrarOnboardingPlan();
+          } else {
+            if (vistaEstado) vistaEstado.style.display = 'block';
+            if (typeof verificarSuscripcion === 'function') verificarSuscripcion();
           }
         }
-      }
-    }).catch(error => {
-      console.error('Error verificando suscripción:', error);
-      // Fallback: mostrar onboarding
-      if (typeof mostrarOnboardingPlan === 'function') {
-        mostrarOnboardingPlan();
-      }
-    });
-    
-    document.getElementById('nav-estado').classList.add('active');
+      }).catch(error => {
+        console.error('Error verificando suscripción:', error);
+        if (typeof mostrarOnboardingPlan === 'function') mostrarOnboardingPlan();
+      });
+    }
+  } else if (v === 'reporte') {
+    if (typeof cargarReporte === 'function') cargarReporte();
   }
 }
 /* ── SUSCRIPCIÓN KOI / MERCADO PAGO ─────────────────── */

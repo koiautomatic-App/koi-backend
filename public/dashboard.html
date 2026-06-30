@@ -1300,34 +1300,35 @@
     </div>
 
 </div>
-
-  </div><!-- /main -->
-</div><!-- /shell -->
 <!-- ── VISTA REPORTE MENSUAL ── -->
 <div class="content" id="vista-reporte" style="display:none;">
 
-  <!-- HEADER -->
+  <!-- HEADER REORGANIZADO -->
   <div class="report-header">
-    <div>
-      <p class="sec-label" style="margin:0;">Reportes</p>
-      <h2 style="font-size:18px;font-weight:700;color:var(--text-1);margin:4px 0 0;">Reporte mensual para el contador</h2>
+    <div class="report-header-left">
+      <p class="sec-label" style="margin:0;font-size:9px;color:var(--text-3);">Reportes</p>
+      <h2 style="font-size:16px;font-weight:700;color:var(--text-1);margin:0;">Reporte mensual para el contador</h2>
+      <div class="month-buttons-container">
+        <button class="month-btn-report" data-mes="0" onclick="cambiarMesReporte(0, this)">Ene</button>
+        <button class="month-btn-report" data-mes="1" onclick="cambiarMesReporte(1, this)">Feb</button>
+        <button class="month-btn-report" data-mes="2" onclick="cambiarMesReporte(2, this)">Mar</button>
+        <button class="month-btn-report" data-mes="3" onclick="cambiarMesReporte(3, this)">Abr</button>
+        <button class="month-btn-report" data-mes="4" onclick="cambiarMesReporte(4, this)">May</button>
+        <button class="month-btn-report active" data-mes="5" onclick="cambiarMesReporte(5, this)">Jun</button>
+        <button class="month-btn-report" data-mes="6" onclick="cambiarMesReporte(6, this)">Jul</button>
+        <button class="month-btn-report" data-mes="7" onclick="cambiarMesReporte(7, this)">Ago</button>
+        <button class="month-btn-report" data-mes="8" onclick="cambiarMesReporte(8, this)">Sep</button>
+        <button class="month-btn-report" data-mes="9" onclick="cambiarMesReporte(9, this)">Oct</button>
+        <button class="month-btn-report" data-mes="10" onclick="cambiarMesReporte(10, this)">Nov</button>
+        <button class="month-btn-report" data-mes="11" onclick="cambiarMesReporte(11, this)">Dic</button>
+      </div>
     </div>
-  </div>
-
-  <!-- MONTH BAR -->
-  <div class="month-bar-report">
-    <button class="month-btn-report" data-mes="0" onclick="cambiarMesReporte(0, this)">Ene</button>
-    <button class="month-btn-report" data-mes="1" onclick="cambiarMesReporte(1, this)">Feb</button>
-    <button class="month-btn-report" data-mes="2" onclick="cambiarMesReporte(2, this)">Mar</button>
-    <button class="month-btn-report" data-mes="3" onclick="cambiarMesReporte(3, this)">Abr</button>
-    <button class="month-btn-report" data-mes="4" onclick="cambiarMesReporte(4, this)">May</button>
-    <button class="month-btn-report active" data-mes="5" onclick="cambiarMesReporte(5, this)">Jun</button>
-    <button class="month-btn-report" data-mes="6" onclick="cambiarMesReporte(6, this)">Jul</button>
-    <button class="month-btn-report" data-mes="7" onclick="cambiarMesReporte(7, this)">Ago</button>
-    <button class="month-btn-report" data-mes="8" onclick="cambiarMesReporte(8, this)">Sep</button>
-    <button class="month-btn-report" data-mes="9" onclick="cambiarMesReporte(9, this)">Oct</button>
-    <button class="month-btn-report" data-mes="10" onclick="cambiarMesReporte(10, this)">Nov</button>
-    <button class="month-btn-report" data-mes="11" onclick="cambiarMesReporte(11, this)">Dic</button>
+    <div class="report-header-right">
+      <button class="btn-send-report" id="rptBtnEnviar" onclick="enviarReporteContador()">
+        <span class="material-icons" style="font-size:16px;">send</span>
+        Enviar reporte por email
+      </button>
+    </div>
   </div>
 
   <!-- LAYOUT -->
@@ -1390,10 +1391,6 @@
           <span class="material-icons" style="font-size:14px;">schedule</span>
           Último envío: <span id="rptUltimoEnvio">No enviado</span>
         </div>
-        <button class="btn-send-report" id="rptBtnEnviar" onclick="enviarReporteContador()">
-          <span class="material-icons" style="font-size:16px;">send</span>
-          Enviar reporte por email
-        </button>
         <div class="pdf-notice-report">
           <span class="material-icons" style="font-size:13px;">picture_as_pdf</span>
           <span>El reporte se adjunta en PDF automáticamente</span>
@@ -1454,9 +1451,7 @@
             <div class="doc-table-header-report">
               <div class="doc-table-title-report">Comprobantes emitidos · <span id="rptTableMes">Junio 2026</span></div>
             </div>
-            <div style="padding: 20px; text-align: center; color: #888; font-size: 13px;" id="rptLoadingComprobantes">
-              Cargando comprobantes...
-            </div>
+            <div style="padding:20px;text-align:center;color:#888;font-size:13px;" id="rptLoadingComprobantes">Cargando comprobantes...</div>
             <table class="comp-table-report" id="rptComprobantesTable" style="display:none;">
               <thead>
                 <tr>
@@ -1510,6 +1505,9 @@
   </div>
 
 </div>
+
+</div><!-- /main -->
+</div><!-- /shell -->
 
 <!-- ── MODAL NUEVA EMISIÓN ──────────────────────────── -->
 <div class="modal-overlay" id="modalOverlay" onclick="cerrarNuevaEmision()"></div>

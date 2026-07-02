@@ -832,6 +832,28 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
           conceptoMostrar = o.platform || 'Venta';
         }
         
+        // 👇 DETERMINAR ORIGEN CORRECTO
+        let origen = 'woo';
+        if (o.platform === 'manual' || o.platform === 'manuales') {
+          origen = 'manual';
+        } else if (o.platform === 'mercadolibre' || o.platform === 'ml') {
+          origen = 'mercadolibre';
+        } else if (o.platform === 'tiendanube') {
+          origen = 'tiendanube';
+        } else if (o.platform === 'empretienda') {
+          origen = 'empretienda';
+        } else if (o.platform === 'rappi') {
+          origen = 'rappi';
+        } else if (o.platform === 'vtex') {
+          origen = 'vtex';
+        }
+        
+        // 👇 DETERMINAR EMISIÓN
+        const emision = (o.platform === 'manual' || o.platform === 'manuales') ? 'manual' : 'automatica';
+        
+        // 👇 FECHA ISO para filtros
+        const fechaISO = o.createdAt ? new Date(o.createdAt).toISOString().split('T')[0] : '';
+        
         return {
           id: o.externalId || o._id,
           _id: o._id,
@@ -839,12 +861,14 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
           email: o.customerEmail || '',
           concepto: conceptoMostrar,
           fecha: o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR') : '—',
-          tipo: 'Factura C',
+          fechaISO: fechaISO,
+          tipo: 'factura_c',
           monto: o.amount || 0,
-          currency: o.currency || 'ARS',  // 👈 AGREGADO
+          currency: o.currency || 'ARS',
           estado: o.status === 'invoiced' ? 'emitido' : 'pendiente',
-          origen: o.platform === 'manual' ? 'manual' : 'woo',
+          origen: origen,
           platform: o.platform,
+          emision: emision,
           emailSent: o.emailSent || false,
           amount: o.amount,
           nroFormatted: o.nroFormatted,
@@ -854,7 +878,18 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
         };
       });
       
-      filtrarComprobantes();
+      console.log('✅ Comprobantes cargados:', _todosComp.length);
+      
+      // 👇 CAMBIO CLAVE: Usar renderComprobantes en lugar de filtrarComprobantes
+      if (typeof renderComprobantes === 'function') {
+        renderComprobantes(_todosComp);
+        console.log('✅ Comprobantes renderizados en la tabla');
+      } else {
+        console.error('❌ renderComprobantes no está definida');
+        // Fallback: usar filtrarComprobantes
+        filtrarComprobantes();
+      }
+      
       renderPaginadorComprobantes();
     })
     .catch(err => {
@@ -862,7 +897,7 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
       if (intento < 3) {
         setTimeout(() => cargarTodosComprobantes(page, search, intento + 1), intento * 2000);
       } else {
-        document.getElementById('manualesBody').innerHTML = `<tr><td colspan="8">Error de conexión. Recargá la página.</td></tr>`;
+        document.getElementById('manualesBody').innerHTML = `<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">❌ Error de conexión. Recargá la página.</td></tr>`;
       }
     });
 }

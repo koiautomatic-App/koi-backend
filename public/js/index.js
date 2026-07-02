@@ -1848,6 +1848,13 @@ function renderComprobantes(lista) {
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
     
+    // 👇 DETERMINAR VALORES PARA DATA ATTRIBUTES
+    const origen = c.origen || c.platform || 'manual';
+    const estado = emitido ? 'emitido' : (c.estado === 'pendiente' ? 'pendiente' : 'pendiente');
+    const tipo = c.tipo || 'factura_c';
+    const emision = c.origen === 'manual' ? 'manual' : 'automatica';
+    const fecha = c.fechaISO || c.fecha || '';
+    
     let estadoChip = '';
     if (esAnulada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
@@ -1896,9 +1903,9 @@ function renderComprobantes(lista) {
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     const pdfId = c._id || c.id;
     
-    // 👇 CORRECCIÓN: El orden correcto de las columnas
+    // 👇 AGREGAR DATA ATTRIBUTES A LA FILA
     html += `
-    <tr style="animation:rowIn .3s ease ${i*35}ms both">
+    <tr data-origen="${origen}" data-estado="${estado}" data-tipo="${tipo}" data-emision="${emision}" data-fecha="${fecha}" style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>

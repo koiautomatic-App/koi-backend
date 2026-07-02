@@ -6519,6 +6519,354 @@ function initReporte() {
     cargarReporte();
   }
 }
+// ── FILTROS ──
+let filtrosActivos = {
+  plataforma: [],
+  estado: ['emitido'],
+  tipo: ['factura_c'],
+  emision: ['automatica'],
+  fechaDesde: '',
+  fechaHasta: ''
+};
+
+function abrirModalFiltros() {
+  const modal = document.getElementById('modalFiltros');
+  const overlay = document.getElementById('modalFiltrosOverlay');
+  if (modal && overlay) {
+    modal.style.display = 'block';
+    overlay.style.display = 'block';
+    sincronizarCheckboxes();
+  }
+}
+
+function cerrarModalFiltros() {
+  const modal = document.getElementById('modalFiltros');
+  const overlay = document.getElementById('modalFiltrosOverlay');
+  if (modal && overlay) {
+    modal.style.display = 'none';
+    overlay.style.display = 'none';
+  }
+  aplicarFiltros();
+}
+
+function sincronizarCheckboxes() {
+  // Plataformas
+  document.querySelectorAll('.filtro-plataforma input').forEach(cb => {
+    cb.checked = filtrosActivos.plataforma.includes(cb.value);
+  });
+  
+  // Estados
+  document.querySelectorAll('.filtro-check[data-estado] input').forEach(cb => {
+    cb.checked = filtrosActivos.estado.includes(cb.value);
+  });
+  
+  // Tipos
+  document.querySelectorAll('.filtro-check[data-tipo] input').forEach(cb => {
+    cb.checked = filtrosActivos.tipo.includes(cb.value);
+  });
+  
+  // Emisión
+  document.querySelectorAll('.filtro-check[data-emision] input').forEach(cb => {
+    cb.checked = filtrosActivos.emision.includes(cb.value);
+  });
+  
+  // Fechas
+  const desde = document.getElementById('filtroFechaDesde');
+  const hasta = document.getElementById('filtroFechaHasta');
+  if (desde) desde.value = filtrosActivos.fechaDesde || '';
+  if (hasta) hasta.value = filtrosActivos.fechaHasta || '';
+  
+  // Actualizar clases visuales
+  actualizarClasesCheckboxes();
+}
+
+function actualizarClasesCheckboxes() {
+  // Plataformas
+  document.querySelectorAll('.filtro-plataforma').forEach(label => {
+    const cb = label.querySelector('input');
+    label.classList.toggle('active', cb.checked);
+  });
+  
+  // Checks
+  document.querySelectorAll('.filtro-check').forEach(label => {
+    const cb = label.querySelector('input');
+    label.classList.toggle('active', cb.checked);
+  });
+}
+
+function aplicarFiltros() {
+  // Recolectar plataformas
+  const plataforma = [];
+  document.querySelectorAll('.filtro-plataforma input:checked').forEach(cb => {
+    plataforma.push(cb.value);
+  });
+  
+  // Recolectar estados
+  const estado = [];
+  document.querySelectorAll('.filtro-check[data-estado] input:checked').forEach(cb => {
+    estado.push(cb.value);
+  });
+  
+  // Recolectar tipos
+  const tipo = [];
+  document.querySelectorAll('.filtro-check[data-tipo] input:checked').forEach(cb => {
+    tipo.push(cb.value);
+  });
+  
+  // Recolectar emisión
+  const emision = [];
+  document.querySelectorAll('.filtro-check[data-emision] input:checked').forEach(cb => {
+    emision.push(cb.value);
+  });
+  
+  // Fechas
+  const fechaDesde = document.getElementById('filtroFechaDesde')?.value || '';
+  const fechaHasta = document.getElementById('filtroFechaHasta')?.value || '';
+  
+  filtrosActivos = { plataforma, estado, tipo, emision, fechaDesde, fechaHasta };
+  
+  actualizarTagsFiltros();
+  filtrarComprobantesConFiltros();
+}
+
+function actualizarTagsFiltros() {
+  const container = document.getElementById('filtrosActivos');
+  const badge = document.getElementById('filtroBadge');
+  if (!container) return;
+  
+  const totalActivos = 
+    filtrosActivos.plataforma.length + 
+    filtrosActivos.estado.length + 
+    filtrosActivos.tipo.length +
+    filtrosActivos.emision.length;
+  
+  // Mostrar/ocultar badge
+  if (badge) {
+    const defaultActive = 
+      filtrosActivos.estado.length === 1 && filtrosActivos.estado[0] === 'emitido' &&
+      filtrosActivos.tipo.length === 1 && filtrosActivos.tipo[0] === 'factura_c' &&
+      filtrosActivos.emision.length === 1 && filtrosActivos.emision[0] === 'automatica' &&
+      filtrosActivos.plataforma.length === 0;
+    
+    if (totalActivos > 0 && !defaultActive) {
+      badge.style.display = 'inline';
+      badge.textContent = totalActivos;
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  
+  // Generar tags
+  let html = '';
+  
+  const labels = {
+    'woo': 'WooCommerce',
+    'mercadolibre': 'Mercado Libre',
+    'tiendanube': 'Tienda Nube',
+    'empretienda': 'Empretienda',
+    'rappi': 'Rappi',
+    'vtex': 'VTEX',
+    'emitido': 'Emitido',
+    'pendiente': 'Sin emitir',
+    'error': 'Error',
+    'factura_c': 'Factura C',
+    'factura_a': 'Factura A',
+    'factura_b': 'Factura B',
+    'nota_credito': 'Nota Crédito',
+    'automatica': 'Automática',
+    'manual': 'Manual'
+  };
+  
+  // Tags de plataforma
+  filtrosActivos.plataforma.forEach(p => {
+    html += `<span class="filtro-tag">
+      ${labels[p] || p}
+      <span class="material-icons" onclick="quitarFiltro('plataforma','${p}')">close</span>
+    </span>`;
+  });
+  
+  // Tags de estado
+  filtrosActivos.estado.forEach(e => {
+    html += `<span class="filtro-tag">
+      ${labels[e] || e}
+      <span class="material-icons" onclick="quitarFiltro('estado','${e}')">close</span>
+    </span>`;
+  });
+  
+  // Tags de tipo
+  filtrosActivos.tipo.forEach(t => {
+    html += `<span class="filtro-tag">
+      ${labels[t] || t}
+      <span class="material-icons" onclick="quitarFiltro('tipo','${t}')">close</span>
+    </span>`;
+  });
+  
+  // Tags de emisión
+  filtrosActivos.emision.forEach(e => {
+    html += `<span class="filtro-tag">
+      ${labels[e] || e}
+      <span class="material-icons" onclick="quitarFiltro('emision','${e}')">close</span>
+    </span>`;
+  });
+  
+  container.innerHTML = html;
+}
+
+function quitarFiltro(grupo, valor) {
+  const index = filtrosActivos[grupo].indexOf(valor);
+  if (index > -1) {
+    filtrosActivos[grupo].splice(index, 1);
+  }
+  
+  // Actualizar checkboxes
+  document.querySelectorAll('.filtro-plataforma input, .filtro-check input').forEach(cb => {
+    if (cb.value === valor) cb.checked = false;
+  });
+  
+  actualizarClasesCheckboxes();
+  actualizarTagsFiltros();
+  filtrarComprobantesConFiltros();
+}
+
+function limpiarFiltros() {
+  filtrosActivos = {
+    plataforma: [],
+    estado: ['emitido'],
+    tipo: ['factura_c'],
+    emision: ['automatica'],
+    fechaDesde: '',
+    fechaHasta: ''
+  };
+  
+  // Desmarcar todos
+  document.querySelectorAll('.filtro-plataforma input, .filtro-check input').forEach(cb => {
+    cb.checked = false;
+  });
+  
+  // Marcar defaults
+  document.querySelectorAll('.filtro-check[data-estado] input[value="emitido"]').forEach(cb => cb.checked = true);
+  document.querySelectorAll('.filtro-check[data-tipo] input[value="factura_c"]').forEach(cb => cb.checked = true);
+  document.querySelectorAll('.filtro-check[data-emision] input[value="automatica"]').forEach(cb => cb.checked = true);
+  
+  // Limpiar fechas
+  const desde = document.getElementById('filtroFechaDesde');
+  const hasta = document.getElementById('filtroFechaHasta');
+  if (desde) desde.value = '';
+  if (hasta) hasta.value = '';
+  
+  actualizarClasesCheckboxes();
+  actualizarTagsFiltros();
+  filtrarComprobantesConFiltros();
+}
+
+function filtrarComprobantesConFiltros() {
+  const filas = document.querySelectorAll('#manualesBody tr');
+  let total = 0;
+  let count = 0;
+  
+  filas.forEach(fila => {
+    let mostrar = true;
+    
+    // Obtener datos de la fila desde data attributes
+    const origen = fila.dataset.origen || '';
+    const estado = fila.dataset.estado || '';
+    const tipo = fila.dataset.tipo || '';
+    const emision = fila.dataset.emision || '';
+    
+    // Filtrar por plataforma
+    if (filtrosActivos.plataforma.length > 0) {
+      if (!filtrosActivos.plataforma.includes(origen)) mostrar = false;
+    }
+    
+    // Filtrar por estado
+    if (filtrosActivos.estado.length > 0 && mostrar) {
+      if (!filtrosActivos.estado.includes(estado)) mostrar = false;
+    }
+    
+    // Filtrar por tipo
+    if (filtrosActivos.tipo.length > 0 && mostrar) {
+      if (!filtrosActivos.tipo.includes(tipo)) mostrar = false;
+    }
+    
+    // Filtrar por emisión
+    if (filtrosActivos.emision.length > 0 && mostrar) {
+      if (!filtrosActivos.emision.includes(emision)) mostrar = false;
+    }
+    
+    // Filtrar por fechas (si tenés fecha en la fila)
+    if (mostrar && filtrosActivos.fechaDesde) {
+      const fechaFila = fila.dataset.fecha || '';
+      if (fechaFila && fechaFila < filtrosActivos.fechaDesde) mostrar = false;
+    }
+    if (mostrar && filtrosActivos.fechaHasta) {
+      const fechaFila = fila.dataset.fecha || '';
+      if (fechaFila && fechaFila > filtrosActivos.fechaHasta) mostrar = false;
+    }
+    
+    fila.style.display = mostrar ? '' : 'none';
+    
+    if (mostrar) {
+      const montoCell = fila.querySelector('td:nth-child(6)');
+      if (montoCell) {
+        const monto = parseFloat(montoCell.textContent.replace(/[$,.]/g, ''));
+        if (!isNaN(monto)) {
+          total += monto;
+          count++;
+        }
+      }
+    }
+  });
+  
+  // Actualizar totales
+  const totalesDiv = document.getElementById('compTotales');
+  if (totalesDiv) {
+    totalesDiv.innerHTML = `
+      <div><strong>${count}</strong> comprobantes</div>
+      <div>Total: <strong>$${total.toLocaleString()}</strong></div>
+    `;
+  }
+}
+
+// Inicializar eventos para los checkboxes
+document.addEventListener('DOMContentLoaded', function() {
+  // Eventos para plataformas
+  document.querySelectorAll('.filtro-plataforma input').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const label = this.closest('.filtro-plataforma');
+      label.classList.toggle('active', this.checked);
+    });
+  });
+  
+  // Eventos para checks
+  document.querySelectorAll('.filtro-check input').forEach(cb => {
+    cb.addEventListener('change', function() {
+      const label = this.closest('.filtro-check');
+      label.classList.toggle('active', this.checked);
+    });
+  });
+});
+
+// Modificar la función existente de búsqueda para que combine con los filtros
+const filtrarComprobantesOriginal = window.filtrarComprobantes;
+window.filtrarComprobantes = function() {
+  // Aplicar filtros primero
+  filtrarComprobantesConFiltros();
+  // Luego aplicar búsqueda (si existe la función original)
+  if (filtrarComprobantesOriginal) {
+    // Guardar referencia y ejecutar
+    const busqueda = document.getElementById('compBuscar')?.value || '';
+    const filas = document.querySelectorAll('#manualesBody tr');
+    // Ya filtrados por los filtros, ahora aplicar búsqueda
+    filas.forEach(fila => {
+      if (fila.style.display !== 'none') {
+        const texto = fila.textContent.toLowerCase();
+        if (busqueda && !texto.includes(busqueda.toLowerCase())) {
+          fila.style.display = 'none';
+        }
+      }
+    });
+  }
+};
 // ============================================================
 //  EXPORTS GLOBALES
 // ============================================================

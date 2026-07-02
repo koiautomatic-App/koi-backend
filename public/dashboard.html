@@ -357,15 +357,15 @@
 
       </div>
 
-      <!-- FILTROS RÁPIDOS -->
-      <div class="comp-filtros">
-        <button class="filtro-btn active" id="ftodos"     onclick="setFiltro('todos',this)">Todos</button>
-        <button class="filtro-btn"        id="ffactura"   onclick="setFiltro('factura',this)">Facturas C</button>
-        <button class="filtro-btn"        id="fnota"      onclick="setFiltro('nota',this)">Notas de Crédito</button>
-        <button class="filtro-btn"        id="fpendiente" onclick="setFiltro('pendiente',this)">Sin emitir</button>
-        <button class="filtro-btn"        id="fmanual"    onclick="setFiltro('manual',this)">Manuales</button>
-        <button class="filtro-btn"        id="fwoo"       onclick="setFiltro('woo',this)">WooCommerce</button>
-      </div>
+  <!-- FILTROS - BOTÓN PARA ABRIR MODAL -->
+<div class="comp-filtros">
+  <button class="filtro-btn-filtrar" onclick="abrirModalFiltros()">
+    <span class="material-icons" style="font-size:16px!important">filter_list</span>
+    Filtrar
+    <span class="filtro-badge" id="filtroBadge" style="display:none;">0</span>
+  </button>
+  <div class="filtros-activos" id="filtrosActivos"></div>
+</div>
 
       <!-- TABLA -->
       <div class="comp-tabla-wrap">
@@ -1714,6 +1714,156 @@
 <div id="toasts"></div>
 
 <script src="js/index.js"></script>
+<!-- ── MODAL FILTROS ─────────────────────────────── -->
+<div class="modal-overlay" id="modalFiltrosOverlay" onclick="cerrarModalFiltros()"></div>
+<div class="modal-box modal-filtros" id="modalFiltros">
+  <div class="modal-header">
+    <div class="modal-title">
+      <span class="material-icons" style="color:var(--orange-2)">filter_list</span>
+      Filtrar Comprobantes
+    </div>
+    <button class="cfg-close" onclick="cerrarModalFiltros()">
+      <span class="material-icons">close</span>
+    </button>
+  </div>
+  
+  <div class="modal-body">
+    <!-- PLATAFORMA -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Plataforma</div>
+      <div class="filtro-opciones">
+        <!-- WooCommerce -->
+        <label class="filtro-plataforma" data-plataforma="woo">
+          <input type="checkbox" value="woo">
+          <span class="plataforma-logo" style="background: #7F54B3;">W</span>
+          <span class="plataforma-info">WooCommerce</span>
+        </label>
+        <!-- Mercado Libre -->
+        <label class="filtro-plataforma" data-plataforma="mercadolibre">
+          <input type="checkbox" value="mercadolibre">
+          <span class="plataforma-logo" style="background: #FFE600; color:#333;">ML</span>
+          <span class="plataforma-info">Mercado Libre</span>
+        </label>
+        <!-- Tienda Nube -->
+        <label class="filtro-plataforma" data-plataforma="tiendanube">
+          <input type="checkbox" value="tiendanube">
+          <span class="plataforma-logo" style="background: #1EAAF1;">TN</span>
+          <span class="plataforma-info">Tienda Nube</span>
+        </label>
+        <!-- Empretienda -->
+        <label class="filtro-plataforma" data-plataforma="empretienda">
+          <input type="checkbox" value="empretienda">
+          <span class="plataforma-logo" style="background: #00C37A;">E</span>
+          <span class="plataforma-info">Empretienda</span>
+        </label>
+        <!-- Rappi -->
+        <label class="filtro-plataforma" data-plataforma="rappi">
+          <input type="checkbox" value="rappi">
+          <span class="plataforma-logo" style="background: #FF441B;">R</span>
+          <span class="plataforma-info">Rappi</span>
+        </label>
+        <!-- VTEX -->
+        <label class="filtro-plataforma" data-plataforma="vtex">
+          <input type="checkbox" value="vtex">
+          <span class="plataforma-logo" style="background: #F71963;">V</span>
+          <span class="plataforma-info">VTEX</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ESTADO -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Estado</div>
+      <div class="filtro-opciones">
+        <label class="filtro-check active" data-estado="emitido">
+          <input type="checkbox" value="emitido" checked>
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>✅ Emitido</span>
+        </label>
+        <label class="filtro-check" data-estado="pendiente">
+          <input type="checkbox" value="pendiente">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>⏳ Sin emitir</span>
+        </label>
+        <label class="filtro-check" data-estado="error">
+          <input type="checkbox" value="error">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>❌ Error</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- TIPO DE COMPROBANTE -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Tipo de Comprobante</div>
+      <div class="filtro-opciones">
+        <label class="filtro-check active" data-tipo="factura_c">
+          <input type="checkbox" value="factura_c" checked>
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📄 Factura C</span>
+        </label>
+        <label class="filtro-check" data-tipo="factura_a">
+          <input type="checkbox" value="factura_a">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📄 Factura A</span>
+        </label>
+        <label class="filtro-check" data-tipo="factura_b">
+          <input type="checkbox" value="factura_b">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📄 Factura B</span>
+        </label>
+        <label class="filtro-check" data-tipo="nota_credito">
+          <input type="checkbox" value="nota_credito">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📝 Nota de Crédito</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- TIPO DE EMISIÓN -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Tipo de Emisión</div>
+      <div class="filtro-opciones">
+        <label class="filtro-check active" data-emision="automatica">
+          <input type="checkbox" value="automatica" checked>
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>🤖 Automática</span>
+        </label>
+        <label class="filtro-check" data-emision="manual">
+          <input type="checkbox" value="manual">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>✏️ Manual</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- RANGO DE FECHAS -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Rango de Fechas</div>
+      <div class="filtro-fechas">
+        <div class="cfg-field">
+          <label class="cfg-label">Desde</label>
+          <input id="filtroFechaDesde" class="cfg-input" type="date" onchange="aplicarFiltros()">
+        </div>
+        <div class="cfg-field">
+          <label class="cfg-label">Hasta</label>
+          <input id="filtroFechaHasta" class="cfg-input" type="date" onchange="aplicarFiltros()">
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-footer">
+    <button class="btn-cancel" onclick="limpiarFiltros()">
+      <span class="material-icons" style="font-size:14px!important">clear_all</span>
+      Limpiar filtros
+    </button>
+    <button class="btn-registrar" onclick="cerrarModalFiltros()">
+      <span class="material-icons" style="font-size:14px!important">check</span>
+      Aplicar filtros
+    </button>
+  </div>
+</div>
 <!-- ── MODAL EMITIR LOTE (FLUJO DE DOS PASOS) ── -->
 <div class="modal-overlay" id="modalLoteOverlay" onclick="cerrarModalLote()"></div>
 <div class="modal-box" id="modalLote" style="display: none;">

@@ -5588,3 +5588,471 @@ table.comp-table-report tr.total td:last-child {
     padding: 5px 12px !important;
   }
 }
+/* ============================================
+   MODAL DE FILTROS - VERSIÓN CORREGIDA
+   ============================================ */
+
+/* Overlay */
+#modalFiltrosOverlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: 99998;
+}
+
+#modalFiltrosOverlay.open {
+    display: block;
+}
+
+/* Modal Box */
+#modalFiltros {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 520px;
+    max-width: 94vw;
+    max-height: 85vh;
+    background: #141a2b;
+    border-radius: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    z-index: 99999;
+    overflow: hidden;
+}
+
+#modalFiltros.open {
+    display: block;
+}
+
+/* Header */
+#modalFiltros .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 18px 24px 14px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+#modalFiltros .modal-title {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #fff;
+    font-size: 16px;
+    font-weight: 700;
+}
+
+#modalFiltros .cfg-close {
+    background: rgba(255, 255, 255, 0.04);
+    border: none;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    color: #666;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#modalFiltros .cfg-close:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+}
+
+#modalFiltros .cfg-close .material-icons {
+    font-size: 18px;
+}
+
+/* Body */
+#modalFiltros .modal-body {
+    padding: 20px 24px;
+    max-height: calc(85vh - 160px);
+    overflow-y: auto;
+}
+
+/* Scrollbar */
+#modalFiltros .modal-body::-webkit-scrollbar {
+    width: 3px;
+}
+
+#modalFiltros .modal-body::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+#modalFiltros .modal-body::-webkit-scrollbar-thumb {
+    background: rgba(232, 98, 42, 0.3);
+    border-radius: 10px;
+}
+
+/* Footer */
+#modalFiltros .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    padding: 14px 24px 18px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+#modalFiltros .btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 40px;
+    padding: 8px 18px;
+    color: rgba(255, 255, 255, 0.5);
+    font-size: 11px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#modalFiltros .btn-cancel:hover {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+}
+
+#modalFiltros .btn-registrar {
+    background: linear-gradient(135deg, #e8622a, #f5a623);
+    border: none;
+    border-radius: 40px;
+    padding: 8px 22px;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#modalFiltros .btn-registrar:hover {
+    transform: scale(1.02);
+    box-shadow: 0 4px 16px rgba(232, 98, 42, 0.25);
+}
+
+/* ============================================
+   GRUPOS DE FILTROS
+   ============================================ */
+
+.filtro-grupo {
+    margin-bottom: 20px;
+}
+
+.filtro-grupo:last-child {
+    margin-bottom: 0;
+}
+
+.filtro-grupo-titulo {
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.2px;
+    color: rgba(255, 255, 255, 0.3);
+    margin-bottom: 10px;
+}
+
+.filtro-opciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+/* ============================================
+   PLATAFORMAS CON LOGOS
+   ============================================ */
+
+.filtro-plataforma {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 12px 6px 8px;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+    color: rgba(255, 255, 255, 0.5);
+    user-select: none;
+}
+
+.filtro-plataforma:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(232, 98, 42, 0.2);
+}
+
+.filtro-plataforma input[type="checkbox"] {
+    display: none;
+}
+
+.filtro-plataforma .plataforma-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 11px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #fff;
+}
+
+.filtro-plataforma .plataforma-info {
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.2s;
+    font-weight: 500;
+    font-size: 11px;
+}
+
+.filtro-plataforma.active {
+    background: rgba(232, 98, 42, 0.12);
+    border-color: rgba(232, 98, 42, 0.25);
+}
+
+.filtro-plataforma.active .plataforma-info {
+    color: #fff;
+}
+
+/* ============================================
+   CHECKBOXES PERSONALIZADOS
+   ============================================ */
+
+.filtro-check {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 14px;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+    color: rgba(255, 255, 255, 0.5);
+    font-weight: 500;
+    user-select: none;
+}
+
+.filtro-check:hover {
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.filtro-check input[type="checkbox"] {
+    display: none;
+}
+
+.filtro-check .check-custom {
+    width: 16px;
+    height: 16px;
+    border-radius: 4px;
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    flex-shrink: 0;
+}
+
+.filtro-check .check-custom .material-icons {
+    font-size: 12px;
+    color: transparent;
+    transition: color 0.2s;
+}
+
+.filtro-check.active {
+    background: rgba(232, 98, 42, 0.1);
+    border-color: rgba(232, 98, 42, 0.2);
+    color: #fff;
+}
+
+.filtro-check.active .check-custom {
+    background: #e8622a;
+    border-color: #e8622a;
+}
+
+.filtro-check.active .check-custom .material-icons {
+    color: #fff;
+}
+
+/* ============================================
+   RANGO DE FECHAS
+   ============================================ */
+
+.filtro-fechas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.filtro-fechas .cfg-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.filtro-fechas .cfg-label {
+    font-size: 9px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.3);
+}
+
+.filtro-fechas .cfg-input {
+    background: rgba(255, 255, 255, 0.04);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    padding: 8px 12px;
+    color: #fff;
+    font-size: 12px;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    transition: all 0.2s;
+    width: 100%;
+}
+
+.filtro-fechas .cfg-input:focus {
+    outline: none;
+    border-color: rgba(232, 98, 42, 0.3);
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.filtro-fechas .cfg-input[type="date"] {
+    color-scheme: dark;
+    min-height: 36px;
+}
+
+/* ============================================
+   BOTÓN FILTRAR Y TAGS
+   ============================================ */
+
+.comp-filtros {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    margin-bottom: 20px;
+}
+
+.filtro-btn-filtrar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: #1a1f33;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 40px;
+    padding: 8px 18px;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.filtro-btn-filtrar:hover {
+    background: #222a40;
+    border-color: rgba(232, 98, 42, 0.3);
+}
+
+.filtro-badge {
+    background: #e8622a;
+    color: white;
+    font-size: 9px;
+    font-weight: 700;
+    padding: 1px 6px;
+    border-radius: 40px;
+    margin-left: 2px;
+}
+
+.filtros-activos {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+
+.filtro-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: rgba(232, 98, 42, 0.1);
+    border: 1px solid rgba(232, 98, 42, 0.2);
+    border-radius: 40px;
+    padding: 4px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    color: #e8622a;
+}
+
+.filtro-tag .material-icons {
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.filtro-tag .material-icons:hover {
+    color: #ff3d57;
+}
+
+/* ============================================
+   RESPONSIVE
+   ============================================ */
+
+@media (max-width: 640px) {
+    #modalFiltros {
+        width: 100%;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+        top: 0;
+        left: 0;
+        transform: none;
+    }
+
+    #modalFiltros .modal-body {
+        max-height: calc(100vh - 160px);
+    }
+
+    .filtro-btn-filtrar {
+        padding: 6px 14px;
+        font-size: 12px;
+    }
+
+    .filtro-check {
+        padding: 4px 10px;
+        font-size: 10px;
+    }
+
+    .filtro-plataforma {
+        padding: 4px 10px 4px 6px;
+        font-size: 10px;
+    }
+
+    .filtro-plataforma .plataforma-logo {
+        width: 18px;
+        height: 18px;
+        font-size: 9px;
+    }
+
+    .filtro-fechas {
+        grid-template-columns: 1fr;
+    }
+
+    #modalFiltros .modal-footer {
+        flex-direction: column-reverse;
+    }
+
+    #modalFiltros .btn-cancel,
+    #modalFiltros .btn-registrar {
+        justify-content: center;
+        padding: 10px;
+    }
+}

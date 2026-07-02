@@ -5600,10 +5600,15 @@ table.comp-table-report tr.total td:last-child {
     background: rgba(0, 0, 0, 0.7);
     backdrop-filter: blur(8px);
     z-index: 99998;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
 }
 
 #modalFiltrosOverlay.open {
     display: block;
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Modal Box */
@@ -5612,7 +5617,7 @@ table.comp-table-report tr.total td:last-child {
     position: fixed;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%) scale(0.95);
     width: 520px;
     max-width: 94vw;
     max-height: 85vh;
@@ -5622,10 +5627,18 @@ table.comp-table-report tr.total td:last-child {
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
     z-index: 99999;
     overflow: hidden;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
 }
 
 #modalFiltros.open {
     display: block;
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
 }
 
 /* Header */
@@ -6014,6 +6027,10 @@ table.comp-table-report tr.total td:last-child {
         border-radius: 0;
         top: 0;
         left: 0;
+        transform: none;
+    }
+
+    #modalFiltros.open {
         transform: none;
     }
 

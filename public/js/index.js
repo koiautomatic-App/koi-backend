@@ -6530,23 +6530,37 @@ let filtrosActivos = {
 };
 
 function abrirModalFiltros() {
-  const modal = document.getElementById('modalFiltros');
-  const overlay = document.getElementById('modalFiltrosOverlay');
-  if (modal && overlay) {
-    modal.style.display = 'block';
-    overlay.style.display = 'block';
-    sincronizarCheckboxes();
-  }
+    console.log('🟢 abrirModalFiltros() ejecutada');
+    
+    const modal = document.getElementById('modalFiltros');
+    const overlay = document.getElementById('modalFiltrosOverlay');
+    
+    if (modal && overlay) {
+        // SOLO AGREGAR LA CLASE - EL CSS HACE EL RESTO
+        modal.classList.add('open');
+        overlay.classList.add('open');
+        console.log('✅ Clases .open agregadas');
+        
+        sincronizarCheckboxes();
+    } else {
+        console.error('❌ Modal o overlay no encontrados');
+    }
 }
 
 function cerrarModalFiltros() {
-  const modal = document.getElementById('modalFiltros');
-  const overlay = document.getElementById('modalFiltrosOverlay');
-  if (modal && overlay) {
-    modal.style.display = 'none';
-    overlay.style.display = 'none';
-  }
-  aplicarFiltros();
+    console.log('🔴 cerrarModalFiltros() ejecutada');
+    
+    const modal = document.getElementById('modalFiltros');
+    const overlay = document.getElementById('modalFiltrosOverlay');
+    
+    if (modal && overlay) {
+        // SOLO REMOVER LA CLASE - EL CSS HACE EL RESTO
+        modal.classList.remove('open');
+        overlay.classList.remove('open');
+        console.log('✅ Clases .open removidas');
+    }
+    
+    aplicarFiltros();
 }
 
 function sincronizarCheckboxes() {
@@ -6827,46 +6841,114 @@ function filtrarComprobantesConFiltros() {
   }
 }
 
-// Inicializar eventos para los checkboxes
+// ── INICIALIZACIÓN DE FILTROS ──
 document.addEventListener('DOMContentLoaded', function() {
-  // Eventos para plataformas
+  console.log('🔧 Inicializando eventos de filtros...');
+  
+  // 1. Eventos para plataformas
   document.querySelectorAll('.filtro-plataforma input').forEach(cb => {
     cb.addEventListener('change', function() {
       const label = this.closest('.filtro-plataforma');
-      label.classList.toggle('active', this.checked);
+      if (label) {
+        label.classList.toggle('active', this.checked);
+      }
     });
   });
   
-  // Eventos para checks
+  // 2. Eventos para checks
   document.querySelectorAll('.filtro-check input').forEach(cb => {
     cb.addEventListener('change', function() {
       const label = this.closest('.filtro-check');
-      label.classList.toggle('active', this.checked);
-    });
-  });
-});
-
-// Modificar la función existente de búsqueda para que combine con los filtros
-const filtrarComprobantesOriginal = window.filtrarComprobantes;
-window.filtrarComprobantes = function() {
-  // Aplicar filtros primero
-  filtrarComprobantesConFiltros();
-  // Luego aplicar búsqueda (si existe la función original)
-  if (filtrarComprobantesOriginal) {
-    // Guardar referencia y ejecutar
-    const busqueda = document.getElementById('compBuscar')?.value || '';
-    const filas = document.querySelectorAll('#manualesBody tr');
-    // Ya filtrados por los filtros, ahora aplicar búsqueda
-    filas.forEach(fila => {
-      if (fila.style.display !== 'none') {
-        const texto = fila.textContent.toLowerCase();
-        if (busqueda && !texto.includes(busqueda.toLowerCase())) {
-          fila.style.display = 'none';
-        }
+      if (label) {
+        label.classList.toggle('active', this.checked);
       }
     });
+  });
+  
+  // 3. 👇 NUEVO: Inicializar evento del botón filtrar
+  const btnFiltrar = document.querySelector('.filtro-btn-filtrar');
+  if (btnFiltrar) {
+    // Remover onclick del HTML si existe
+    btnFiltrar.removeAttribute('onclick');
+    // Agregar evento moderno
+    btnFiltrar.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      console.log('🖱️ CLICK en botón Filtrar');
+      if (typeof abrirModalFiltros === 'function') {
+        abrirModalFiltros();
+      } else {
+        console.error('❌ abrirModalFiltros no está definida');
+      }
+    });
+    console.log('✅ Evento click del botón Filtrar inicializado');
+  } else {
+    console.warn('⚠️ Botón .filtro-btn-filtrar no encontrado');
+  }
+  
+  console.log('✅ Eventos de filtros inicializados correctamente');
+});
+
+// ── BÚSQUEDA COMBINADA CON FILTROS ──
+// Guardar referencia a la función original si existe
+const filtrarComprobantesOriginal = window.filtrarComprobantes;
+
+// Reemplazar la función de búsqueda
+window.filtrarComprobantes = function() {
+  console.log('🔍 Ejecutando búsqueda combinada con filtros...');
+  
+  // PASO 1: Aplicar filtros primero (si la función existe)
+  if (typeof filtrarComprobantesConFiltros === 'function') {
+    filtrarComprobantesConFiltros();
+  } else {
+    console.warn('⚠️ filtrarComprobantesConFiltros no está definida');
+  }
+  
+  // PASO 2: Aplicar búsqueda por texto
+  const busqueda = document.getElementById('compBuscar')?.value?.trim()?.toLowerCase() || '';
+  const filas = document.querySelectorAll('#manualesBody tr');
+  
+  if (!busqueda) {
+    // Si no hay búsqueda, solo mostrar las filas que pasaron los filtros
+    filas.forEach(fila => {
+      // Si la fila tiene display:none por filtros, mantenerlo
+      // Si no, asegurar que esté visible
+      if (fila.style.display === 'none') {
+        // Ya está oculta por filtros, mantener
+      } else {
+        fila.style.display = '';
+      }
+    });
+    console.log('🔍 Búsqueda vacía - mostrando solo filtros aplicados');
+    return;
+  }
+  
+  // Aplicar búsqueda sobre las filas ya filtradas
+  let filasVisibles = 0;
+  filas.forEach(fila => {
+    // Si la fila ya está oculta por filtros, no la mostramos
+    if (fila.style.display === 'none') {
+      return;
+    }
+    
+    const texto = fila.textContent.toLowerCase();
+    if (texto.includes(busqueda)) {
+      fila.style.display = '';
+      filasVisibles++;
+    } else {
+      fila.style.display = 'none';
+    }
+  });
+  
+  console.log(`🔍 Búsqueda: "${busqueda}" - ${filasVisibles} filas coinciden`);
+  
+  // Actualizar contador de resultados si existe la función
+  if (typeof actualizarContadorResultados === 'function') {
+    actualizarContadorResultados();
   }
 };
+
+console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================
 //  EXPORTS GLOBALES
 // ============================================================

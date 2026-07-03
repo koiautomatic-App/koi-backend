@@ -7,9 +7,14 @@ const generarQRHtml = (url) => {
   return '<img src="' + qrApiUrl + '" alt="Código QR AFIP" style="width: 88px; height: 88px;">';
 };
 
-const generarFacturaHtml = async (userId, orden) => {
+const generarFacturaHtml = async (userId, orden, esNC = false) => {
   const User = require('../../models/User');
   const user = await User.findById(userId).select('nombre apellido settings').lean();
+
+  // 👇 DETECTAR NC (del parámetro o de los datos de la orden)
+  const esNotaCredito = esNC || orden.nroFormatted?.startsWith('NC') || 
+                        orden.externalId?.includes('-NC') ||
+                        orden.amount < 0;
 
   const docLen = (orden.customerDoc || '').replace(/\D/g, '').length;
   const condicionEmisor = user?.settings?.condicionFiscal || 'responsable_inscripto';
@@ -18,12 +23,21 @@ const generarFacturaHtml = async (userId, orden) => {
   let impNeto = null;
   let impIVA = null;
 
-  if (condicionEmisor === 'monotributo' || condicionEmisor === 'exento') {
+  // 👇 SI ES NC, USAR EL TIPO CORRESPONDIENTE
+  if (esNotaCredito) {
+    if (orden.tipoComprobante === 1 || orden.tipoComprobante === 2) {
+      tipoFactura = 'NOTA DE CRÉDITO A';
+    } else if (orden.tipoComprobante === 6 || orden.tipoComprobante === 7) {
+      tipoFactura = 'NOTA DE CRÉDITO B';
+    } else {
+      tipoFactura = 'NOTA DE CRÉDITO C';
+    }
+  } else if (condicionEmisor === 'monotributo' || condicionEmisor === 'exento') {
     tipoFactura = 'FACTURA C';
   } else {
     if (docLen === 11) {
       tipoFactura = 'FACTURA A';
-      const total = orden.amount;
+      const total = Math.abs(orden.amount);
       impNeto = total / 1.21;
       impIVA = total - impNeto;
     } else if (docLen >= 7 && docLen <= 8) {
@@ -33,6 +47,7 @@ const generarFacturaHtml = async (userId, orden) => {
     }
   }
 
+  // 👇 DATOS DE LA EMPRESA (MOVIDOS ANTES DEL RETURN)
   const nombreFantasia = user?.settings?.razonSocial
     || (user?.nombre ? user.nombre + ' ' + (user.apellido || '') : 'Sono Handmade');
   const razonSocial = user?.settings?.razonSocial || nombreFantasia;
@@ -61,14 +76,14 @@ const generarFacturaHtml = async (userId, orden) => {
   };
 
   const filasItems = items.map(item => {
-  const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
-  return '<tr>\n' +
-    '   <td style="text-align: left;">' + escapeHtml(item.nombre || 'Producto') + '</td>\n' +
-    '   <td style="text-align: center;">' + (item.cantidad || 1) + '</td>\n' +
-    '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n' +
-    '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(subtotal) + '</td>\n' +
-    '</tr>';
-}).join('');
+    const subtotal = Math.abs((item.precio || 0) * (item.cantidad || 1));
+    return '<tr>\n' +
+      '   <td style="text-align: left;">' + escapeHtml(item.nombre || 'Producto') + '</td>\n' +
+      '   <td style="text-align: center;">' + (item.cantidad || 1) + '</td>\n' +
+      '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(Math.abs(item.precio || 0)) + '</td>\n' +
+      '   <td style="text-align: right; padding-right: 8px;">$ ' + fmtARS(subtotal) + '</td>\n' +
+      '</tr>';
+  }).join('');
 
   const caeNum = orden.caeNumber || null;
   const caeVto = orden.caeExpiry
@@ -99,6 +114,7 @@ const generarFacturaHtml = async (userId, orden) => {
     qrImageHtml = generarQRHtml(urlQrAfip);
   }
 
+  // 👇 RENDERIZAR EL TEMPLATE CON TODOS LOS DATOS
   return await ejs.renderFile(path.join(__dirname, '../../views', 'factura.ejs'), {
     logoUrl: user?.settings?.logoUrl || '',
     nombreFantasia: nombreFantasia,
@@ -116,7 +132,10 @@ const generarFacturaHtml = async (userId, orden) => {
     urlQrAfip: urlQrAfip,
     qrImageHtml: qrImageHtml,
     sinCae: !caeNum,
-    customerName: orden.customerName || orden.customerEmail || 'Cliente'
+    customerName: orden.customerName || orden.customerEmail || 'Cliente',
+    // 👇 AGREGAR ESTO PARA EL TEMPLATE
+    esNC: esNotaCredito,
+    facturaOriginalNro: orden.facturaOriginalNro || null
   });
 };
 

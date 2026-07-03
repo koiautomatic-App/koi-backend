@@ -6567,6 +6567,7 @@ let filtrosActivos = {
   estado: ['emitido'],
   tipo: ['factura_c'],
   emision: ['automatica'],
+  envio: [],  // 
   fechaDesde: '',
   fechaHasta: ''
 };
@@ -6675,11 +6676,18 @@ function aplicarFiltros() {
     emision.push(cb.value);
   });
   
+  // 👇 NUEVO: Recolectar envío
+  const envio = [];
+  document.querySelectorAll('.filtro-check[data-envio] input:checked').forEach(cb => {
+    envio.push(cb.value);
+  });
+  
   // Fechas
   const fechaDesde = document.getElementById('filtroFechaDesde')?.value || '';
   const fechaHasta = document.getElementById('filtroFechaHasta')?.value || '';
   
-  filtrosActivos = { plataforma, estado, tipo, emision, fechaDesde, fechaHasta };
+  // 👇 ACTUALIZAR con envio
+  filtrosActivos = { plataforma, estado, tipo, emision, envio, fechaDesde, fechaHasta };
   
   actualizarTagsFiltros();
   filtrarComprobantesConFiltros();
@@ -6790,6 +6798,7 @@ function limpiarFiltros() {
     estado: ['emitido'],
     tipo: ['factura_c'],
     emision: ['automatica'],
+    envio: [],  // 👈 AGREGAR ESTO
     fechaDesde: '',
     fechaHasta: ''
   };

@@ -1878,21 +1878,31 @@ function renderComprobantes(lista) {
   for (let i = 0; i < lista.length; i++) {
     const c = lista[i];
     
-    const esCancelada = c.status === 'cancelled';
+    // 👇 DETERMINAR ESTADOS CORRECTAMENTE
+    const esCancelada = c.status === 'cancelled' || c.status === 'cancelled_by_nc';
     const esAnulada = c.status === 'cancelled_by_nc';
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
-    const emitido = c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '') || esNotaCredito;
+    const emitido = (c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '')) && !esCancelada;
     
-    // 👇 DETERMINAR VALORES PARA DATA ATTRIBUTES
-    const origen = c.origen || c.platform || 'manual';
-    const estado = emitido ? 'emitido' : (c.estado === 'pendiente' ? 'pendiente' : 'pendiente');
+    // 👇 DATA ATTRIBUTES
+    const origen = c.origen || c.platform || 'woo';
+    const estado = (() => {
+      if (esAnulada) return 'anulada';
+      if (esCancelada) return 'cancelada';
+      if (emitido) return 'emitido';
+      return 'pendiente';
+    })();
     const tipo = c.tipo || 'factura_c';
     const emision = c.origen === 'manual' ? 'manual' : 'automatica';
     const fecha = c.fechaISO || c.fecha || '';
+    const emailSent = c.emailSent === true;
+    const envio = emailSent ? 'enviado' : 'no_enviado';
     
     let estadoChip = '';
     if (esAnulada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
+    } else if (esCancelada) {
+      estadoChip = `<span class="estado-chip anulado">⚠️ Cancelada</span>`;
     } else if (emitido) {
       estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
     } else {
@@ -1910,7 +1920,7 @@ function renderComprobantes(lista) {
       }
     })();
     
-    const btnAnular = c.origen === 'manual' && !emitido && !esAnulada
+    const btnAnular = c.origen === 'manual' && !emitido && !esAnulada && !esCancelada
       ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
       : '';
     
@@ -1927,7 +1937,6 @@ function renderComprobantes(lista) {
       ? 'Ver Nota de Crédito' 
       : (esAnulada ? 'Ver Factura Anulada' : 'Ver PDF');
     
-    const emailSent = c.emailSent === true;
     const emailTitle = emailSent 
       ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
       : (esNotaCredito ? 'Enviar Nota de Crédito por email' : 'Enviar factura por email');
@@ -1938,9 +1947,9 @@ function renderComprobantes(lista) {
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     const pdfId = c._id || c.id;
     
-    // 👇 AGREGAR DATA ATTRIBUTES A LA FILA
+    // 👇 FILA CON TODOS LOS DATA ATTRIBUTES
     html += `
-    <tr data-origen="${origen}" data-estado="${estado}" data-tipo="${tipo}" data-emision="${emision}" data-fecha="${fecha}" style="animation:rowIn .3s ease ${i*35}ms both">
+    <tr data-origen="${origen}" data-estado="${estado}" data-tipo="${tipo}" data-emision="${emision}" data-envio="${envio}" data-email-sent="${emailSent}" data-fecha="${fecha}" style="animation:rowIn .3s ease ${i*35}ms both">
       <td style="text-align:center">${origenPill}</td>
       <td style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td>
@@ -1959,7 +1968,7 @@ function renderComprobantes(lista) {
               <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
             </svg>
           </button>
-          ${!emitido && !esNotaCredito && !esAnulada
+          ${!emitido && !esNotaCredito && !esAnulada && !esCancelada
             ? `<button class="act-btn act-warn" title="Emitir CAE" data-emitir="${c._id||c.id}" onclick="emitir('${c._id||c.id}')">
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
@@ -1967,7 +1976,7 @@ function renderComprobantes(lista) {
                   <circle cx='7' cy='10' r='.6' fill='currentColor'/>
                 </svg>
                </button>`
-            : `<button class="act-btn act-done" title="${esNotaCredito ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
+            : `<button class="act-btn act-done" title="${esNotaCredito || esCancelada ? 'Nota de Crédito emitida' : 'Factura ya emitida'}" disabled>
                 <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
                   <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
                 </svg>

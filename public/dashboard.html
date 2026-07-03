@@ -1733,37 +1733,31 @@
     <div class="filtro-grupo">
       <div class="filtro-grupo-titulo">Plataforma</div>
       <div class="filtro-opciones">
-        <!-- WooCommerce -->
         <label class="filtro-plataforma" data-plataforma="woo">
           <input type="checkbox" value="woo">
           <span class="plataforma-logo" style="background: #7F54B3;">W</span>
           <span class="plataforma-info">WooCommerce</span>
         </label>
-        <!-- Mercado Libre -->
         <label class="filtro-plataforma" data-plataforma="mercadolibre">
           <input type="checkbox" value="mercadolibre">
           <span class="plataforma-logo" style="background: #FFE600; color:#333;">ML</span>
           <span class="plataforma-info">Mercado Libre</span>
         </label>
-        <!-- Tienda Nube -->
         <label class="filtro-plataforma" data-plataforma="tiendanube">
           <input type="checkbox" value="tiendanube">
           <span class="plataforma-logo" style="background: #1EAAF1;">TN</span>
           <span class="plataforma-info">Tienda Nube</span>
         </label>
-        <!-- Empretienda -->
         <label class="filtro-plataforma" data-plataforma="empretienda">
           <input type="checkbox" value="empretienda">
           <span class="plataforma-logo" style="background: #00C37A;">E</span>
           <span class="plataforma-info">Empretienda</span>
         </label>
-        <!-- Rappi -->
         <label class="filtro-plataforma" data-plataforma="rappi">
           <input type="checkbox" value="rappi">
           <span class="plataforma-logo" style="background: #FF441B;">R</span>
           <span class="plataforma-info">Rappi</span>
         </label>
-        <!-- VTEX -->
         <label class="filtro-plataforma" data-plataforma="vtex">
           <input type="checkbox" value="vtex">
           <span class="plataforma-logo" style="background: #F71963;">V</span>
@@ -1776,8 +1770,8 @@
     <div class="filtro-grupo">
       <div class="filtro-grupo-titulo">Estado</div>
       <div class="filtro-opciones">
-        <label class="filtro-check active" data-estado="emitido">
-          <input type="checkbox" value="emitido" checked>
+        <label class="filtro-check" data-estado="emitido">
+          <input type="checkbox" value="emitido">
           <span class="check-custom"><span class="material-icons">check</span></span>
           <span>Emitido</span>
         </label>
@@ -1785,6 +1779,16 @@
           <input type="checkbox" value="pendiente">
           <span class="check-custom"><span class="material-icons">check</span></span>
           <span>Sin emitir</span>
+        </label>
+        <label class="filtro-check" data-estado="cancelada">
+          <input type="checkbox" value="cancelada">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>Cancelada</span>
+        </label>
+        <label class="filtro-check" data-estado="anulada">
+          <input type="checkbox" value="anulada">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>Anulada</span>
         </label>
         <label class="filtro-check" data-estado="error">
           <input type="checkbox" value="error">
@@ -1798,8 +1802,8 @@
     <div class="filtro-grupo">
       <div class="filtro-grupo-titulo">Tipo de Comprobante</div>
       <div class="filtro-opciones">
-        <label class="filtro-check active" data-tipo="factura_c">
-          <input type="checkbox" value="factura_c" checked>
+        <label class="filtro-check" data-tipo="factura_c">
+          <input type="checkbox" value="factura_c">
           <span class="check-custom"><span class="material-icons">check</span></span>
           <span>Factura C</span>
         </label>
@@ -1825,8 +1829,8 @@
     <div class="filtro-grupo">
       <div class="filtro-grupo-titulo">Tipo de Emisión</div>
       <div class="filtro-opciones">
-        <label class="filtro-check active" data-emision="automatica">
-          <input type="checkbox" value="automatica" checked>
+        <label class="filtro-check" data-emision="automatica">
+          <input type="checkbox" value="automatica">
           <span class="check-custom"><span class="material-icons">check</span></span>
           <span>Automática</span>
         </label>
@@ -1834,6 +1838,28 @@
           <input type="checkbox" value="manual">
           <span class="check-custom"><span class="material-icons">check</span></span>
           <span>Manual</span>
+        </label>
+      </div>
+    </div>
+
+    <!-- ESTADO DE ENVÍO -->
+    <div class="filtro-grupo">
+      <div class="filtro-grupo-titulo">Estado de Envío</div>
+      <div class="filtro-opciones">
+        <label class="filtro-check" data-envio="enviado">
+          <input type="checkbox" value="enviado">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📧 Enviado</span>
+        </label>
+        <label class="filtro-check" data-envio="no_enviado">
+          <input type="checkbox" value="no_enviado">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>📧 No enviado</span>
+        </label>
+        <label class="filtro-check" data-envio="pendiente_envio">
+          <input type="checkbox" value="pendiente_envio">
+          <span class="check-custom"><span class="material-icons">check</span></span>
+          <span>⏳ Pendiente de envío</span>
         </label>
       </div>
     </div>

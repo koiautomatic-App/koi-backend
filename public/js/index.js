@@ -2176,15 +2176,35 @@ function verPDF(orderId) {
     let tipo = 'Factura';
     
     if (orden) {
-        // Si el ID contiene "NC" o el nroFormatted comienza con "NC"
+        // 🔥 CASO 1: SI ES NC (id contiene NC o amount < 0) → Mostrar NC
         if (orden.id && orden.id.includes('NC')) {
             pdfId = orden._id;
             tipo = 'Nota de Crédito';
-        } else if (orden.nroFormatted && orden.nroFormatted.startsWith('NC')) {
+            console.log(`📄 Abriendo PDF de Nota de Crédito (ID: ${pdfId})`);
+            window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+            return;
+        }
+        
+        if (orden.nroFormatted && orden.nroFormatted.startsWith('NC')) {
             pdfId = orden._id;
             tipo = 'Nota de Crédito';
-        } else if (orden.status === 'cancelled_by_nc') {
-            // Si es una factura anulada por NC, buscar la NC asociada
+            console.log(`📄 Abriendo PDF de Nota de Crédito (ID: ${pdfId})`);
+            window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+            return;
+        }
+        
+        // 🔥 CASO 2: FACTURA ANULADA POR NC → Mostrar la factura original
+        if (orden.status === 'cancelled_by_nc') {
+            // NO buscar NC, mostrar la factura original
+            pdfId = orden._id;
+            tipo = 'Factura Anulada';
+            console.log(`📄 Abriendo PDF de Factura Anulada (ID: ${pdfId})`);
+            window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+            return;
+        }
+        
+        // 🔥 CASO 3: FACTURA CANCELADA (sin NC) → Buscar NC
+        if (orden.status === 'cancelled') {
             const ncAsociada = _todosComp.find(c => 
                 c.id && c.id.includes('NC') && 
                 c.concepto && c.concepto.includes(orden.id)
@@ -2192,13 +2212,20 @@ function verPDF(orderId) {
             if (ncAsociada) {
                 pdfId = ncAsociada._id;
                 tipo = 'Nota de Crédito asociada';
-                console.log(`📄 ${tipo} encontrada para factura anulada #${orden.id}`);
+                console.log(`📄 ${tipo} encontrada para factura cancelada #${orden.id}`);
+                window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+                return;
             }
         }
+        
+        // 🔥 CASO 4: FACTURA NORMAL
+        console.log(`📄 Abriendo PDF de Factura (ID: ${pdfId})`);
+        window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+        return;
     }
     
-    console.log(`📄 Abriendo PDF de ${tipo} (ID: ${pdfId})`);
-    window.open(`/api/orders/${pdfId}/pdf`, '_blank');
+    // Fallback
+    window.open(`/api/orders/${orderId}/pdf`, '_blank');
 }
 async function emitir(idOrden) {
   // idOrden es el _id de MongoDB de la orden

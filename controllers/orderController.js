@@ -439,13 +439,11 @@ const generarPDF = async (req, res) => {
                  orden.externalId?.includes('-NC') ||
                  orden.amount < 0;
 
-    // Si es NC, generar PDF de Nota de Crédito
+    // 👇 CASO 1: LA ORDEN ACTUAL ES UNA NC → Mostrar NC
     if (esNC) {
       const { generarFacturaHtml } = require('../services/email');
-      // 👇 PASAR esNC al template
       const html = await generarFacturaHtml(req.userId, orden, true);
       
-      // 👇 USAR nroFormatted para el nombre
       const nombreArchivo = orden.nroFormatted 
         ? orden.nroFormatted.replace(/\s/g, '') 
         : `NOTA_DE_CREDITO-${String(orden.puntoVenta || 1).padStart(4, '0')}-${String(orden.nroComprobante || 0).padStart(8, '0')}`;
@@ -455,8 +453,24 @@ const generarPDF = async (req, res) => {
       return res.send(html);
     }
 
-    // Si la orden está cancelada, buscar la NC asociada
-    if (orden.status === 'cancelled' || orden.status === 'cancelled_by_nc') {
+    // 👇 CASO 2: LA ORDEN ESTÁ ANULADA POR NC → Mostrar la factura original (NO la NC)
+    // NOTA: Esta condición debe ir ANTES de buscar la NC
+    if (orden.status === 'cancelled_by_nc') {
+      const { generarFacturaHtml } = require('../services/email');
+      // pasar false para que sepa que es factura (no NC)
+      const html = await generarFacturaHtml(req.userId, orden, false);
+      
+      const nombreArchivo = orden.nroFormatted 
+        ? `FACTURA-${orden.nroFormatted.replace(/\s/g, '')}`
+        : `FACTURA-${String(orden.puntoVenta || 1).padStart(4, '0')}-${String(orden.nroComprobante || 0).padStart(8, '0')}`;
+      
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="${nombreArchivo}.html"`);
+      return res.send(html);
+    }
+
+    // 👇 CASO 3: LA ORDEN ESTÁ CANCELADA (sin NC asociada) → Buscar NC
+    if (orden.status === 'cancelled') {
       let nc = null;
       
       if (orden._id) {
@@ -487,7 +501,7 @@ const generarPDF = async (req, res) => {
       }
     }
 
-    // Si es factura normal
+    // 👇 CASO 4: FACTURA NORMAL (emitida o pendiente)
     const { generarFacturaHtml } = require('../services/email');
     const html = await generarFacturaHtml(req.userId, orden, false);
 
@@ -504,7 +518,6 @@ const generarPDF = async (req, res) => {
     res.status(500).json({ error: 'Error generando comprobante: ' + error.message });
   }
 };
-
 module.exports = {
   listarOrdenes,
   obtenerOrden,

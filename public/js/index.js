@@ -1878,7 +1878,7 @@ function renderComprobantes(lista) {
   for (let i = 0; i < lista.length; i++) {
     const c = lista[i];
     
-    // 👇 DETERMINAR ESTADOS CORRECTAMENTE
+    // 👇 DETERMINAR TIPOS
     const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC')) || (c.id && c.id.includes('NC'));
     const esCancelada = c.status === 'cancelled' || c.status === 'cancelled_by_nc';
     const esAnulada = c.status === 'cancelled_by_nc';
@@ -1888,8 +1888,7 @@ function renderComprobantes(lista) {
     const origen = c.origen || c.platform || 'woo';
     const estado = (() => {
       if (esAnulada) return 'anulada';
-      if (esCancelada && !esNotaCredito) return 'cancelada';
-      if (esNotaCredito) return 'emitido';
+      if (esCancelada) return 'cancelada';  // 🔥 TODAS las canceladas (incluye NC)
       if (emitido) return 'emitido';
       return 'pendiente';
     })();
@@ -1899,13 +1898,12 @@ function renderComprobantes(lista) {
     const emailSent = c.emailSent === true;
     const envio = emailSent ? 'enviado' : 'no_enviado';
     
+    // 👇 CHIP
     let estadoChip = '';
     if (esAnulada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
-    } else if (esCancelada && !esNotaCredito) {
+    } else if (esCancelada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Cancelada</span>`;
-    } else if (esNotaCredito) {
-      estadoChip = `<span class="estado-chip ok">● NC Emitida</span>`;
     } else if (emitido) {
       estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
     } else {
@@ -1936,7 +1934,7 @@ function renderComprobantes(lista) {
          </button>`
       : '';
     
-    // 👇 TÍTULO DEL PDF - CORREGIDO
+    // 👇 TÍTULO DEL PDF
     let tituloPDF = 'Ver PDF';
     if (esNotaCredito) {
       tituloPDF = 'Ver Nota de Crédito';

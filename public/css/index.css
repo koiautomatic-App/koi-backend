@@ -5613,7 +5613,7 @@ table.comp-table-report tr.total td:last-child {
 
 /* Modal Box */
 #modalFiltros {
-    display: none;
+     display: none;
     position: fixed;
     top: 50%;
     left: 50%;
@@ -5621,10 +5621,10 @@ table.comp-table-report tr.total td:last-child {
     width: 480px;
     max-width: 94vw;
     max-height: 85vh;
-    background: #141a2b;
+    background: var(--card); /* 👈 MISMO QUE NUEVA EMISIÓN */
     border-radius: 20px;
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+    border: 1px solid var(--border); /* 👈 MISMO QUE NUEVA EMISIÓN */
+    box-shadow: var(--sh-card); /* 👈 MISMO QUE NUEVA EMISIÓN */
     z-index: 99999;
     overflow: hidden;
     opacity: 0;
@@ -5632,6 +5632,7 @@ table.comp-table-report tr.total td:last-child {
     pointer-events: none;
     transition: opacity 0.3s ease, visibility 0.3s ease, transform 0.3s ease;
 }
+
 
 #modalFiltros.open {
     display: block;
@@ -5856,6 +5857,62 @@ table.comp-table-report tr.total td:last-child {
     color: #fff;
 }
 
+/* ============================================
+   PLATAFORMAS CON LOGOS
+   ============================================ */
+
+.filtro-plataforma {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.04);
+    padding: 6px 12px 6px 8px;
+    border-radius: 40px;
+    cursor: pointer;
+    font-size: 11px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    transition: all 0.2s;
+    color: rgba(255, 255, 255, 0.5);
+    user-select: none;
+}
+
+.filtro-plataforma:hover {
+    background: rgba(255, 255, 255, 0.07);
+    border-color: rgba(232, 98, 42, 0.2);
+}
+
+.filtro-plataforma input[type="checkbox"] {
+    display: none;
+}
+
+.filtro-plataforma .plataforma-logo {
+    width: 22px;
+    height: 22px;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 10px;
+    font-weight: 700;
+    flex-shrink: 0;
+    color: #fff;
+}
+
+.filtro-plataforma .plataforma-info {
+    color: rgba(255, 255, 255, 0.5);
+    transition: color 0.2s;
+    font-weight: 500;
+    font-size: 11px;
+}
+
+.filtro-plataforma.active {
+    background: rgba(232, 98, 42, 0.12);
+    border-color: rgba(232, 98, 42, 0.25);
+}
+
+.filtro-plataforma.active .plataforma-info {
+    color: #fff;
+}
 /* ============================================
    BOTÓN FILTRAR Y TAGS
    ============================================ */

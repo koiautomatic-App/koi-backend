@@ -5589,7 +5589,7 @@ table.comp-table-report tr.total td:last-child {
   }
 }
 /* ============================================
-   MODAL DE FILTROS - VERSIÓN CORREGIDA
+   MODAL DE FILTROS - ESTILO KOI
    ============================================ */
 
 /* Overlay */
@@ -5618,7 +5618,7 @@ table.comp-table-report tr.total td:last-child {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%) scale(0.95);
-    width: 520px;
+    width: 480px;
     max-width: 94vw;
     max-height: 85vh;
     background: #141a2b;
@@ -5646,7 +5646,7 @@ table.comp-table-report tr.total td:last-child {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 18px 24px 14px;
+    padding: 20px 24px 16px 24px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
@@ -5657,6 +5657,11 @@ table.comp-table-report tr.total td:last-child {
     color: #fff;
     font-size: 16px;
     font-weight: 700;
+}
+
+#modalFiltros .modal-title .material-icons {
+    color: #e8622a;
+    font-size: 22px;
 }
 
 #modalFiltros .cfg-close {
@@ -5684,7 +5689,7 @@ table.comp-table-report tr.total td:last-child {
 
 /* Body */
 #modalFiltros .modal-body {
-    padding: 20px 24px;
+    padding: 24px;
     max-height: calc(85vh - 160px);
     overflow-y: auto;
 }
@@ -5708,7 +5713,7 @@ table.comp-table-report tr.total td:last-child {
     display: flex;
     justify-content: flex-end;
     gap: 10px;
-    padding: 14px 24px 18px;
+    padding: 14px 24px 20px;
     border-top: 1px solid rgba(255, 255, 255, 0.05);
 }
 
@@ -5720,6 +5725,7 @@ table.comp-table-report tr.total td:last-child {
     color: rgba(255, 255, 255, 0.5);
     font-size: 11px;
     font-weight: 600;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -5733,6 +5739,10 @@ table.comp-table-report tr.total td:last-child {
     color: #fff;
 }
 
+#modalFiltros .btn-cancel .material-icons {
+    font-size: 14px;
+}
+
 #modalFiltros .btn-registrar {
     background: linear-gradient(135deg, #e8622a, #f5a623);
     border: none;
@@ -5741,6 +5751,7 @@ table.comp-table-report tr.total td:last-child {
     color: #fff;
     font-size: 11px;
     font-weight: 700;
+    font-family: 'Plus Jakarta Sans', sans-serif;
     cursor: pointer;
     transition: all 0.2s;
     display: flex;
@@ -5753,8 +5764,12 @@ table.comp-table-report tr.total td:last-child {
     box-shadow: 0 4px 16px rgba(232, 98, 42, 0.25);
 }
 
+#modalFiltros .btn-registrar .material-icons {
+    font-size: 14px;
+}
+
 /* ============================================
-   GRUPOS DE FILTROS
+   FILTROS - GRUPOS
    ============================================ */
 
 .filtro-grupo {
@@ -5778,63 +5793,6 @@ table.comp-table-report tr.total td:last-child {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
-}
-
-/* ============================================
-   PLATAFORMAS CON LOGOS
-   ============================================ */
-
-.filtro-plataforma {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    background: rgba(255, 255, 255, 0.04);
-    padding: 6px 12px 6px 8px;
-    border-radius: 40px;
-    cursor: pointer;
-    font-size: 11px;
-    border: 1px solid rgba(255, 255, 255, 0.05);
-    transition: all 0.2s;
-    color: rgba(255, 255, 255, 0.5);
-    user-select: none;
-}
-
-.filtro-plataforma:hover {
-    background: rgba(255, 255, 255, 0.07);
-    border-color: rgba(232, 98, 42, 0.2);
-}
-
-.filtro-plataforma input[type="checkbox"] {
-    display: none;
-}
-
-.filtro-plataforma .plataforma-logo {
-    width: 22px;
-    height: 22px;
-    border-radius: 6px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 11px;
-    font-weight: 700;
-    flex-shrink: 0;
-    color: #fff;
-}
-
-.filtro-plataforma .plataforma-info {
-    color: rgba(255, 255, 255, 0.5);
-    transition: color 0.2s;
-    font-weight: 500;
-    font-size: 11px;
-}
-
-.filtro-plataforma.active {
-    background: rgba(232, 98, 42, 0.12);
-    border-color: rgba(232, 98, 42, 0.25);
-}
-
-.filtro-plataforma.active .plataforma-info {
-    color: #fff;
 }
 
 /* ============================================
@@ -5896,53 +5854,6 @@ table.comp-table-report tr.total td:last-child {
 
 .filtro-check.active .check-custom .material-icons {
     color: #fff;
-}
-
-/* ============================================
-   RANGO DE FECHAS
-   ============================================ */
-
-.filtro-fechas {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
-}
-
-.filtro-fechas .cfg-field {
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
-}
-
-.filtro-fechas .cfg-label {
-    font-size: 9px;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: 0.8px;
-    color: rgba(255, 255, 255, 0.3);
-}
-
-.filtro-fechas .cfg-input {
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.06);
-    border-radius: 8px;
-    padding: 8px 12px;
-    color: #fff;
-    font-size: 12px;
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    transition: all 0.2s;
-    width: 100%;
-}
-
-.filtro-fechas .cfg-input:focus {
-    outline: none;
-    border-color: rgba(232, 98, 42, 0.3);
-    background: rgba(255, 255, 255, 0.06);
-}
-
-.filtro-fechas .cfg-input[type="date"] {
-    color-scheme: dark;
-    min-height: 36px;
 }
 
 /* ============================================
@@ -6036,6 +5947,22 @@ table.comp-table-report tr.total td:last-child {
 
     #modalFiltros .modal-body {
         max-height: calc(100vh - 160px);
+        padding: 16px 18px;
+    }
+
+    #modalFiltros .modal-header {
+        padding: 16px 18px 12px 18px;
+    }
+
+    #modalFiltros .modal-footer {
+        flex-direction: column-reverse;
+        padding: 12px 18px 16px;
+    }
+
+    #modalFiltros .btn-cancel,
+    #modalFiltros .btn-registrar {
+        justify-content: center;
+        padding: 10px;
     }
 
     .filtro-btn-filtrar {
@@ -6046,30 +5973,5 @@ table.comp-table-report tr.total td:last-child {
     .filtro-check {
         padding: 4px 10px;
         font-size: 10px;
-    }
-
-    .filtro-plataforma {
-        padding: 4px 10px 4px 6px;
-        font-size: 10px;
-    }
-
-    .filtro-plataforma .plataforma-logo {
-        width: 18px;
-        height: 18px;
-        font-size: 9px;
-    }
-
-    .filtro-fechas {
-        grid-template-columns: 1fr;
-    }
-
-    #modalFiltros .modal-footer {
-        flex-direction: column-reverse;
-    }
-
-    #modalFiltros .btn-cancel,
-    #modalFiltros .btn-registrar {
-        justify-content: center;
-        padding: 10px;
     }
 }

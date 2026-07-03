@@ -1879,20 +1879,21 @@ function renderComprobantes(lista) {
     const c = lista[i];
     
     // 👇 DETERMINAR ESTADOS CORRECTAMENTE
+    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC')) || (c.id && c.id.includes('NC'));
     const esCancelada = c.status === 'cancelled' || c.status === 'cancelled_by_nc';
     const esAnulada = c.status === 'cancelled_by_nc';
-    const esNotaCredito = c.amount < 0 || (c.nroFormatted && c.nroFormatted.startsWith('NC'));
     const emitido = (c.estado === 'emitido' || c.status === 'invoiced' || (c.caeNumber && c.caeNumber !== '')) && !esCancelada;
     
     // 👇 DATA ATTRIBUTES
     const origen = c.origen || c.platform || 'woo';
     const estado = (() => {
       if (esAnulada) return 'anulada';
-      if (esCancelada) return 'cancelada';
+      if (esCancelada && !esNotaCredito) return 'cancelada';
+      if (esNotaCredito) return 'emitido';
       if (emitido) return 'emitido';
       return 'pendiente';
     })();
-    const tipo = c.tipo || 'factura_c';
+    const tipo = esNotaCredito ? 'nota_credito' : (c.tipo || 'factura_c');
     const emision = c.origen === 'manual' ? 'manual' : 'automatica';
     const fecha = c.fechaISO || c.fecha || '';
     const emailSent = c.emailSent === true;
@@ -1901,8 +1902,10 @@ function renderComprobantes(lista) {
     let estadoChip = '';
     if (esAnulada) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Anulada</span>`;
-    } else if (esCancelada) {
+    } else if (esCancelada && !esNotaCredito) {
       estadoChip = `<span class="estado-chip anulado">⚠️ Cancelada</span>`;
+    } else if (esNotaCredito) {
+      estadoChip = `<span class="estado-chip ok">● NC Emitida</span>`;
     } else if (emitido) {
       estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
     } else {
@@ -1933,9 +1936,15 @@ function renderComprobantes(lista) {
          </button>`
       : '';
     
-    const tituloPDF = (esNotaCredito || esCancelada) 
-      ? 'Ver Nota de Crédito' 
-      : (esAnulada ? 'Ver Factura Anulada' : 'Ver PDF');
+    // 👇 TÍTULO DEL PDF - CORREGIDO
+    let tituloPDF = 'Ver PDF';
+    if (esNotaCredito) {
+      tituloPDF = 'Ver Nota de Crédito';
+    } else if (esAnulada) {
+      tituloPDF = 'Ver Factura Anulada';
+    } else if (esCancelada && !esNotaCredito) {
+      tituloPDF = 'Ver Factura Cancelada';
+    }
     
     const emailTitle = emailSent 
       ? (esNotaCredito ? 'Nota de Crédito ya enviada' : 'Factura ya enviada')
@@ -2156,14 +2165,43 @@ function exportarIvaVentas(){
   if(typeof google==='undefined') setTimeout(()=>toast('Exportación generada (demo)','success'),1200);
 }
 
-function verPDF(orderId){
-  if (!orderId || orderId === 'undefined') {
-    toast('Sin comprobante disponible', 'warn');
-    return;
-  }
-  window.open(`/api/orders/${orderId}/pdf`, '_blank');
+function verPDF(orderId) {
+    if (!orderId || orderId === 'undefined') {
+        toast('Sin comprobante disponible', 'warn');
+        return;
+    }
+    
+    // Buscar la orden en _todosComp para identificar si es NC
+    const orden = _todosComp.find(c => c._id === orderId || c.id === orderId);
+    
+    let pdfId = orderId;
+    let tipo = 'Factura';
+    
+    if (orden) {
+        // Si el ID contiene "NC" o el nroFormatted comienza con "NC"
+        if (orden.id && orden.id.includes('NC')) {
+            pdfId = orden._id;
+            tipo = 'Nota de Crédito';
+        } else if (orden.nroFormatted && orden.nroFormatted.startsWith('NC')) {
+            pdfId = orden._id;
+            tipo = 'Nota de Crédito';
+        } else if (orden.status === 'cancelled_by_nc') {
+            // Si es una factura anulada por NC, buscar la NC asociada
+            const ncAsociada = _todosComp.find(c => 
+                c.id && c.id.includes('NC') && 
+                c.concepto && c.concepto.includes(orden.id)
+            );
+            if (ncAsociada) {
+                pdfId = ncAsociada._id;
+                tipo = 'Nota de Crédito asociada';
+                console.log(`📄 ${tipo} encontrada para factura anulada #${orden.id}`);
+            }
+        }
+    }
+    
+    console.log(`📄 Abriendo PDF de ${tipo} (ID: ${pdfId})`);
+    window.open(`/api/orders/${pdfId}/pdf`, '_blank');
 }
-
 async function emitir(idOrden) {
   // idOrden es el _id de MongoDB de la orden
   const btn = document.querySelector(`[data-emitir="${idOrden}"]`);

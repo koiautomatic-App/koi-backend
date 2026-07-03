@@ -6636,6 +6636,11 @@ function sincronizarCheckboxes() {
     cb.checked = filtrosActivos.emision.includes(cb.value);
   });
   
+  // 👇 NUEVO: Envío
+  document.querySelectorAll('.filtro-check[data-envio] input').forEach(cb => {
+    cb.checked = filtrosActivos.envio.includes(cb.value);
+  });
+  
   // Fechas
   const desde = document.getElementById('filtroFechaDesde');
   const hasta = document.getElementById('filtroFechaHasta');
@@ -6711,7 +6716,8 @@ function actualizarTagsFiltros() {
     filtrosActivos.plataforma.length + 
     filtrosActivos.estado.length + 
     filtrosActivos.tipo.length +
-    filtrosActivos.emision.length;
+    filtrosActivos.emision.length +
+    filtrosActivos.envio.length; // 👈 AGREGAR
   
   // Mostrar/ocultar badge
   if (badge) {
@@ -6719,7 +6725,8 @@ function actualizarTagsFiltros() {
       filtrosActivos.estado.length === 1 && filtrosActivos.estado[0] === 'emitido' &&
       filtrosActivos.tipo.length === 1 && filtrosActivos.tipo[0] === 'factura_c' &&
       filtrosActivos.emision.length === 1 && filtrosActivos.emision[0] === 'automatica' &&
-      filtrosActivos.plataforma.length === 0;
+      filtrosActivos.plataforma.length === 0 &&
+      filtrosActivos.envio.length === 0; // 👈 AGREGAR
     
     if (totalActivos > 0 && !defaultActive) {
       badge.style.display = 'inline';
@@ -6747,7 +6754,10 @@ function actualizarTagsFiltros() {
     'factura_b': 'Factura B',
     'nota_credito': 'Nota Crédito',
     'automatica': 'Automática',
-    'manual': 'Manual'
+    'manual': 'Manual',
+    'enviado': '📧 Enviado',           // 👈 NUEVO
+    'no_enviado': '📧 No enviado',     // 👈 NUEVO
+    'pendiente_envio': '⏳ Pendiente envío' // 👈 NUEVO
   };
   
   // Tags de plataforma
@@ -6779,6 +6789,14 @@ function actualizarTagsFiltros() {
     html += `<span class="filtro-tag">
       ${labels[e] || e}
       <span class="material-icons" onclick="quitarFiltro('emision','${e}')">close</span>
+    </span>`;
+  });
+  
+  // 👇 NUEVO: Tags de envío
+  filtrosActivos.envio.forEach(e => {
+    html += `<span class="filtro-tag">
+      ${labels[e] || e}
+      <span class="material-icons" onclick="quitarFiltro('envio','${e}')">close</span>
     </span>`;
   });
   

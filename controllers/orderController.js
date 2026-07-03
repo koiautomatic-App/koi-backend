@@ -434,14 +434,72 @@ const generarPDF = async (req, res) => {
     let orden = await Order.findOne({ _id: req.params.id, userId: req.userId }).lean();
     if (!orden) return res.status(404).json({ error: 'Orden no encontrada' });
 
-    // Si la orden está cancelada, buscar la Nota de Crédito asociada
-    if (orden.status === 'cancelled') {
-      const nc = await Order.findOne({ 
-        userId: req.userId,
-        externalId: { $regex: `^${orden.externalId}-NC` }
-      }).lean();
-      if (nc) orden = nc;
+    // 👇 PRIMERO: Verificar si la orden actual YA ES una Nota de Crédito
+    const esNC = orden.nroFormatted?.startsWith('NC') || 
+                 orden.externalId?.includes('-NC') ||
+                 orden.amount < 0;
+
+    // Si es NC, generar PDF de Nota de Crédito directamente
+    if (esNC) {
+      const { generarFacturaHtml } = require('../services/email');
+      const html = await generarFacturaHtml(req.userId, orden);
+      
+      const nroComp = String(orden.puntoVenta || 1).padStart(4, '0') + '-' + String(orden.nroComprobante || 0).padStart(8, '0');
+      
+      res.setHeader('Content-Type', 'text/html; charset=utf-8');
+      res.setHeader('Content-Disposition', `inline; filename="NOTA_DE_CREDITO-${nroComp}.html"`);
+      return res.send(html);
     }
+
+    // Si la orden está cancelada y NO es NC, buscar la NC asociada
+    if (orden.status === 'cancelled' || orden.status === 'cancelled_by_nc') {
+      // Buscar NC por facturaOriginalId (si existe)
+      let nc = null;
+      
+      // Intentar por facturaOriginalId
+      if (orden._id) {
+        nc = await Order.findOne({ 
+          userId: req.userId,
+          facturaOriginalId: orden._id
+        }).lean();
+      }
+      
+      // Si no, buscar por externalId
+      if (!nc && orden.externalId) {
+        nc = await Order.findOne({ 
+          userId: req.userId,
+          externalId: { $regex: `^${orden.externalId}-NC$` }
+        }).lean();
+      }
+      
+      if (nc) {
+        const { generarFacturaHtml } = require('../services/email');
+        const html = await generarFacturaHtml(req.userId, nc);
+        
+        const nroComp = String(nc.puntoVenta || 1).padStart(4, '0') + '-' + String(nc.nroComprobante || 0).padStart(8, '0');
+        
+        res.setHeader('Content-Type', 'text/html; charset=utf-8');
+        res.setHeader('Content-Disposition', `inline; filename="NOTA_DE_CREDITO-${nroComp}.html"`);
+        return res.send(html);
+      }
+    }
+
+    // Si es factura normal (emitida o pendiente)
+    const { generarFacturaHtml } = require('../services/email');
+    const html = await generarFacturaHtml(req.userId, orden);
+
+    const tipoFactura = 'FACTURA';
+    const nroComp = String(orden.puntoVenta || 1).padStart(4, '0') + '-' + String(orden.nroComprobante || 0).padStart(8, '0');
+
+    res.setHeader('Content-Type', 'text/html; charset=utf-8');
+    res.setHeader('Content-Disposition', `inline; filename="${tipoFactura}-${nroComp}.html"`);
+    res.send(html);
+    
+  } catch (error) {
+    console.error('generarPDF error:', error);
+    res.status(500).json({ error: 'Error generando comprobante: ' + error.message });
+  }
+};
 
     const { generarFacturaHtml } = require('../services/email');
     const html = await generarFacturaHtml(req.userId, orden);

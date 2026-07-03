@@ -453,7 +453,6 @@ const generarPDF = async (req, res) => {
 
     // Si la orden está cancelada y NO es NC, buscar la NC asociada
     if (orden.status === 'cancelled' || orden.status === 'cancelled_by_nc') {
-      // Buscar NC por facturaOriginalId (si existe)
       let nc = null;
       
       // Intentar por facturaOriginalId
@@ -495,21 +494,6 @@ const generarPDF = async (req, res) => {
     res.setHeader('Content-Disposition', `inline; filename="${tipoFactura}-${nroComp}.html"`);
     res.send(html);
     
-  } catch (error) {
-    console.error('generarPDF error:', error);
-    res.status(500).json({ error: 'Error generando comprobante: ' + error.message });
-  }
-};
-
-    const { generarFacturaHtml } = require('../services/email');
-    const html = await generarFacturaHtml(req.userId, orden);
-
-    const tipoFactura = orden.nroFormatted?.startsWith('NC') ? 'NOTA_DE_CREDITO' : 'FACTURA';
-    const nroComp = `${String(orden.puntoVenta || 1).padStart(4, '0')}-${String(orden.nroComprobante || 0).padStart(8, '0')}`;
-
-    res.setHeader('Content-Type', 'text/html; charset=utf-8');
-    res.setHeader('Content-Disposition', `inline; filename="${tipoFactura}-${nroComp}.html"`);
-    res.send(html);
   } catch (error) {
     console.error('generarPDF error:', error);
     res.status(500).json({ error: 'Error generando comprobante: ' + error.message });

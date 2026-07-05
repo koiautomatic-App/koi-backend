@@ -2247,6 +2247,22 @@ async function emitir(idOrden) {
     
     const data = await res.json();
 
+    // 👇 CASO 0: PERÍODO EXPIRADO (403)
+    if (res.status === 403 && data.codigo === 'PERIODO_EXPIRADO') {
+      toast('⚠️ ' + data.error, 'error');
+      if (btn) {
+        btn.disabled = false;
+        btn.innerHTML = originalHtml;
+      }
+      // Redirigir a la página de suscripción después de 2 segundos
+      setTimeout(() => {
+        if (typeof mostrarVista === 'function') {
+          mostrarVista('estado');
+        }
+      }, 2000);
+      return;
+    }
+
     // Caso 1: Requiere confirmación (409 Conflict)
     if (res.status === 409 && data.requiereConfirmacion) {
       if (btn) {
@@ -2313,6 +2329,17 @@ async function emitirLote() {
     });
     
     const data = await res.json();
+
+    // 👇 CASO: PERÍODO EXPIRADO (403)
+    if (res.status === 403 && data.codigo === 'PERIODO_EXPIRADO') {
+      toast('⚠️ ' + data.error, 'error');
+      setTimeout(() => {
+        if (typeof mostrarVista === 'function') {
+          mostrarVista('estado');
+        }
+      }, 2000);
+      return;
+    }
     
     // Caso 1: Requiere confirmación (409 Conflict)
     if (res.status === 409 && data.requiereConfirmacion) {
@@ -2356,6 +2383,16 @@ async function emitirLote() {
     console.error('Error en emitirLote:', e);
     toast('Error: ' + e.message, 'error');
   }
+}
+// 👇 AGREGAR ESTO DESPUÉS DE OBTENER LA RESPUESTA
+if (res.status === 403 && data.codigo === 'PERIODO_EXPIRADO') {
+  toast('⚠️ ' + data.error, 'error');
+  setTimeout(() => {
+    if (typeof mostrarVista === 'function') {
+      mostrarVista('estado');
+    }
+  }, 2000);
+  return;
 }
 
 async function enviarMail(orderId) {

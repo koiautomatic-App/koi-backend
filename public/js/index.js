@@ -2329,6 +2329,17 @@ async function emitirLote() {
     });
     
     const data = await res.json();
+
+    // 👇 CASO: PERÍODO EXPIRADO (403)
+    if (res.status === 403 && data.codigo === 'PERIODO_EXPIRADO') {
+      toast('⚠️ ' + data.error, 'error');
+      setTimeout(() => {
+        if (typeof mostrarVista === 'function') {
+          mostrarVista('estado');
+        }
+      }, 2000);
+      return;
+    }
     
     // Caso 1: Requiere confirmación (409 Conflict)
     if (res.status === 409 && data.requiereConfirmacion) {
@@ -2373,17 +2384,6 @@ async function emitirLote() {
     toast('Error: ' + e.message, 'error');
   }
 }
-// 👇 AGREGAR ESTO DESPUÉS DE OBTENER LA RESPUESTA
-if (res.status === 403 && data.codigo === 'PERIODO_EXPIRADO') {
-  toast('⚠️ ' + data.error, 'error');
-  setTimeout(() => {
-    if (typeof mostrarVista === 'function') {
-      mostrarVista('estado');
-    }
-  }, 2000);
-  return;
-}
-
 async function enviarMail(orderId) {
   if (!orderId) return;
   

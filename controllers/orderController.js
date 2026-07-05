@@ -94,7 +94,20 @@ const emitirOrden = async (req, res) => {
       return res.status(400).json({ error: 'Esta orden ya tiene CAE emitido' });
     }
     
+    // 👇 AGREGAR VALIDACIÓN DE PERÍODO EXPIRADO
     const user = await User.findById(req.userId).select('settings').lean();
+    const estadoCicloVida = user?.settings?.estadoCicloVida || 'cortesia_activa';
+    const suscripcionActiva = user?.settings?.suscripcionActiva || false;
+    
+    // Si está expirado y no tiene suscripción activa, bloquear
+    if (estadoCicloVida === 'expirado' && !suscripcionActiva) {
+      return res.status(403).json({ 
+        error: 'Tu período de prueba ha expirado. Suscribite para continuar facturando.',
+        codigo: 'PERIODO_EXPIRADO'
+      });
+    }
+    
+    // Continuar con la emisión
     const result = await emitirCAE(orden._id, user);
     
     res.json({

@@ -6098,6 +6098,7 @@ table.comp-table-report tr.total td:last-child {
         width: 100% !important;
         box-sizing: border-box !important;
         line-height: 1.4 !important;
+        gap: 12px !important;
     }
     
     .comp-tabla tbody td:last-child {
@@ -6119,13 +6120,26 @@ table.comp-table-report tr.total td:last-child {
         display: inline-block !important;
     }
     
-    /* --- Cliente: nombre y email en columna --- */
+    /* --- Estirar solo <div> de texto plano (Concepto, Fecha, N° Comp, etc) --- */
+    .comp-tabla tbody td > div:not(.comp-actions) {
+        flex: 1 !important;
+        min-width: 0 !important;
+        text-align: right !important;
+    }
+    
+    /* --- Cliente: nombre y email en columna, alineados a la izquierda --- */
     .comp-tabla tbody td[data-label="Cliente"] {
         flex-direction: column !important;
         align-items: flex-start !important;
         gap: 2px !important;
         font-weight: 600 !important;
         font-size: 13px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Cliente"] > div {
+        flex: unset !important;
+        text-align: left !important;
+        width: 100% !important;
     }
     
     .comp-tabla tbody td[data-label="Cliente"] .user-email {
@@ -6154,9 +6168,25 @@ table.comp-table-report tr.total td:last-child {
         color: #00e676 !important;
     }
     
-    /* --- Estado: alineado a la derecha --- */
+    /* --- Origen: el pill (WOO/ML/EXT) mantiene su tamaño natural --- */
+    .comp-tabla tbody td[data-label="Origen"] {
+        justify-content: flex-end !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Origen"] span {
+        flex: none !important;
+        width: auto !important;
+        display: inline-block !important;
+    }
+    
+    /* --- Estado: alineado a la derecha, chip con tamaño natural --- */
     .comp-tabla tbody td[data-label="Estado"] {
         justify-content: flex-end !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Estado"] .estado-chip {
+        flex: none !important;
+        width: auto !important;
     }
     
     /* --- Acciones: alineadas a la derecha --- */
@@ -6276,22 +6306,5 @@ table.comp-table-report tr.total td:last-child {
     .filtro-btn-filtrar {
         font-size: 12px !important;
         padding: 6px 14px !important;
-    }
-}
-@media (max-width: 768px) {
-    .comp-tabla tbody td {
-        gap: 12px !important;
-    }
-    
-    .comp-tabla tbody td > *:not(.estado-chip):not(.comp-actions) {
-        flex: 1 !important;
-        min-width: 0 !important;
-        text-align: right !important;
-    }
-    
-    .comp-tabla tbody td[data-label="Cliente"] > div {
-        flex: unset !important;
-        text-align: left !important;
-        width: 100% !important;
     }
 }

@@ -7222,7 +7222,7 @@ function renderizarComprobantes(comprobantes) {
             }
         `;
 
-        // === FILA CON DATA-LABEL ===
+        // === FILA CON DATA-LABEL (la parte clave) ===
         html += `
         <tr data-origen="${platform}" 
             data-estado="${estado}" 

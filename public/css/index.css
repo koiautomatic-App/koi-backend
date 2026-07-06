@@ -6033,136 +6033,248 @@ table.comp-table-report tr.total td:last-child {
     }
 }
 /* ============================================================
-   TABLA DE COMPROBANTES - OPTIMIZACIÓN MOBILE
+   FIX: TARJETAS DE COMPROBANTES EN MOBILE (VERSIÓN DEFINITIVA)
    ============================================================ */
 
-/* --- Scroll horizontal en mobile --- */
-.comp-tabla-wrap {
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-    margin: 0 -1rem;
-    padding: 0 1rem;
-}
-
-/* --- Tabla base --- */
-.comp-tabla {
-    min-width: 700px;
-    width: 100%;
-}
-
-/* --- Ocultar columnas en mobile --- */
 @media (max-width: 768px) {
-    .comp-tabla th:nth-child(4),
-    .comp-tabla td:nth-child(4) {
-        display: none;
-    }
-    
-    .comp-tabla {
-        font-size: 11px;
-        min-width: 500px;
-    }
-    
-    .comp-tabla th,
-    .comp-tabla td {
-        padding: 8px 10px;
-    }
-}
-
-@media (max-width: 600px) {
-    /* Convertir filas en cards */
+    /* --- Contenedor centrado --- */
     .comp-tabla-wrap {
-        margin: 0;
-        padding: 0;
-        overflow-x: visible;
+        margin: 0 auto !important;
+        padding: 0 16px !important;
+        max-width: 100% !important;
+        background: transparent !important;
+        border: none !important;
+        overflow-x: visible !important;
+        display: flex !important;
+        justify-content: center !important;
+    }
+    
+    /* --- Tabla centrada --- */
+    .comp-tabla {
+        display: block !important;
+        width: 100% !important;
+        max-width: 600px !important;
+        min-width: unset !important;
+        margin: 0 auto !important;
     }
     
     .comp-tabla thead {
-        display: none;
-    }
-    
-    .comp-tabla {
-        min-width: unset;
-        width: 100%;
-        display: block;
+        display: none !important;
     }
     
     .comp-tabla tbody {
-        display: block;
+        display: block !important;
+        width: 100% !important;
     }
     
+    /* --- Cada tarjeta --- */
     .comp-tabla tbody tr {
-        display: block;
-        background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-        height: auto !important;
+        display: block !important;
+        background: var(--card, #0D0D16) !important;
+        border: 1px solid rgba(255,255,255,0.06) !important;
+        border-radius: 12px !important;
+        padding: 16px 18px !important;
+        margin: 0 auto 14px auto !important;
+        width: 100% !important;
+        max-width: 600px !important;
+        box-sizing: border-box !important;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
     }
     
+    .comp-tabla tbody tr:hover {
+        background: var(--card, #0D0D16) !important;
+        border-color: rgba(249,115,22,0.15) !important;
+    }
+    
+    /* --- Cada celda --- */
     .comp-tabla tbody td {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        padding: 6px 0;
-        border-bottom: 1px solid rgba(255,255,255,0.04);
-        text-align: right;
-        white-space: normal;
-        word-break: break-word;
+        display: flex !important;
+        justify-content: space-between !important;
+        align-items: center !important;
+        padding: 5px 0 !important;
+        border-bottom: 1px solid rgba(255,255,255,0.04) !important;
+        font-size: 12px !important;
+        background: transparent !important;
+        width: 100% !important;
+        box-sizing: border-box !important;
+        line-height: 1.4 !important;
     }
     
     .comp-tabla tbody td:last-child {
-        border-bottom: none;
+        border-bottom: none !important;
+        padding-top: 8px !important;
     }
     
+    /* --- Etiqueta a la izquierda (data-label) --- */
     .comp-tabla tbody td::before {
-        content: attr(data-label);
-        font-weight: 600;
-        color: var(--text-3);
-        font-size: 9px;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-        flex-shrink: 0;
-        margin-right: 12px;
+        content: attr(data-label) !important;
+        font-weight: 600 !important;
+        color: #6B7280 !important;
+        font-size: 9px !important;
+        text-transform: uppercase !important;
+        letter-spacing: 0.5px !important;
+        flex-shrink: 0 !important;
+        margin-right: 12px !important;
+        min-width: 60px !important;
+        display: inline-block !important;
     }
     
-    /* Ocultar columnas extra en mobile */
-    .comp-tabla tbody td:nth-child(4) {
-        display: flex;
+    /* --- Cliente: nombre y email en columna --- */
+    .comp-tabla tbody td[data-label="Cliente"] {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 2px !important;
+        font-weight: 600 !important;
+        font-size: 13px !important;
     }
     
-    /* Ajustar estados */
+    .comp-tabla tbody td[data-label="Cliente"] .user-email {
+        font-size: 10px !important;
+        color: #6B7280 !important;
+        font-weight: 400 !important;
+        margin-top: 1px !important;
+    }
+    
+    /* --- Concepto: texto completo --- */
+    .comp-tabla tbody td[data-label="Concepto"] {
+        font-size: 11px !important;
+        color: var(--text-2, #8888aa) !important;
+        max-width: unset !important;
+        overflow: visible !important;
+        white-space: normal !important;
+        text-overflow: unset !important;
+        word-break: break-word !important;
+        line-height: 1.4 !important;
+    }
+    
+    /* --- Monto: destacado en verde --- */
+    .comp-tabla tbody td[data-label="Monto"] {
+        font-size: 16px !important;
+        font-weight: 700 !important;
+        color: #00e676 !important;
+    }
+    
+    /* --- Estado: alineado a la derecha --- */
+    .comp-tabla tbody td[data-label="Estado"] {
+        justify-content: flex-end !important;
+    }
+    
+    /* --- Acciones: alineadas a la derecha --- */
+    .comp-tabla tbody td[data-label="Acciones"] {
+        justify-content: flex-end !important;
+        gap: 6px !important;
+        padding-top: 8px !important;
+        border-bottom: none !important;
+    }
+    
+    /* --- Badge estado --- */
     .estado-chip {
-        font-size: 9px;
-        padding: 2px 8px;
+        font-size: 9px !important;
+        padding: 2px 10px !important;
+    }
+    
+    /* --- Botones de acción --- */
+    .comp-tabla tbody td[data-label="Acciones"] .act-btn {
+        width: 28px !important;
+        height: 28px !important;
+        font-size: 11px !important;
+        border-radius: 6px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Acciones"] .act-btn svg {
+        width: 12px !important;
+        height: 12px !important;
+    }
+    
+    /* --- Totales centrados --- */
+    .comp-totales {
+        display: flex !important;
+        flex-wrap: wrap !important;
+        justify-content: center !important;
+        gap: 8px !important;
+        padding: 10px 0 !important;
+        max-width: 600px !important;
+        margin: 0 auto !important;
+    }
+    
+    .total-chip {
+        font-size: 11px !important;
+        padding: 6px 12px !important;
     }
 }
+
+/* ============================================================
+   MOBILE MUY PEQUEÑO (<= 400px)
+   ============================================================ */
 
 @media (max-width: 400px) {
     .comp-tabla tbody tr {
-        padding: 10px 12px;
+        padding: 12px 14px !important;
+        margin: 0 auto 10px auto !important;
     }
     
     .comp-tabla tbody td {
-        font-size: 11px;
-        padding: 4px 0;
+        font-size: 11px !important;
+        padding: 4px 0 !important;
     }
     
     .comp-tabla tbody td::before {
-        font-size: 8px;
+        font-size: 8px !important;
+        min-width: 50px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Monto"] {
+        font-size: 14px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Cliente"] {
+        font-size: 12px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Acciones"] .act-btn {
+        width: 24px !important;
+        height: 24px !important;
+        font-size: 10px !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Acciones"] .act-btn svg {
+        width: 10px !important;
+        height: 10px !important;
     }
 }
 
-/* --- Botones de acción en mobile --- */
-@media (max-width: 600px) {
-    .comp-tabla tbody td:last-child {
-        justify-content: flex-end;
-        gap: 4px;
+/* ============================================================
+   FIX: HEADER DE COMPROBANTES EN MOBILE
+   ============================================================ */
+
+@media (max-width: 768px) {
+    .comp-search-bar {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+        align-items: stretch !important;
+        padding: 0 4px !important;
     }
     
-    .comp-tabla tbody td:last-child .act-btn {
-        width: 26px;
-        height: 26px;
-        font-size: 12px;
+    .comp-search-wrap {
+        width: 100% !important;
+    }
+    
+    .comp-periodo-wrap {
+        width: 100% !important;
+    }
+    
+    .comp-periodo-btn {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+    
+    .comp-filtros {
+        justify-content: center !important;
+    }
+    
+    .filtro-btn-filtrar {
+        font-size: 12px !important;
+        padding: 6px 14px !important;
     }
 }

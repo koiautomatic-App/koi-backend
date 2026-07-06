@@ -7222,21 +7222,24 @@ function renderizarComprobantes(comprobantes) {
             }
         `;
 
-        // === ⭐⭐⭐ FILA CON DATA-LABEL (LA PARTE CLAVE) ⭐⭐⭐ ===
+        // === NOMBRE Y EMAIL ===
+        const nombreCliente = c.cliente || c.customerName || 'Sin nombre';
+        const emailCliente = c.email || c.customerEmail || '';
+
+        // === FILA CON DATA-LABEL ===
         html += `
         <tr data-origen="${platform}" 
             data-estado="${estado}" 
             data-tipo="${c.tipo || 'factura_c'}" 
             data-emision="${platform === 'manual' ? 'manual' : 'automatica'}"
-            data-fecha="${c.fechaISO || c.fecha || ''}"
-            style="animation:rowIn .3s ease ${i * 40}ms both">
+            data-fecha="${c.fechaISO || c.fecha || ''}">
             <td data-label="Origen">${origenPill}</td>
             <td data-label="N° Comp." style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.numero || c.id || c.externalId || '—'}</td>
             <td data-label="Cliente">
-                <div style="font-weight:600;font-size:12px;color:var(--text-1)">${c.cliente || c.customerName || 'Sin nombre'}</div>
-                ${c.email || c.customerEmail ? `<div class="user-email" style="font-size:10px;color:var(--text-3);margin-top:1px">${c.email || c.customerEmail}</div>` : ''}
+                <div style="font-weight:600;font-size:13px;color:#F9FAFB;margin-bottom:2px;">${nombreCliente}</div>
+                ${emailCliente ? `<div class="user-email" style="font-size:10px;color:#6B7280;margin-top:1px;">${emailCliente}</div>` : ''}
             </td>
-            <td data-label="Concepto" style="font-size:12px;color:var(--text-2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.concepto || c.platform || '—'}</td>
+            <td data-label="Concepto" style="font-size:12px;color:var(--text-2);word-break:break-word;white-space:normal;line-height:1.4;">${c.concepto || c.platform || '—'}</td>
             <td data-label="Fecha" style="font-size:12px;color:var(--text-3)">${c.fecha || '—'}</td>
             <td data-label="Monto" style="font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--green);text-align:right;white-space:nowrap;">${montoFormateado}</td>
             <td data-label="Estado" style="text-align:center">${estadoChip}</td>

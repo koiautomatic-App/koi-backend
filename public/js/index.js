@@ -7126,7 +7126,7 @@ function renderizarComprobantes(comprobantes) {
                 </td>
             </tr>
         `;
-        renderTotalesComp([]);
+        if (typeof renderTotalesComp === 'function') renderTotalesComp([]);
         return;
     }
 
@@ -7222,7 +7222,7 @@ function renderizarComprobantes(comprobantes) {
             }
         `;
 
-        // === FILA CON DATA-LABEL (la parte clave) ===
+        // === ⭐⭐⭐ FILA CON DATA-LABEL (LA PARTE CLAVE) ⭐⭐⭐ ===
         html += `
         <tr data-origen="${platform}" 
             data-estado="${estado}" 
@@ -7247,7 +7247,7 @@ function renderizarComprobantes(comprobantes) {
     });
 
     tbody.innerHTML = html;
-    renderTotalesComp(comprobantes);
+    if (typeof renderTotalesComp === 'function') renderTotalesComp(comprobantes);
 }
 console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================

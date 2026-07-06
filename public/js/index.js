@@ -7114,6 +7114,23 @@ window.filtrarComprobantes = function() {
     actualizarContadorResultados();
   }
 };
+function renderizarComprobantes(comprobantes) {
+    const tbody = document.getElementById('manualesBody');
+    tbody.innerHTML = comprobantes.map(c => `
+        <tr>
+            <td data-label="Origen">${c.origen}</td>
+            <td data-label="N° Comp.">${c.numero}</td>
+            <td data-label="Cliente">${c.cliente}</td>
+            <td data-label="Concepto">${c.concepto}</td>
+            <td data-label="Fecha">${c.fecha}</td>
+            <td data-label="Monto" style="text-align:right">$${c.monto}</td>
+            <td data-label="Estado" style="text-align:center">
+                <span class="estado-chip ${c.estadoClase}">${c.estado}</span>
+            </td>
+            <td data-label="Acciones" style="text-align:center">...</td>
+        </tr>
+    `).join('');
+}
 
 console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================

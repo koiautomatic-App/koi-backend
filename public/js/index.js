@@ -7132,6 +7132,13 @@ function renderizarComprobantes(comprobantes) {
 
     let html = '';
     comprobantes.forEach((c, i) => {
+        // === CONCEPTO (usar el campo real) ===
+        let conceptoTexto = c.concepto || c.platform || '—';
+        // Si el concepto es muy largo, mostrar completo (sin cortar)
+        if (conceptoTexto.length > 60) {
+            conceptoTexto = conceptoTexto; // Mantener completo
+        }
+
         // === DETERMINAR ESTADO ===
         const estado = c.estado || c.status || 'pendiente';
         let estadoChip = '';
@@ -7226,7 +7233,7 @@ function renderizarComprobantes(comprobantes) {
         const nombreCliente = c.cliente || c.customerName || 'Sin nombre';
         const emailCliente = c.email || c.customerEmail || '';
 
-        // === FILA CON DATA-LABEL ===
+        // === FILA COMPLETA CON DATA-LABEL ===
         html += `
         <tr data-origen="${platform}" 
             data-estado="${estado}" 
@@ -7239,7 +7246,7 @@ function renderizarComprobantes(comprobantes) {
                 <div style="font-weight:600;font-size:13px;color:#F9FAFB;margin-bottom:2px;">${nombreCliente}</div>
                 ${emailCliente ? `<div class="user-email" style="font-size:10px;color:#6B7280;margin-top:1px;">${emailCliente}</div>` : ''}
             </td>
-            <td data-label="Concepto" style="font-size:12px;color:var(--text-2);word-break:break-word;white-space:normal;line-height:1.4;">${c.concepto || c.platform || '—'}</td>
+            <td data-label="Concepto" style="font-size:12px;color:var(--text-2);word-break:break-word;white-space:normal;line-height:1.4;max-width:100%;">${conceptoTexto}</td>
             <td data-label="Fecha" style="font-size:12px;color:var(--text-3)">${c.fecha || '—'}</td>
             <td data-label="Monto" style="font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--green);text-align:right;white-space:nowrap;">${montoFormateado}</td>
             <td data-label="Estado" style="text-align:center">${estadoChip}</td>

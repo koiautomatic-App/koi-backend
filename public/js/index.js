@@ -7116,22 +7116,139 @@ window.filtrarComprobantes = function() {
 };
 function renderizarComprobantes(comprobantes) {
     const tbody = document.getElementById('manualesBody');
-    tbody.innerHTML = comprobantes.map(c => `
-        <tr>
-            <td data-label="Origen">${c.origen}</td>
-            <td data-label="N° Comp.">${c.numero}</td>
-            <td data-label="Cliente">${c.cliente}</td>
-            <td data-label="Concepto">${c.concepto}</td>
-            <td data-label="Fecha">${c.fecha}</td>
-            <td data-label="Monto" style="text-align:right">$${c.monto}</td>
-            <td data-label="Estado" style="text-align:center">
-                <span class="estado-chip ${c.estadoClase}">${c.estado}</span>
-            </td>
-            <td data-label="Acciones" style="text-align:center">...</td>
-        </tr>
-    `).join('');
-}
+    
+    if (!comprobantes || !comprobantes.length) {
+        tbody.innerHTML = `
+            <tr>
+                <td colspan="8" style="text-align:center;padding:40px;color:var(--text-3);font-size:13px">
+                    <span style="display:block;font-size:28px;margin-bottom:8px;">📭</span>
+                    Sin comprobantes
+                </td>
+            </tr>
+        `;
+        renderTotalesComp([]);
+        return;
+    }
 
+    let html = '';
+    comprobantes.forEach((c, i) => {
+        // === DETERMINAR ESTADO ===
+        const estado = c.estado || c.status || 'pendiente';
+        let estadoChip = '';
+        if (estado === 'emitido' || estado === 'cae-ok' || estado === 'invoiced') {
+            estadoChip = `<span class="estado-chip ok">● Emitido</span>`;
+        } else if (estado === 'anulado' || estado === 'cancelled' || estado === 'cancelled_by_nc') {
+            estadoChip = `<span class="estado-chip anulado">⚠️ Anulado</span>`;
+        } else if (estado === 'error' || estado === 'cae-err' || estado === 'error_afip') {
+            estadoChip = `<span class="estado-chip error">✕ Error</span>`;
+        } else {
+            estadoChip = `<span class="estado-chip pend">◌ Pendiente</span>`;
+        }
+
+        // === PILL DE ORIGEN ===
+        const platform = c.origen || c.platform || 'woo';
+        const origenPill = (() => {
+            const colores = {
+                'woocommerce': 'background:#7F54B3;color:white;',
+                'mercadolibre': 'background:#FFE600;color:#1a1a00;',
+                'tiendanube': 'background:#1EAAF1;color:white;',
+                'empretienda': 'background:#00C37A;color:white;',
+                'rappi': 'background:#FF441B;color:white;',
+                'vtex': 'background:#F71963;color:white;',
+                'manual': 'background:#f5a623;color:#1a1a00;'
+            };
+            const estilo = colores[platform] || 'background:#444;color:white;';
+            const label = {
+                'woocommerce': 'WOO',
+                'mercadolibre': 'ML',
+                'tiendanube': 'TN',
+                'empretienda': 'EMP',
+                'rappi': 'RAPPI',
+                'vtex': 'VTEX',
+                'manual': 'MAN'
+            }[platform] || platform.toUpperCase().slice(0, 3);
+            return `<span style="font-size:9px;font-weight:700;padding:2px 8px;border-radius:4px;${estilo}">${label}</span>`;
+        })();
+
+        // === MONTO ===
+        const monto = c.monto || c.amount || 0;
+        const montoFormateado = new Intl.NumberFormat('es-AR', {
+            style: 'currency',
+            currency: 'ARS',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0
+        }).format(monto);
+
+        // === ACCIONES ===
+        const isEmitido = estado === 'emitido' || estado === 'cae-ok' || estado === 'invoiced';
+        const isPendiente = estado === 'pendiente' || estado === 'cae-err' || estado === 'error_afip';
+        const isAnulado = estado === 'anulado' || estado === 'cancelled' || estado === 'cancelled_by_nc';
+        
+        const acciones = `
+            <button class="act-btn" title="Ver PDF" onclick="verPDF('${c._id || c.id || c.numero}')">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M4 4.5h4M4 6.5h4M4 8.5h2.5" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/>
+                </svg>
+            </button>
+            ${isPendiente && !isAnulado ? 
+                `<button class="act-btn act-warn" title="Emitir CAE" onclick="emitir('${c._id || c.id}')">
+                    <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                        <path d='M7 1.5l5.5 10H1.5L7 1.5z' stroke='currentColor' stroke-width='1.3' stroke-linejoin='round'/>
+                        <path d='M7 5.5v3' stroke='currentColor' stroke-width='1.3' stroke-linecap='round'/>
+                        <circle cx='7' cy='10' r='.6' fill='currentColor'/>
+                    </svg>
+                </button>` :
+                `<button class="act-btn act-done" title="${isAnulado ? 'Anulado' : 'Ya emitido'}" disabled>
+                    <svg width='13' height='13' viewBox='0 0 14 14' fill='none'>
+                        <path d='M2.5 7l3 3 6-6' stroke='currentColor' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'/>
+                    </svg>
+                </button>`
+            }
+            <button class="act-btn" title="Enviar por email" onclick="enviarMail('${c._id || c.id}')">
+                <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                    <rect x="1.5" y="3" width="11" height="8" rx="1.5" stroke="currentColor" stroke-width="1.3"/>
+                    <path d="M1.5 5l5.5 3.5L12.5 5" stroke="currentColor" stroke-width="1.2"/>
+                </svg>
+            </button>
+            ${isEmitido && platform !== 'manual' && !isAnulado ?
+                `<button class="act-btn act-danger" title="Cancelar - Nota de Crédito" onclick="cancelarFactura('${c._id || c.id}')">
+                    <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
+                        <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <circle cx="7" cy="7" r="5.5" stroke="currentColor" stroke-width="1.3"/>
+                    </svg>
+                </button>` :
+                ''
+            }
+        `;
+
+        // === FILA CON DATA-LABEL ===
+        html += `
+        <tr data-origen="${platform}" 
+            data-estado="${estado}" 
+            data-tipo="${c.tipo || 'factura_c'}" 
+            data-emision="${platform === 'manual' ? 'manual' : 'automatica'}"
+            data-fecha="${c.fechaISO || c.fecha || ''}"
+            style="animation:rowIn .3s ease ${i * 40}ms both">
+            <td data-label="Origen">${origenPill}</td>
+            <td data-label="N° Comp." style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.numero || c.id || c.externalId || '—'}</td>
+            <td data-label="Cliente">
+                <div style="font-weight:600;font-size:12px;color:var(--text-1)">${c.cliente || c.customerName || 'Sin nombre'}</div>
+                ${c.email || c.customerEmail ? `<div class="user-email" style="font-size:10px;color:var(--text-3);margin-top:1px">${c.email || c.customerEmail}</div>` : ''}
+            </td>
+            <td data-label="Concepto" style="font-size:12px;color:var(--text-2);max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.concepto || c.platform || '—'}</td>
+            <td data-label="Fecha" style="font-size:12px;color:var(--text-3)">${c.fecha || '—'}</td>
+            <td data-label="Monto" style="font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--green);text-align:right;white-space:nowrap;">${montoFormateado}</td>
+            <td data-label="Estado" style="text-align:center">${estadoChip}</td>
+            <td data-label="Acciones" style="text-align:center">
+                <div class="comp-actions" style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">${acciones}</div>
+            </td>
+        </tr>`;
+    });
+
+    tbody.innerHTML = html;
+    renderTotalesComp(comprobantes);
+}
 console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================
 //  EXPORTS GLOBALES

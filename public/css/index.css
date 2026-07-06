@@ -6278,3 +6278,20 @@ table.comp-table-report tr.total td:last-child {
         padding: 6px 14px !important;
     }
 }
+@media (max-width: 768px) {
+    .comp-tabla tbody td {
+        gap: 12px !important;
+    }
+    
+    .comp-tabla tbody td > *:not(.estado-chip):not(.comp-actions) {
+        flex: 1 !important;
+        min-width: 0 !important;
+        text-align: right !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Cliente"] > div {
+        flex: unset !important;
+        text-align: left !important;
+        width: 100% !important;
+    }
+}

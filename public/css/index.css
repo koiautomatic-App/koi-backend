@@ -6127,22 +6127,26 @@ table.comp-table-report tr.total td:last-child {
         text-align: right !important;
     }
     
-    /* --- Cliente: nombre y email en columna, alineados a la izquierda --- */
+    /* --- Cliente: label a la izquierda, nombre y email a la derecha --- */
     .comp-tabla tbody td[data-label="Cliente"] {
-        flex-direction: column !important;
+        flex-wrap: wrap !important;
+        justify-content: space-between !important;
         align-items: flex-start !important;
-        gap: 2px !important;
         font-weight: 600 !important;
         font-size: 13px !important;
     }
     
     .comp-tabla tbody td[data-label="Cliente"] > div {
         flex: unset !important;
-        text-align: left !important;
-        width: 100% !important;
+        width: auto !important;
+        text-align: right !important;
+        margin-left: auto !important;
     }
     
     .comp-tabla tbody td[data-label="Cliente"] .user-email {
+        display: block !important;
+        width: 100% !important;
+        text-align: right !important;
         font-size: 10px !important;
         color: #6B7280 !important;
         font-weight: 400 !important;
@@ -6161,16 +6165,20 @@ table.comp-table-report tr.total td:last-child {
         line-height: 1.4 !important;
     }
     
-    /* --- Monto: destacado en verde --- */
+    /* --- Monto: en blanco, destacado --- */
     .comp-tabla tbody td[data-label="Monto"] {
         font-size: 16px !important;
         font-weight: 700 !important;
-        color: #00e676 !important;
+        color: #FFFFFF !important;
     }
     
-    /* --- Origen: el pill (WOO/ML/EXT) mantiene su tamaño natural --- */
+    .comp-tabla tbody td[data-label="Monto"] > div {
+        color: #FFFFFF !important;
+    }
+    
+    /* --- Origen: label a la izquierda, pill a la derecha --- */
     .comp-tabla tbody td[data-label="Origen"] {
-        justify-content: flex-end !important;
+        justify-content: space-between !important;
     }
     
     .comp-tabla tbody td[data-label="Origen"] span {
@@ -6180,26 +6188,26 @@ table.comp-table-report tr.total td:last-child {
     }
     
     /* --- Estado: label a la izquierda, chip a la derecha --- */
-.comp-tabla tbody td[data-label="Estado"] {
-    justify-content: space-between !important;
-}
-
-.comp-tabla tbody td[data-label="Estado"] .estado-chip {
-    flex: none !important;
-    width: auto !important;
-}
-
-/* --- Acciones: label a la izquierda, botones a la derecha --- */
-.comp-tabla tbody td[data-label="Acciones"] {
-    justify-content: space-between !important;
-    padding-top: 8px !important;
-    border-bottom: none !important;
-}
-
-.comp-tabla tbody td[data-label="Acciones"] .comp-actions {
-    display: flex !important;
-    gap: 6px !important;
-}
+    .comp-tabla tbody td[data-label="Estado"] {
+        justify-content: space-between !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Estado"] .estado-chip {
+        flex: none !important;
+        width: auto !important;
+    }
+    
+    /* --- Acciones: label a la izquierda, botones a la derecha --- */
+    .comp-tabla tbody td[data-label="Acciones"] {
+        justify-content: space-between !important;
+        padding-top: 8px !important;
+        border-bottom: none !important;
+    }
+    
+    .comp-tabla tbody td[data-label="Acciones"] .comp-actions {
+        display: flex !important;
+        gap: 6px !important;
+    }
     
     /* --- Badge estado --- */
     .estado-chip {

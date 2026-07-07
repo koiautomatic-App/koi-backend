@@ -6179,23 +6179,27 @@ table.comp-table-report tr.total td:last-child {
         display: inline-block !important;
     }
     
-    /* --- Estado: alineado a la derecha, chip con tamaño natural --- */
-    .comp-tabla tbody td[data-label="Estado"] {
-        justify-content: flex-end !important;
-    }
-    
-    .comp-tabla tbody td[data-label="Estado"] .estado-chip {
-        flex: none !important;
-        width: auto !important;
-    }
-    
-    /* --- Acciones: alineadas a la derecha --- */
-    .comp-tabla tbody td[data-label="Acciones"] {
-        justify-content: flex-end !important;
-        gap: 6px !important;
-        padding-top: 8px !important;
-        border-bottom: none !important;
-    }
+    /* --- Estado: label a la izquierda, chip a la derecha --- */
+.comp-tabla tbody td[data-label="Estado"] {
+    justify-content: space-between !important;
+}
+
+.comp-tabla tbody td[data-label="Estado"] .estado-chip {
+    flex: none !important;
+    width: auto !important;
+}
+
+/* --- Acciones: label a la izquierda, botones a la derecha --- */
+.comp-tabla tbody td[data-label="Acciones"] {
+    justify-content: space-between !important;
+    padding-top: 8px !important;
+    border-bottom: none !important;
+}
+
+.comp-tabla tbody td[data-label="Acciones"] .comp-actions {
+    display: flex !important;
+    gap: 6px !important;
+}
     
     /* --- Badge estado --- */
     .estado-chip {

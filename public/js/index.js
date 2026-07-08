@@ -1968,7 +1968,7 @@ function renderComprobantes(lista) {
       <td data-label="Monto" style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px;color:#F9FAFB;">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td data-label="Estado" style="text-align:center">${estadoChip}</td>
       <td data-label="Acciones" style="text-align:center">
-        <div class="comp-actions" style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
+        <div class="comp-actions" style="display:flex;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;gap:4px;">
           <button class="act-btn" title="${tituloPDF}" onclick="verPDF('${pdfId}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>

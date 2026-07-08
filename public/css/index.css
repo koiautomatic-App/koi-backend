@@ -6204,15 +6204,16 @@ table.comp-table-report tr.total td:last-child {
         border-bottom: none !important;
     }
     
-    .comp-tabla tbody td[data-label="Acciones"] .comp-actions {
-        display: flex !important;
-        flex-direction: row !important;
-        flex-wrap: nowrap !important;
-        align-items: center !important;
-        justify-content: flex-end !important;
-        gap: 4px !important;
-        width: 100% !important;
-    }
+.comp-tabla tbody td[data-label="Acciones"] .comp-actions {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    justify-content: flex-end !important;
+    gap: 4px !important;
+    width: auto !important;
+    flex-shrink: 0 !important;
+}
     
     /* --- Badge estado --- */
     .estado-chip {

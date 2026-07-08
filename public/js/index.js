@@ -1954,21 +1954,21 @@ function renderComprobantes(lista) {
     const montoMostrar = esNotaCredito ? Math.abs(montoRaw) : montoRaw;
     const pdfId = c._id || c.id;
     
-    // 👇 FILA CON DATA-LABEL (LA PARTE CLAVE)
+    // 👇 FILA CON DATA-LABEL (VERSIÓN FINAL)
     html += `
     <tr data-origen="${origen}" data-estado="${estado}" data-tipo="${tipo}" data-emision="${emision}" data-envio="${envio}" data-email-sent="${emailSent}" data-fecha="${fecha}" style="animation:rowIn .3s ease ${i*35}ms both">
       <td data-label="Origen" style="text-align:center">${origenPill}</td>
       <td data-label="N° Comp." style="font-family:var(--font-num);font-weight:600;font-size:11px">${c.id}</td>
       <td data-label="Cliente">
-        <div style="font-weight:600;font-size:12px">${c.cliente}</div>
-        ${c.email ? `<div style="font-size:10px;color:var(--text-3)">${c.email}</div>` : ''}
+        <div style="font-weight:600;font-size:12px;color:#F9FAFB;">${c.cliente}</div>
+        ${c.email ? `<div class="user-email" style="font-size:10px;color:#6B7280;margin-top:1px;">${c.email}</div>` : ''}
       </td>
       <td data-label="Concepto" style="font-size:12px;color:var(--text-2);word-break:break-word;white-space:normal;line-height:1.4;">${c.concepto || c.tipo || ''}</td>
       <td data-label="Fecha" style="font-size:12px;color:var(--text-3)">${c.fecha}</td>
-      <td data-label="Monto" style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px;color:var(--green);">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
+      <td data-label="Monto" style="text-align:right;font-family:var(--font-num);font-weight:700;font-size:13px;color:#F9FAFB;">${formatCurrency(montoMostrar, c.currency || 'ARS')}</td>
       <td data-label="Estado" style="text-align:center">${estadoChip}</td>
       <td data-label="Acciones" style="text-align:center">
-        <div class="comp-actions" style="justify-content:center">
+        <div class="comp-actions" style="display:flex;align-items:center;justify-content:center;gap:4px;flex-wrap:wrap;">
           <button class="act-btn" title="${tituloPDF}" onclick="verPDF('${pdfId}')">
             <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
               <rect x="2" y="1" width="8" height="11" rx="1.5" stroke="currentColor" stroke-width="1.3"/>

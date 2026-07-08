@@ -6206,13 +6206,18 @@ table.comp-table-report tr.total td:last-child {
     
     .comp-tabla tbody td[data-label="Acciones"] .comp-actions {
         display: flex !important;
-        gap: 6px !important;
+        flex-direction: row !important;
+        flex-wrap: nowrap !important;
+        align-items: center !important;
+        justify-content: flex-end !important;
+        gap: 4px !important;
+        width: 100% !important;
     }
     
     /* --- Badge estado --- */
     .estado-chip {
         font-size: 9px !important;
-        padding: 2px 10px !important;
+        padding: 3px 10px !important;
         height: 24px !important;
         min-height: 24px !important;
         display: inline-flex !important;
@@ -6256,6 +6261,15 @@ table.comp-table-report tr.total td:last-child {
         height: 28px !important;
         font-size: 11px !important;
         border-radius: 6px !important;
+        flex-shrink: 0 !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        border: 1px solid rgba(255,255,255,0.08) !important;
+        background: rgba(255,255,255,0.04) !important;
+        color: #9CA3AF !important;
+        cursor: pointer !important;
+        transition: all 0.2s !important;
     }
     
     .comp-tabla tbody td[data-label="Acciones"] .act-btn svg {

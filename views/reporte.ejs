@@ -72,14 +72,22 @@
             <div style="font-size:16px;font-weight:700;color:#111111;font-family:Arial, sans-serif;letter-spacing:-0.3px;">$<%= totalFacturado.toLocaleString('es-AR') %></div>
             <div style="font-size:10px;color:#888888;font-family:Arial, sans-serif;margin-top:2px;"><%= totalComprobantes %> comprobantes</div>
           </td>
+          <%
+            const _facturacionAcumulada = typeof facturacionAcumulada !== 'undefined' ? facturacionAcumulada : totalFacturado;
+            const _limiteAnual = typeof limiteAnual !== 'undefined' ? limiteAnual : limiteCategoria;
+            const _porcentajeAnual = typeof porcentajeAnual !== 'undefined' ? porcentajeAnual : porcentaje;
+            const _pendientesCAE = typeof pendientesCAE !== 'undefined'
+              ? pendientesCAE
+              : orders.filter(o => o.status === 'pending_invoice' || o.status === 'error_afip').length;
+          %>
           <td class="koi-stat-cell" width="33.33%" align="left" valign="top" style="padding:0 12px;border-right:1px solid #eee;">
             <div style="font-size:9px;color:#aaaaaa;text-transform:uppercase;letter-spacing:0.4px;font-weight:500;font-family:Arial, sans-serif;margin-bottom:3px;">Acum. 12 meses</div>
-            <div style="font-size:16px;font-weight:700;color:#111111;font-family:Arial, sans-serif;letter-spacing:-0.3px;">$<%= (typeof acumulado12Meses !== 'undefined' ? acumulado12Meses : totalFacturado).toLocaleString('es-AR') %></div>
-            <div style="font-size:10px;color:#888888;font-family:Arial, sans-serif;margin-top:2px;"><%= porcentaje.toFixed(1) %>% del l&iacute;mite</div>
+            <div style="font-size:16px;font-weight:700;color:#111111;font-family:Arial, sans-serif;letter-spacing:-0.3px;">$<%= _facturacionAcumulada.toLocaleString('es-AR') %></div>
+            <div style="font-size:10px;color:#888888;font-family:Arial, sans-serif;margin-top:2px;"><%= _porcentajeAnual.toFixed(1) %>% del l&iacute;mite</div>
           </td>
           <td class="koi-stat-cell" width="33.33%" align="left" valign="top" style="padding:0 0 0 12px;">
             <div style="font-size:9px;color:#aaaaaa;text-transform:uppercase;letter-spacing:0.4px;font-weight:500;font-family:Arial, sans-serif;margin-bottom:3px;">Pendientes CAE</div>
-            <div style="font-size:16px;font-weight:700;color:#e05500;font-family:Arial, sans-serif;letter-spacing:-0.3px;"><%= typeof pendientesCAE !== 'undefined' ? pendientesCAE : 0 %></div>
+            <div style="font-size:16px;font-weight:700;color:#e05500;font-family:Arial, sans-serif;letter-spacing:-0.3px;"><%= _pendientesCAE %></div>
             <div style="font-size:10px;color:#888888;font-family:Arial, sans-serif;margin-top:2px;">Requiere atenci&oacute;n</div>
           </td>
         </tr>
@@ -155,11 +163,11 @@
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
         <tr>
           <td style="font-size:10px;color:#888888;font-family:Arial, sans-serif;padding-bottom:4px;">Facturado &uacute;ltimos 12 meses</td>
-          <td align="right" style="font-size:10px;color:#333333;font-weight:500;font-family:Arial, sans-serif;padding-bottom:4px;">$<%= (typeof acumulado12Meses !== 'undefined' ? acumulado12Meses : totalFacturado).toLocaleString('es-AR') %></td>
+          <td align="right" style="font-size:10px;color:#333333;font-weight:500;font-family:Arial, sans-serif;padding-bottom:4px;">$<%= _facturacionAcumulada.toLocaleString('es-AR') %></td>
         </tr>
         <tr>
           <td style="font-size:10px;color:#888888;font-family:Arial, sans-serif;padding-bottom:4px;">L&iacute;mite Categor&iacute;a <%= categoria %></td>
-          <td align="right" style="font-size:10px;color:#333333;font-weight:500;font-family:Arial, sans-serif;padding-bottom:4px;">$<%= limiteCategoria.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %></td>
+          <td align="right" style="font-size:10px;color:#333333;font-weight:500;font-family:Arial, sans-serif;padding-bottom:4px;">$<%= _limiteAnual.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %></td>
         </tr>
       </table>
 
@@ -169,7 +177,7 @@
           <td style="background-color:#eeeeee;border-radius:4px;">
             <table role="presentation" width="100%" height="5" cellpadding="0" cellspacing="0" border="0">
               <tr>
-                <% const pct = Math.max(0, Math.min(Math.round(porcentaje), 100)); %>
+                <% const pct = Math.max(0, Math.min(Math.round(_porcentajeAnual), 100)); %>
                 <% if (pct > 0) { %><td width="<%= pct %>%" style="background-color:#3db87a;font-size:1px;line-height:5px;border-radius:4px;">&nbsp;</td><% } %>
                 <% if (pct < 100) { %><td width="<%= 100 - pct %>%" style="font-size:1px;line-height:5px;">&nbsp;</td><% } %>
               </tr>
@@ -178,8 +186,11 @@
         </tr>
       </table>
 
+      <%
+        const _margen = typeof margen !== 'undefined' ? margen : (_limiteAnual - _facturacionAcumulada);
+      %>
       <div style="font-size:10px;color:#3a7a55;font-weight:600;font-family:Arial, sans-serif;">
-        <%= porcentaje.toFixed(1) %>% utilizado &middot; Margen disponible: $<%= margen.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %>
+        <%= _porcentajeAnual.toFixed(1) %>% utilizado &middot; Margen disponible: $<%= _margen.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %>
       </div>
     </td>
   </tr>

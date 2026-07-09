@@ -47,7 +47,10 @@ const UserSchema = new mongoose.Schema({
     estadoCicloVida: { type: String, default: 'cortesia_activa', enum: ['cortesia_activa', 'cortesia_extendida', 'suscripto', 'expirado', 'suspendido', 'cancelado'] },
     paymentId: { type: String, default: '' },
     preapprovalId: { type: String, default: null },
-    ultimoMontoPago: { type: Number, default: 40000 }
+    ultimoMontoPago: { type: Number, default: 40000 },
+    // 👇 NUEVOS CAMPOS PARA CONTADOR 👇
+    contadorEmail: { type: String, default: '' },
+    contadorNombre: { type: String, default: '' }
   },
   ultimoAcceso: { type: Date, default: Date.now },
   creadoEn: { type: Date, default: Date.now }

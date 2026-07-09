@@ -18,14 +18,16 @@ const updateSettings = async (req, res) => {
     const userActual = await User.findById(req.userId).select('email settings').lean();
     const esAdmin = userActual?.email === 'koi.automatic@gmail.com';
 
-    // Campos permitidos para actualización
+      // Campos permitidos para actualización
     const allowed = [
       'factAuto', 'envioAuto', 'categoria', 'condicionFiscal', 'cuit', 'razonSocial',
       'puntoVenta', 'tipoComprobante', 'nombre', 'apellido', 'logoUrl',
       'fechaInicioVinculacion', 'inicioCortesia', 'finCortesia', 'inicioExtension',
       'finExtension', 'fechaSuscripcion', 'ultimoPago', 'proximoPago',
       'fechaCancelacion', 'fechaExpiracion', 'estadoCicloVida', 'planId',
-      'planNombre', 'precioSuscripcion', 'arcaStatus', 'suscripcionActiva'
+      'planNombre', 'precioSuscripcion', 'arcaStatus', 'suscripcionActiva',
+      // 👇 AGREGAR ESTOS 👇
+      'contadorEmail', 'contadorNombre'
     ];
 
     // 🔒 SOLO ADMIN puede modificar fechaVinculacionARCA

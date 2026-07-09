@@ -6659,6 +6659,238 @@ function initReporte() {
     cargarReporte();
   }
 }
+// ============================================================
+//  REPORTE - CONTADOR EDITABLE (FUNCIONES ADICIONALES)
+// ============================================================
+
+// === GUARDAR EMAIL DEL CONTADOR ===
+async function guardarEmailContador(email) {
+    if (!email || !email.includes('@')) {
+        if (typeof toast === 'function') toast('❌ Email inválido', 'error');
+        return;
+    }
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ contadorEmail: email })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            if (typeof toast === 'function') toast('✅ Email guardado', 'success');
+            console.log('✅ Email guardado en Atlas:', email);
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof toast === 'function') toast('❌ Error al guardar', 'error');
+    }
+}
+
+// === GUARDAR NOMBRE DEL CONTADOR ===
+async function guardarNombreContador(nombre) {
+    if (!nombre || !nombre.trim()) return;
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({ contadorNombre: nombre.trim() })
+        });
+        const data = await res.json();
+        if (data.ok) {
+            if (typeof toast === 'function') toast('✅ Nombre guardado', 'success');
+            console.log('✅ Nombre guardado en Atlas:', nombre);
+            const avatar = document.getElementById('rptContadorAvatar');
+            if (avatar) avatar.textContent = nombre.trim().charAt(0).toUpperCase();
+        }
+    } catch (e) {
+        console.error(e);
+        if (typeof toast === 'function') toast('❌ Error al guardar', 'error');
+    }
+}
+
+// === INICIALIZAR CAMPOS EDITABLES DEL CONTADOR ===
+function initContadorEditable() {
+    console.log('🔧 Inicializando campos editables del contador...');
+    
+    // Email
+    const emailEl = document.getElementById('rptContadorEmail');
+    if (emailEl) {
+        emailEl.contentEditable = true;
+        emailEl.dataset.original = emailEl.textContent.trim();
+        
+        emailEl.addEventListener('blur', function() {
+            const val = this.textContent.trim();
+            if (val && val !== this.dataset.original) {
+                if (val.includes('@')) {
+                    guardarEmailContador(val);
+                    this.dataset.original = val;
+                } else {
+                    if (typeof toast === 'function') toast('❌ Email inválido', 'error');
+                    this.textContent = this.dataset.original;
+                }
+            }
+        });
+        
+        emailEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+            if (e.key === 'Escape') { this.textContent = this.dataset.original; this.blur(); }
+        });
+    }
+
+    // Nombre
+    const nombreEl = document.getElementById('rptContadorNombre');
+    if (nombreEl) {
+        nombreEl.contentEditable = true;
+        nombreEl.dataset.original = nombreEl.textContent.trim();
+        
+        nombreEl.addEventListener('blur', function() {
+            const val = this.textContent.trim();
+            if (val && val !== this.dataset.original) {
+                guardarNombreContador(val);
+                this.dataset.original = val;
+            }
+        });
+        
+        nombreEl.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
+            if (e.key === 'Escape') { this.textContent = this.dataset.original; this.blur(); }
+        });
+    }
+}
+
+// === CARGAR DATOS GUARDADOS DEL CONTADOR ===
+async function cargarContadorGuardado() {
+    try {
+        const res = await fetch('/api/me', { credentials: 'include' });
+        const data = await res.json();
+        const user = data.user;
+        const email = user?.settings?.contadorEmail || '';
+        const nombre = user?.settings?.contadorNombre || '';
+        
+        const emailEl = document.getElementById('rptContadorEmail');
+        const nombreEl = document.getElementById('rptContadorNombre');
+        const avatarEl = document.getElementById('rptContadorAvatar');
+        
+        if (emailEl && email) {
+            emailEl.textContent = email;
+            emailEl.dataset.original = email;
+        }
+        if (nombreEl && nombre) {
+            nombreEl.textContent = nombre;
+            nombreEl.dataset.original = nombre;
+        }
+        if (avatarEl && nombre) {
+            avatarEl.textContent = nombre.charAt(0).toUpperCase();
+        }
+        console.log('✅ Contador cargado:', nombre || 'No configurado', email || 'No configurado');
+    } catch (e) {
+        console.error('Error cargando contador:', e);
+    }
+}
+
+// === INICIALIZAR REPORTE COMPLETO ===
+function initReporteCompleto() {
+    console.log('📊 Inicializando reporte completo...');
+    
+    // 1. Cargar datos guardados
+    cargarContadorGuardado();
+    
+    // 2. Inicializar campos editables
+    initContadorEditable();
+    
+    // 3. Mejorar botón enviar (reemplazar la función existente)
+    const btn = document.getElementById('rptBtnEnviar');
+    if (btn) {
+        btn.onclick = async function(e) {
+            e.preventDefault();
+            
+            const emailEl = document.getElementById('rptContadorEmail');
+            const email = emailEl?.textContent?.trim() || '';
+            
+            if (!email || !email.includes('@')) {
+                if (typeof toast === 'function') toast('⚠️ Configurá el email del contador', 'error');
+                emailEl?.focus();
+                return;
+            }
+            
+            const originalText = this.innerHTML;
+            this.disabled = true;
+            this.innerHTML = '<span style="animation:spin 1s linear infinite;">🔄</span> Enviando...';
+            this.style.opacity = '0.7';
+            
+            try {
+                const nota = document.getElementById('rptNotaContador')?.value || '';
+                const res = await fetch('/api/reports/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    credentials: 'include',
+                    body: JSON.stringify({
+                        contadorEmail: email,
+                        nota: nota,
+                        mes: window._reporteMes || new Date().getMonth(),
+                        anio: window._reporteAnio || new Date().getFullYear()
+                    })
+                });
+                
+                const data = await res.json();
+                
+                if (data.ok) {
+                    if (typeof toast === 'function') toast(`✅ Reporte enviado a ${email}`, 'success');
+                    this.innerHTML = '✅ Enviado';
+                    this.style.background = 'rgba(0,230,118,0.15)';
+                    this.style.border = '1px solid rgba(0,230,118,0.3)';
+                    this.style.color = '#00e676';
+                    
+                    const ultimoEnvio = document.getElementById('rptUltimoEnvio');
+                    if (ultimoEnvio) {
+                        ultimoEnvio.textContent = new Date().toLocaleString('es-AR');
+                    }
+                    
+                    setTimeout(() => {
+                        this.innerHTML = originalText;
+                        this.style.background = '';
+                        this.style.border = '';
+                        this.style.color = '';
+                        this.disabled = false;
+                        this.style.opacity = '1';
+                    }, 3000);
+                } else {
+                    throw new Error(data.error || 'Error al enviar');
+                }
+            } catch (error) {
+                console.error('❌ Error:', error);
+                if (typeof toast === 'function') toast('❌ Error al enviar: ' + error.message, 'error');
+                this.innerHTML = '❌ Error';
+                this.style.background = 'rgba(239,68,68,0.15)';
+                this.style.border = '1px solid rgba(239,68,68,0.3)';
+                this.style.color = '#f87171';
+                
+                setTimeout(() => {
+                    this.innerHTML = originalText;
+                    this.style.background = '';
+                    this.style.border = '';
+                    this.style.color = '';
+                    this.disabled = false;
+                    this.style.opacity = '1';
+                }, 3000);
+            }
+        };
+    }
+    
+    console.log('✅ Reporte completo inicializado');
+}
+
+// === INICIALIZAR AL CARGAR LA VISTA ===
+if (document.getElementById('vista-reporte')) {
+    setTimeout(() => {
+        if (document.getElementById('vista-reporte')?.style?.display !== 'none') {
+            initReporteCompleto();
+        }
+    }, 500);
+}
+
 // ── FILTROS ──
 let filtrosActivos = {
   plataforma: [],
@@ -7126,3 +7358,9 @@ window.mostrarNotificacionesCentro = mostrarNotificacionesCentro;
 window.reproducirSonidoNotificacion = reproducirSonidoNotificacion;
 window.cargarDatosSuscripcion = cargarDatosSuscripcion;
 window.mostrarVista = mostrarVista;
+window.guardarEmailContador = guardarEmailContador;
+window.guardarNombreContador = guardarNombreContador;
+window.initReporteCompleto = initReporteCompleto;
+window.cargarContadorGuardado = cargarContadorGuardado;
+window.initContadorEditable = initContadorEditable;
+window.initReporte = initReporte;

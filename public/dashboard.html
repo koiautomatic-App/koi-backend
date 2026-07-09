@@ -1329,18 +1329,27 @@
         <div class="period-sub-report" id="rptNegocioNombre">Cargando...</div>
       </div>
 
-      <!-- Enviar a -->
-      <div class="report-panel-section">
-        <div class="report-panel-label">Enviar a</div>
-        <div class="contador-card-report" onclick="editarContador()">
-          <div class="contador-avatar-report" id="rptContadorAvatar">CG</div>
-          <div>
-            <div class="contador-name-report" id="rptContadorNombre">Carlos García</div>
-            <div class="contador-email-report" id="rptContadorEmail">cgarcia@estudio.com.ar</div>
-          </div>
-        </div>
-        <div class="change-link-report" onclick="editarContador()">+ Cambiar contador</div>
-      </div>
+     <!-- Enviar a -->
+<div class="report-panel-section">
+  <div class="report-panel-label">Enviar a</div>
+  <div class="contador-card-report">
+    <div class="contador-avatar-report" id="rptContadorAvatar">CG</div>
+    <div class="contador-info-report">
+      <input type="text" id="rptContadorNombreInput" class="contador-input-report" value="Carlos García" placeholder="Nombre del contador">
+      <input type="email" id="rptContadorEmailInput" class="contador-input-report contador-email-input" value="cargar email del contador" placeholder="Email del contador">
+    </div>
+  </div>
+  <div class="contador-actions-report">
+    <button class="btn-contador-guardar" id="btnGuardarContador">
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+        <path d="M2 7l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      Guardar contador
+    </button>
+    <span class="contador-guardado-msg" id="contadorGuardadoMsg" style="display:none;">✅ Guardado</span>
+  </div>
+  <div class="change-link-report" onclick="editarContador()">+ Cambiar contador</div>
+</div>
 
       <!-- Incluir -->
       <div class="report-panel-section">

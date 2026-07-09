@@ -6660,108 +6660,11 @@ function initReporte() {
   }
 }
 // ============================================================
-//  REPORTE - CONTADOR EDITABLE (FUNCIONES ADICIONALES)
+//  CONTADOR - VERSIÓN CON INPUTS (DEFINITIVA)
 // ============================================================
 
-// === GUARDAR EMAIL DEL CONTADOR ===
-async function guardarEmailContador(email) {
-    if (!email || !email.includes('@')) {
-        if (typeof toast === 'function') toast('❌ Email inválido', 'error');
-        return;
-    }
-    try {
-        const res = await fetch('/api/me/settings', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ contadorEmail: email })
-        });
-        const data = await res.json();
-        if (data.ok) {
-            if (typeof toast === 'function') toast('✅ Email guardado', 'success');
-            console.log('✅ Email guardado en Atlas:', email);
-        }
-    } catch (e) {
-        console.error(e);
-        if (typeof toast === 'function') toast('❌ Error al guardar', 'error');
-    }
-}
-
-// === GUARDAR NOMBRE DEL CONTADOR ===
-async function guardarNombreContador(nombre) {
-    if (!nombre || !nombre.trim()) return;
-    try {
-        const res = await fetch('/api/me/settings', {
-            method: 'PATCH',
-            headers: { 'Content-Type': 'application/json' },
-            credentials: 'include',
-            body: JSON.stringify({ contadorNombre: nombre.trim() })
-        });
-        const data = await res.json();
-        if (data.ok) {
-            if (typeof toast === 'function') toast('✅ Nombre guardado', 'success');
-            console.log('✅ Nombre guardado en Atlas:', nombre);
-            const avatar = document.getElementById('rptContadorAvatar');
-            if (avatar) avatar.textContent = nombre.trim().charAt(0).toUpperCase();
-        }
-    } catch (e) {
-        console.error(e);
-        if (typeof toast === 'function') toast('❌ Error al guardar', 'error');
-    }
-}
-
-// === INICIALIZAR CAMPOS EDITABLES DEL CONTADOR ===
-function initContadorEditable() {
-    console.log('🔧 Inicializando campos editables del contador...');
-    
-    // Email
-    const emailEl = document.getElementById('rptContadorEmail');
-    if (emailEl) {
-        emailEl.contentEditable = true;
-        emailEl.dataset.original = emailEl.textContent.trim();
-        
-        emailEl.addEventListener('blur', function() {
-            const val = this.textContent.trim();
-            if (val && val !== this.dataset.original) {
-                if (val.includes('@')) {
-                    guardarEmailContador(val);
-                    this.dataset.original = val;
-                } else {
-                    if (typeof toast === 'function') toast('❌ Email inválido', 'error');
-                    this.textContent = this.dataset.original;
-                }
-            }
-        });
-        
-        emailEl.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
-            if (e.key === 'Escape') { this.textContent = this.dataset.original; this.blur(); }
-        });
-    }
-
-    // Nombre
-    const nombreEl = document.getElementById('rptContadorNombre');
-    if (nombreEl) {
-        nombreEl.contentEditable = true;
-        nombreEl.dataset.original = nombreEl.textContent.trim();
-        
-        nombreEl.addEventListener('blur', function() {
-            const val = this.textContent.trim();
-            if (val && val !== this.dataset.original) {
-                guardarNombreContador(val);
-                this.dataset.original = val;
-            }
-        });
-        
-        nombreEl.addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { e.preventDefault(); this.blur(); }
-            if (e.key === 'Escape') { this.textContent = this.dataset.original; this.blur(); }
-        });
-    }
-}
-
-// === CARGAR DATOS GUARDADOS DEL CONTADOR ===
-async function cargarContadorGuardado() {
+// === CARGAR DATOS DEL CONTADOR EN LOS INPUTS ===
+async function cargarContadorInputs() {
     try {
         const res = await fetch('/api/me', { credentials: 'include' });
         const data = await res.json();
@@ -6769,49 +6672,140 @@ async function cargarContadorGuardado() {
         const email = user?.settings?.contadorEmail || '';
         const nombre = user?.settings?.contadorNombre || '';
         
-        const emailEl = document.getElementById('rptContadorEmail');
-        const nombreEl = document.getElementById('rptContadorNombre');
+        const nombreInput = document.getElementById('rptContadorNombreInput');
+        const emailInput = document.getElementById('rptContadorEmailInput');
         const avatarEl = document.getElementById('rptContadorAvatar');
         
-        if (emailEl && email) {
-            emailEl.textContent = email;
-            emailEl.dataset.original = email;
+        if (nombreInput) {
+            nombreInput.value = nombre || 'Carlos García';
         }
-        if (nombreEl && nombre) {
-            nombreEl.textContent = nombre;
-            nombreEl.dataset.original = nombre;
+        if (emailInput) {
+            emailInput.value = email || 'cargar email del contador';
         }
-        if (avatarEl && nombre) {
-            avatarEl.textContent = nombre.charAt(0).toUpperCase();
+        if (avatarEl) {
+            const nombreMostrar = nombre || 'C';
+            avatarEl.textContent = nombreMostrar.charAt(0).toUpperCase();
         }
-        console.log('✅ Contador cargado:', nombre || 'No configurado', email || 'No configurado');
+        console.log('✅ Contador cargado en inputs:', { nombre, email });
     } catch (e) {
         console.error('Error cargando contador:', e);
     }
 }
 
-// === INICIALIZAR REPORTE COMPLETO ===
+// === GUARDAR CONTADOR DESDE INPUTS ===
+async function guardarContadorInputs() {
+    const nombreInput = document.getElementById('rptContadorNombreInput');
+    const emailInput = document.getElementById('rptContadorEmailInput');
+    const msg = document.getElementById('contadorGuardadoMsg');
+    const btn = document.getElementById('btnGuardarContador');
+    
+    const nombre = nombreInput?.value?.trim() || '';
+    const email = emailInput?.value?.trim() || '';
+    
+    if (!email || !email.includes('@')) {
+        if (typeof toast === 'function') toast('❌ Email inválido', 'error');
+        if (msg) {
+            msg.textContent = '❌ Email inválido';
+            msg.style.color = '#f87171';
+            msg.style.display = 'inline';
+            setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        }
+        return;
+    }
+    
+    if (!nombre) {
+        if (typeof toast === 'function') toast('❌ Ingresá un nombre', 'error');
+        return;
+    }
+    
+    if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '⏳ Guardando...';
+    }
+    
+    try {
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                contadorEmail: email,
+                contadorNombre: nombre
+            })
+        });
+        
+        const data = await res.json();
+        
+        if (data.ok) {
+            if (typeof toast === 'function') toast('✅ Contador guardado', 'success');
+            if (msg) {
+                msg.textContent = '✅ Guardado';
+                msg.style.color = '#00e676';
+                msg.style.display = 'inline';
+                setTimeout(() => { msg.style.display = 'none'; }, 3000);
+            }
+            const avatarEl = document.getElementById('rptContadorAvatar');
+            if (avatarEl) {
+                avatarEl.textContent = nombre.charAt(0).toUpperCase();
+            }
+            console.log('✅ Contador guardado:', { nombre, email });
+        } else {
+            throw new Error(data.error || 'Error al guardar');
+        }
+    } catch (e) {
+        console.error('❌ Error:', e);
+        if (typeof toast === 'function') toast('❌ Error al guardar', 'error');
+        if (msg) {
+            msg.textContent = '❌ Error';
+            msg.style.color = '#f87171';
+            msg.style.display = 'inline';
+            setTimeout(() => { msg.style.display = 'none'; }, 3000);
+        }
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = `
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                    <path d="M2 7l3 3 7-7" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                Guardar contador
+            `;
+        }
+    }
+}
+
+// === CONECTAR BOTÓN GUARDAR ===
+function conectarBotonGuardarContador() {
+    const btn = document.getElementById('btnGuardarContador');
+    if (btn) {
+        btn.onclick = guardarContadorInputs;
+        console.log('✅ Botón guardar contador conectado');
+    }
+}
+
+// === INICIALIZAR CONTADOR CON INPUTS ===
+function initContadorInputs() {
+    console.log('🔧 Inicializando contador con inputs...');
+    cargarContadorInputs();
+    conectarBotonGuardarContador();
+}
+
+// === INICIALIZAR REPORTE COMPLETO (con inputs) ===
 function initReporteCompleto() {
     console.log('📊 Inicializando reporte completo...');
+    initContadorInputs();
     
-    // 1. Cargar datos guardados
-    cargarContadorGuardado();
-    
-    // 2. Inicializar campos editables
-    initContadorEditable();
-    
-    // 3. Mejorar botón enviar (reemplazar la función existente)
     const btn = document.getElementById('rptBtnEnviar');
     if (btn) {
         btn.onclick = async function(e) {
             e.preventDefault();
             
-            const emailEl = document.getElementById('rptContadorEmail');
-            const email = emailEl?.textContent?.trim() || '';
+            const emailInput = document.getElementById('rptContadorEmailInput');
+            const email = emailInput?.value?.trim() || '';
             
             if (!email || !email.includes('@')) {
                 if (typeof toast === 'function') toast('⚠️ Configurá el email del contador', 'error');
-                emailEl?.focus();
+                emailInput?.focus();
                 return;
             }
             
@@ -6880,15 +6874,6 @@ function initReporteCompleto() {
     }
     
     console.log('✅ Reporte completo inicializado');
-}
-
-// === INICIALIZAR AL CARGAR LA VISTA ===
-if (document.getElementById('vista-reporte')) {
-    setTimeout(() => {
-        if (document.getElementById('vista-reporte')?.style?.display !== 'none') {
-            initReporteCompleto();
-        }
-    }, 500);
 }
 
 // ── FILTROS ──

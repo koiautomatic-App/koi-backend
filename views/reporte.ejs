@@ -6,202 +6,406 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reporte Mensual - <%= nombreMes %></title>
     <style>
+        /* ===== KOI ESTILOS - IGUAL QUE EL DASHBOARD ===== */
+        :root {
+            --bg: #080810;
+            --bg-2: #0d0d1a;
+            --surface: #111120;
+            --card: #13131f;
+            --card-2: #17172a;
+            --border: rgba(255,255,255,0.055);
+            --green: #00e676;
+            --green-glow: rgba(0,230,118,0.18);
+            --green-soft: rgba(0,230,118,0.08);
+            --orange: #e8622a;
+            --orange-2: #f5a623;
+            --orange-glow: rgba(232,98,42,0.22);
+            --orange-soft: rgba(232,98,42,0.10);
+            --red: #ff3d57;
+            --yellow: #ffb300;
+            --text-1: #f0f0fa;
+            --text-2: #8888aa;
+            --text-3: #44445a;
+            --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+            --font-num: 'Space Grotesk', monospace;
+            --r-sm: 8px; --r-md: 14px; --r-lg: 18px; --r-xl: 24px;
+        }
+        
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            line-height: 1.6;
-            color: #111827;
-            max-width: 800px;
-            margin: 0 auto;
+            background: var(--bg);
+            color: var(--text-1);
+            font-family: var(--font-ui);
+            font-size: 13px;
+            line-height: 1.5;
             padding: 20px;
-            background: #f3f4f6;
+            min-height: 100vh;
         }
+        
         .container {
-            background: white;
-            border-radius: 16px;
+            max-width: 900px;
+            margin: 0 auto;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: var(--r-xl);
             overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.5);
         }
+        
+        /* ===== HEADER ===== */
         .header {
-            background: #0a0e1a;
-            color: white;
-            padding: 24px 32px;
-            border-bottom: 3px solid #00e676;
+            background: var(--card-2);
+            padding: 28px 32px;
+            border-bottom: 3px solid var(--green);
+            position: relative;
+        }
+        .header::after {
+            content: '';
+            position: absolute;
+            top: -60px;
+            right: -60px;
+            width: 220px;
+            height: 220px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(232,98,42,0.05) 0%, rgba(0,230,118,0.04) 60%, transparent 100%);
+            pointer-events: none;
+        }
+        .header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .header-brand .logo-mark {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            background: linear-gradient(135deg, var(--orange), var(--orange-2), var(--green));
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            font-weight: 900;
+            color: #fff;
+            flex-shrink: 0;
+        }
+        .header-brand .logo-text {
+            font-weight: 800;
+            font-size: 18px;
+            color: var(--text-1);
+            letter-spacing: -0.3px;
+        }
+        .header-brand .logo-text span {
+            color: var(--green);
+        }
+        .header-brand .logo-sub {
+            font-size: 9px;
+            font-weight: 500;
+            color: var(--text-3);
+            letter-spacing: 1.4px;
+            text-transform: uppercase;
+        }
+        .header-badge {
+            background: var(--green-soft);
+            border: 1px solid rgba(0,230,118,0.2);
+            padding: 4px 14px;
+            border-radius: 999px;
+            font-size: 10px;
+            font-weight: 700;
+            color: var(--green);
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
         }
         .header h1 {
-            margin: 0;
-            font-size: 22px;
+            font-size: 24px;
             font-weight: 700;
+            color: var(--text-1);
             letter-spacing: -0.5px;
+            margin-bottom: 2px;
         }
         .header .sub {
-            margin: 4px 0 0;
-            font-size: 13px;
-            color: #a0aec0;
+            font-size: 14px;
+            color: var(--text-2);
         }
-        .header .badge {
-            display: inline-block;
-            margin-top: 8px;
-            background: rgba(0, 230, 118, 0.12);
-            color: #00e676;
-            padding: 3px 12px;
-            border-radius: 20px;
+        .header .meta {
+            display: flex;
+            gap: 12px;
+            margin-top: 12px;
+            flex-wrap: wrap;
+        }
+        .header .meta-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
             font-size: 11px;
-            font-weight: 600;
-            border: 1px solid rgba(0, 230, 118, 0.15);
+            color: var(--text-3);
+            background: rgba(255,255,255,0.03);
+            padding: 4px 14px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
         }
-        .stats {
+        .header .meta-item strong {
+            color: var(--text-1);
+            font-weight: 600;
+        }
+
+        /* ===== STATS ===== */
+        .stats-grid {
             display: grid;
             grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
+            gap: 12px;
             padding: 20px 32px;
-            background: #f9fafb;
-            border-bottom: 1px solid #e5e7eb;
+            background: var(--bg-2);
+            border-bottom: 1px solid var(--border);
         }
         .stat-card {
             text-align: center;
+            padding: 8px 4px;
         }
         .stat-card .number {
-            font-size: 24px;
+            font-family: var(--font-num);
+            font-size: 28px;
             font-weight: 700;
-            color: #059669;
+            color: var(--green);
+            letter-spacing: -1px;
+        }
+        .stat-card .number.warn {
+            color: var(--yellow);
         }
         .stat-card .label {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 2px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-3);
+            margin-top: 4px;
         }
         .stat-card .sub {
             font-size: 10px;
-            color: #9ca3af;
+            color: var(--text-3);
             margin-top: 2px;
         }
+
+        /* ===== CONTENT ===== */
         .content {
-            padding: 20px 32px;
+            padding: 24px 32px;
         }
-        .nota {
-            background: #fffbeb;
-            border-left: 4px solid #f59e0b;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
+
+        /* Nota */
+        .nota-box {
+            background: rgba(255,179,0,0.06);
+            border-left: 3px solid var(--yellow);
+            padding: 14px 18px;
+            border-radius: var(--r-sm);
+            margin-bottom: 24px;
         }
-        .nota strong { color: #92400e; }
-        .nota p { margin: 0; font-size: 13px; color: #78350f; }
-        .section-title {
-            font-size: 15px;
+        .nota-box .label {
+            font-size: 9px;
             font-weight: 700;
-            color: #1a1a2e;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--yellow);
+            margin-bottom: 2px;
         }
-        .section-title .count {
-            background: #e5e7eb;
-            color: #4b5563;
-            padding: 0 10px;
-            border-radius: 12px;
+        .nota-box p {
+            font-size: 13px;
+            color: var(--text-2);
+            margin: 0;
+        }
+
+        /* Tabla */
+        .table-title {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .table-title h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text-1);
+        }
+        .table-title .count {
+            background: var(--card-2);
+            color: var(--text-2);
+            padding: 0 12px;
+            border-radius: 999px;
             font-size: 11px;
             font-weight: 600;
+            border: 1px solid var(--border);
         }
+
         .table-wrapper {
             overflow-x: auto;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
+            border: 1px solid var(--border);
+            border-radius: var(--r-md);
             margin-bottom: 24px;
+            background: var(--card-2);
         }
         table {
             width: 100%;
             border-collapse: collapse;
             font-size: 12px;
         }
+        thead {
+            background: rgba(232,98,42,0.04);
+            border-bottom: 1px solid rgba(232,98,42,0.1);
+        }
         thead th {
-            background: #f3f4f6;
             padding: 10px 14px;
             text-align: left;
-            border: 1px solid #e5e7eb;
-            font-weight: 600;
-            color: #374151;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        thead th:last-child { text-align: right; }
-        td {
-            padding: 8px 14px;
-            border: 1px solid #e5e7eb;
-        }
-        td:last-child { text-align: right; font-weight: 600; }
-        .mono { font-family: monospace; font-size: 11px; color: #6b7280; }
-        .date { color: #6b7280; font-size: 11px; }
-        tr.alt td { background: #f9fafb; }
-        tr.total td {
-            background: #f0fdf4;
-            border-top: 2px solid #059669;
+            font-size: 9px;
             font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: rgba(232,98,42,0.5);
+            border-bottom: 1px solid var(--border);
+        }
+        thead th:last-child {
+            text-align: right;
+        }
+        td {
+            padding: 9px 14px;
+            color: var(--text-1);
+            border-bottom: 1px solid var(--border);
+        }
+        td:last-child {
+            text-align: right;
+            font-weight: 600;
+            color: var(--green);
+        }
+        .mono {
+            font-family: var(--font-num);
+            font-size: 11px;
+            color: var(--text-2);
+        }
+        .date {
+            color: var(--text-3);
+            font-size: 11px;
+        }
+        tr.alt td {
+            background: rgba(255,255,255,0.02);
+        }
+        tr.total td {
+            background: var(--green-soft);
+            border-top: 2px solid var(--green);
+            font-weight: 700;
+            color: var(--text-1);
         }
         tr.total td:last-child {
-            color: #059669;
             font-size: 14px;
+            color: var(--green);
         }
+        .empty-state {
+            padding: 30px;
+            text-align: center;
+            color: var(--text-3);
+        }
+
+        /* Categoría */
         .categoria-section {
-            background: #f0fdf4;
-            border-radius: 12px;
+            background: var(--green-soft);
+            border: 1px solid rgba(0,230,118,0.12);
+            border-radius: var(--r-md);
             padding: 18px 24px;
-            border: 1px solid #bbf7d0;
-            margin-bottom: 24px;
+            margin-bottom: 8px;
         }
         .categoria-section .title {
             font-weight: 700;
-            font-size: 14px;
-            color: #1a1a2e;
-            margin-bottom: 8px;
+            font-size: 13px;
+            color: var(--text-1);
+            margin-bottom: 10px;
         }
         .cat-row {
             display: flex;
             justify-content: space-between;
-            padding: 4px 0;
-            font-size: 13px;
+            padding: 3px 0;
+            font-size: 12px;
         }
-        .cat-row .label { color: #6b7280; }
-        .cat-row .value { font-weight: 600; color: #1a1a2e; }
+        .cat-row .label {
+            color: var(--text-2);
+        }
+        .cat-row .value {
+            font-weight: 600;
+            color: var(--text-1);
+        }
         .progress-bar {
             width: 100%;
-            height: 8px;
-            background: #e5e7eb;
-            border-radius: 4px;
+            height: 6px;
+            background: rgba(255,255,255,0.05);
+            border-radius: 999px;
             margin: 10px 0;
             overflow: hidden;
         }
         .progress-bar .fill {
             height: 100%;
-            background: linear-gradient(90deg, #059669, #10b981);
-            border-radius: 4px;
-            transition: width 0.5s ease;
+            background: linear-gradient(90deg, var(--orange), var(--orange-2), var(--green));
+            border-radius: 999px;
+            transition: width 0.6s ease;
         }
         .cat-pct {
-            font-size: 12px;
-            color: #059669;
-            font-weight: 600;
+            font-size: 11px;
+            color: var(--text-2);
+            font-weight: 500;
         }
+        .cat-pct strong {
+            color: var(--green);
+        }
+
+        /* FOOTER */
         .footer {
             padding: 16px 32px;
-            background: #f9fafb;
-            border-top: 1px solid #e5e7eb;
+            background: var(--bg-2);
+            border-top: 1px solid var(--border);
             text-align: center;
-            color: #6b7280;
-            font-size: 11px;
         }
-        .footer strong { color: #1a1a2e; }
-        .footer .brand { color: #00e676; font-weight: 700; }
-        @media (max-width: 600px) {
-            .header { padding: 18px 20px; }
-            .stats { grid-template-columns: repeat(2, 1fr); padding: 16px 20px; }
+        .footer p {
+            font-size: 11px;
+            color: var(--text-3);
+        }
+        .footer .brand {
+            color: var(--green);
+            font-weight: 700;
+        }
+        .footer .sub {
+            font-size: 10px;
+            color: var(--text-3);
+            margin-top: 4px;
+        }
+        .footer .sub strong {
+            color: var(--text-2);
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 640px) {
+            body { padding: 12px; }
+            .header { padding: 20px; }
+            .header h1 { font-size: 20px; }
+            .stats-grid { 
+                grid-template-columns: repeat(2, 1fr); 
+                gap: 8px; 
+                padding: 16px 20px; 
+            }
+            .stat-card .number { font-size: 22px; }
             .content { padding: 16px 20px; }
             .footer { padding: 12px 20px; }
             table { font-size: 10px; }
             thead th, td { padding: 6px 10px; }
+            .header .meta { gap: 6px; }
+            .header .meta-item { font-size: 10px; padding: 2px 10px; }
+            .cat-row { font-size: 11px; }
+            .categoria-section { padding: 14px 16px; }
+        }
+        @media (max-width: 400px) {
+            .stats-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
+            .stat-card .number { font-size: 18px; }
+            .header-brand .logo-text { font-size: 14px; }
+            .header-brand .logo-mark { width: 32px; height: 32px; font-size: 16px; }
         }
     </style>
 </head>
@@ -209,13 +413,27 @@
     <div class="container">
         <!-- HEADER -->
         <div class="header">
-            <h1>📊 Reporte Mensual</h1>
-            <div class="sub"><strong><%= nombreMes %></strong> · <%= nombreNegocio %></div>
-            <div class="badge"><%= condicionLabel %> · Cat. <%= categoria %> · CUIT <%= cuit %></div>
+            <div class="header-top">
+                <div class="header-brand">
+                    <div class="logo-mark">K</div>
+                    <div>
+                        <div class="logo-text">KOI<span>·FACTURA</span></div>
+                        <div class="logo-sub">sono.handmade · AFIP</div>
+                    </div>
+                </div>
+                <div class="header-badge">Reporte Mensual</div>
+            </div>
+            <h1><%= nombreMes %></h1>
+            <div class="sub"><%= nombreNegocio %></div>
+            <div class="meta">
+                <span class="meta-item">📋 <strong><%= condicionLabel %></strong></span>
+                <span class="meta-item">📊 Cat. <strong><%= categoria %></strong></span>
+                <span class="meta-item">🆔 CUIT <strong><%= cuit %></strong></span>
+            </div>
         </div>
-        
+
         <!-- STATS -->
-        <div class="stats">
+        <div class="stats-grid">
             <div class="stat-card">
                 <div class="number">$<%= totalFacturado.toLocaleString('es-AR') %></div>
                 <div class="label">Total Facturado</div>
@@ -232,24 +450,25 @@
                 <div class="sub"><%= totalComprobantes > 0 ? 'Utilizado' : 'Sin actividad' %></div>
             </div>
             <div class="stat-card">
-                <div class="number"><%= totalComprobantes > 0 ? '✔️' : '📋' %></div>
+                <div class="number"><%= totalComprobantes > 0 ? '✅' : '📋' %></div>
                 <div class="label">Pendientes CAE</div>
                 <div class="sub"><%= totalComprobantes > 0 ? 'Todas emitidas' : 'Sin emitir' %></div>
             </div>
         </div>
-        
+
+        <!-- CONTENT -->
         <div class="content">
             <!-- NOTA -->
-            <% if (nota) { %>
-                <div class="nota">
-                    <strong>📝 Nota:</strong>
+            <% if (nota && nota.trim()) { %>
+                <div class="nota-box">
+                    <div class="label">📝 Nota</div>
                     <p><%= nota %></p>
                 </div>
             <% } %>
-            
+
             <!-- TABLA -->
-            <div class="section-title">
-                📄 Detalle de Comprobantes
+            <div class="table-title">
+                <h3>📄 Detalle de Comprobantes</h3>
                 <span class="count"><%= orders.length %></span>
             </div>
             <div class="table-wrapper">
@@ -288,7 +507,7 @@
                             </tr>
                         <% } else { %>
                             <tr>
-                                <td colspan="5" style="padding: 20px; text-align: center; color: #6b7280;">
+                                <td colspan="5" class="empty-state">
                                     No hay comprobantes emitidos en este período
                                 </td>
                             </tr>
@@ -296,7 +515,7 @@
                     </tbody>
                 </table>
             </div>
-            
+
             <!-- CATEGORÍA -->
             <div class="categoria-section">
                 <div class="title">📈 Posición en categoría</div>
@@ -312,16 +531,19 @@
                     <div class="fill" style="width: <%= Math.min(porcentaje, 100) %>%;"></div>
                 </div>
                 <div class="cat-pct">
-                    <%= porcentaje.toFixed(1) %>% utilizado · Margen disponible: $<%= margen.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %>
+                    <strong><%= porcentaje.toFixed(1) %>%</strong> utilizado · Margen disponible: <strong>$<%= margen.toLocaleString('es-AR', { maximumFractionDigits: 2 }) %></strong>
                 </div>
             </div>
         </div>
-        
+
         <!-- FOOTER -->
         <div class="footer">
-            <p>Generado automáticamente por <strong class="brand">KOI</strong> · koi-factura.lat</p>
-            <p style="font-size: 10px; margin-top: 4px; color: #9ca3af;">
-                <% if (contadorNombre) { %>Enviado por: <%= contadorNombre %><% } %>
+            <p>
+                Generado automáticamente por <strong class="brand">KOI</strong> · 
+                <span style="color: var(--text-3);">koi-factura.lat</span>
+            </p>
+            <p class="sub">
+                <% if (contadorNombre) { %>Enviado por: <strong><%= contadorNombre %></strong><% } %>
                 <% if (contadorNombre) { %> · <% } %>
                 Los datos son de carácter informativo
             </p>

@@ -1,6 +1,8 @@
 // routes/api/reports.js
 const express = require('express');
 const router = express.Router();
+const path = require('path');
+const ejs = require('ejs');
 const Order = require('../../models/Order');
 const User = require('../../models/User');
 const { Resend } = require('resend');
@@ -66,24 +68,28 @@ router.post('/send', requireAuthAPI, async (req, res) => {
         const porcentaje = limiteCategoria > 0 ? (totalFacturado / limiteCategoria) * 100 : 0;
         const margen = limiteCategoria - totalFacturado;
         
-        // Generar HTML del reporte (con el diseño de la vista previa)
+        // 👇 GENERAR HTML USANDO LA PLANTILLA EJS
         const nombreMes = fechaInicio.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
-        const html = generarHTMLReporte({
-            user,
-            orders,
-            totalFacturado,
-            totalComprobantes,
-            nombreMes,
-            nota,
-            contadorNombre,
-            nombreNegocio,
-            cuit,
-            categoria,
-            condicionLabel,
-            limiteCategoria,
-            porcentaje,
-            margen
-        });
+        const mesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+        
+        const html = await ejs.renderFile(
+            path.join(__dirname, '../../views/reporte.ejs'),
+            {
+                nombreMes: mesCapitalizado,
+                nombreNegocio,
+                cuit,
+                categoria,
+                condicionLabel,
+                totalFacturado,
+                totalComprobantes,
+                orders,
+                nota: nota || '',
+                contadorNombre: contadorNombre || '',
+                limiteCategoria,
+                porcentaje,
+                margen
+            }
+        );
         
         // Enviar email con Resend
         const nombreFantasia = user?.settings?.razonSocial || user?.nombre || 'KOI Factura';
@@ -93,7 +99,7 @@ router.post('/send', requireAuthAPI, async (req, res) => {
             from: '"KOI-FACTURA" <hola@koi-factura.lat>',
             reply_to: replyToEmail,
             to: contadorEmail,
-            subject: `📊 Reporte mensual - ${nombreMes}`,
+            subject: `📊 Reporte mensual - ${mesCapitalizado}`,
             html: html
         });
         
@@ -118,364 +124,5 @@ router.post('/send', requireAuthAPI, async (req, res) => {
         });
     }
 });
-
-function generarHTMLReporte(data) {
-    const { 
-        user, orders, totalFacturado, totalComprobantes, nombreMes, 
-        nota, contadorNombre, nombreNegocio, cuit, categoria, 
-        condicionLabel, limiteCategoria, porcentaje, margen 
-    } = data;
-    
-    // Generar filas de la tabla
-    let filasTabla = '';
-    if (orders.length > 0) {
-        orders.forEach((o, i) => {
-            const nroComp = o.nroFormatted || o.externalId || '—';
-            const cliente = o.customerName || 'Sin nombre';
-            const fecha = o.createdAt ? new Date(o.createdAt).toLocaleDateString('es-AR', { 
-                day: '2-digit', month: '2-digit', year: 'numeric' 
-            }) : '—';
-            const monto = (o.amount || 0).toLocaleString('es-AR');
-            const caeDisplay = o.caeNumber || '—';
-            const caeVto = o.caeExpiry ? new Date(o.caeExpiry).toLocaleDateString('es-AR', {
-                day: '2-digit', month: '2-digit', year: 'numeric'
-            }) : '—';
-            const altClass = i % 2 === 0 ? '' : 'alt';
-            filasTabla += `
-                <tr class="${altClass}">
-                    <td>${nroComp}</td>
-                    <td>${cliente}</td>
-                    <td class="mono">${caeDisplay}</td>
-                    <td class="date">${caeVto}</td>
-                    <td>$${monto}</td>
-                </tr>
-            `;
-        });
-        
-        // Agregar fila de total
-        filasTabla += `
-            <tr class="total">
-                <td colspan="4">Total del período</td>
-                <td>$${totalFacturado.toLocaleString('es-AR')}</td>
-            </tr>
-        `;
-    } else {
-        filasTabla = `
-            <tr>
-                <td colspan="5" style="padding: 20px; text-align: center; color: #6b7280;">
-                    No hay comprobantes emitidos en este período
-                </td>
-            </tr>
-        `;
-    }
-    
-    // Formatear fecha para el título
-    const mesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
-    
-    return `
-<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reporte Mensual - ${mesCapitalizado}</title>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body { 
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
-            line-height: 1.6;
-            color: #111827;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-            background: #f3f4f6;
-        }
-        .container {
-            background: white;
-            border-radius: 16px;
-            overflow: hidden;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.08);
-        }
-        .header {
-            background: #0a0e1a;
-            color: white;
-            padding: 24px 32px;
-            border-bottom: 3px solid #00e676;
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 22px;
-            font-weight: 700;
-            letter-spacing: -0.5px;
-        }
-        .header .sub {
-            margin: 4px 0 0;
-            font-size: 13px;
-            color: #a0aec0;
-        }
-        .header .badge {
-            display: inline-block;
-            margin-top: 8px;
-            background: rgba(0, 230, 118, 0.12);
-            color: #00e676;
-            padding: 3px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 600;
-            border: 1px solid rgba(0, 230, 118, 0.15);
-        }
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 16px;
-            padding: 20px 32px;
-            background: #f9fafb;
-            border-bottom: 1px solid #e5e7eb;
-        }
-        .stat-card {
-            text-align: center;
-        }
-        .stat-card .number {
-            font-size: 24px;
-            font-weight: 700;
-            color: #059669;
-        }
-        .stat-card .label {
-            font-size: 12px;
-            color: #6b7280;
-            margin-top: 2px;
-        }
-        .stat-card .sub {
-            font-size: 10px;
-            color: #9ca3af;
-            margin-top: 2px;
-        }
-        .content {
-            padding: 20px 32px;
-        }
-        .nota {
-            background: #fffbeb;
-            border-left: 4px solid #f59e0b;
-            padding: 12px 16px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-        }
-        .nota strong { color: #92400e; }
-        .nota p { margin: 0; font-size: 13px; color: #78350f; }
-        .section-title {
-            font-size: 15px;
-            font-weight: 700;
-            color: #1a1a2e;
-            margin-bottom: 12px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .section-title .count {
-            background: #e5e7eb;
-            color: #4b5563;
-            padding: 0 10px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: 600;
-        }
-        .table-wrapper {
-            overflow-x: auto;
-            border: 1px solid #e5e7eb;
-            border-radius: 10px;
-            margin-bottom: 24px;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            font-size: 12px;
-        }
-        thead th {
-            background: #f3f4f6;
-            padding: 10px 14px;
-            text-align: left;
-            border: 1px solid #e5e7eb;
-            font-weight: 600;
-            color: #374151;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-        thead th:last-child { text-align: right; }
-        td {
-            padding: 8px 14px;
-            border: 1px solid #e5e7eb;
-        }
-        td:last-child { text-align: right; font-weight: 600; }
-        .mono { font-family: monospace; font-size: 11px; color: #6b7280; }
-        .date { color: #6b7280; font-size: 11px; }
-        tr.alt td { background: #f9fafb; }
-        tr.total td {
-            background: #f0fdf4;
-            border-top: 2px solid #059669;
-            font-weight: 700;
-        }
-        tr.total td:last-child {
-            color: #059669;
-            font-size: 14px;
-        }
-        .categoria-section {
-            background: #f0fdf4;
-            border-radius: 12px;
-            padding: 18px 24px;
-            border: 1px solid #bbf7d0;
-            margin-bottom: 24px;
-        }
-        .categoria-section .title {
-            font-weight: 700;
-            font-size: 14px;
-            color: #1a1a2e;
-            margin-bottom: 8px;
-        }
-        .cat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 4px 0;
-            font-size: 13px;
-        }
-        .cat-row .label { color: #6b7280; }
-        .cat-row .value { font-weight: 600; color: #1a1a2e; }
-        .progress-bar {
-            width: 100%;
-            height: 8px;
-            background: #e5e7eb;
-            border-radius: 4px;
-            margin: 10px 0;
-            overflow: hidden;
-        }
-        .progress-bar .fill {
-            height: 100%;
-            background: linear-gradient(90deg, #059669, #10b981);
-            border-radius: 4px;
-            transition: width 0.5s ease;
-        }
-        .cat-pct {
-            font-size: 12px;
-            color: #059669;
-            font-weight: 600;
-        }
-        .footer {
-            padding: 16px 32px;
-            background: #f9fafb;
-            border-top: 1px solid #e5e7eb;
-            text-align: center;
-            color: #6b7280;
-            font-size: 11px;
-        }
-        .footer strong { color: #1a1a2e; }
-        .footer .brand { color: #00e676; font-weight: 700; }
-        @media (max-width: 600px) {
-            .header { padding: 18px 20px; }
-            .stats { grid-template-columns: repeat(2, 1fr); padding: 16px 20px; }
-            .content { padding: 16px 20px; }
-            .footer { padding: 12px 20px; }
-            table { font-size: 10px; }
-            thead th, td { padding: 6px 10px; }
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <!-- HEADER -->
-        <div class="header">
-            <h1>📊 Reporte Mensual</h1>
-            <div class="sub"><strong>${mesCapitalizado}</strong> · ${nombreNegocio}</div>
-            <div class="badge">${condicionLabel} · Cat. ${categoria} · CUIT ${cuit}</div>
-        </div>
-        
-        <!-- STATS -->
-        <div class="stats">
-            <div class="stat-card">
-                <div class="number">$${totalFacturado.toLocaleString('es-AR')}</div>
-                <div class="label">Total Facturado</div>
-                <div class="sub">${totalComprobantes} comprobantes</div>
-            </div>
-            <div class="stat-card">
-                <div class="number">${totalComprobantes}</div>
-                <div class="label">Comprobantes Emitidos</div>
-                <div class="sub">En el período</div>
-            </div>
-            <div class="stat-card">
-                <div class="number">${porcentaje.toFixed(1)}%</div>
-                <div class="label">Límite Cat. ${categoria}</div>
-                <div class="sub">${totalComprobantes > 0 ? 'Utilizado' : 'Sin actividad'}</div>
-            </div>
-            <div class="stat-card">
-                <div class="number">${totalComprobantes > 0 ? '✔️' : '📋'}</div>
-                <div class="label">Pendientes CAE</div>
-                <div class="sub">${totalComprobantes > 0 ? 'Todas emitidas' : 'Sin emitir'}</div>
-            </div>
-        </div>
-        
-        <div class="content">
-            <!-- NOTA -->
-            ${nota ? `
-                <div class="nota">
-                    <strong>📝 Nota:</strong>
-                    <p>${nota}</p>
-                </div>
-            ` : ''}
-            
-            <!-- TABLA -->
-            <div class="section-title">
-                📄 Detalle de Comprobantes
-                <span class="count">${orders.length}</span>
-            </div>
-            <div class="table-wrapper">
-                <table>
-                    <thead>
-                        <tr>
-                            <th>N° Comprobante</th>
-                            <th>Cliente</th>
-                            <th>CAE</th>
-                            <th>Vto. CAE</th>
-                            <th style="text-align: right;">Monto</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        ${filasTabla}
-                    </tbody>
-                </table>
-            </div>
-            
-            <!-- CATEGORÍA -->
-            <div class="categoria-section">
-                <div class="title">📈 Posición en categoría</div>
-                <div class="cat-row">
-                    <span class="label">Facturado últimos 12 meses</span>
-                    <span class="value">$${totalFacturado.toLocaleString('es-AR')}</span>
-                </div>
-                <div class="cat-row">
-                    <span class="label">Límite Categoría ${categoria}</span>
-                    <span class="value">$${limiteCategoria.toLocaleString('es-AR', { maximumFractionDigits: 2 })}</span>
-                </div>
-                <div class="progress-bar">
-                    <div class="fill" style="width: ${Math.min(porcentaje, 100)}%;"></div>
-                </div>
-                <div class="cat-pct">
-                    ${porcentaje.toFixed(1)}% utilizado · Margen disponible: $${margen.toLocaleString('es-AR', { maximumFractionDigits: 2 })}
-                </div>
-            </div>
-        </div>
-        
-        <!-- FOOTER -->
-        <div class="footer">
-            <p>Generado automáticamente por <strong class="brand">KOI</strong> · koi-factura.lat</p>
-            <p style="font-size: 10px; margin-top: 4px; color: #9ca3af;">
-                ${contadorNombre ? `Enviado por: ${contadorNombre}` : ''}
-                ${contadorNombre ? ' · ' : ''}
-                Los datos son de carácter informativo
-            </p>
-        </div>
-    </div>
-</body>
-</html>
-    `;
-}
 
 module.exports = router;

@@ -174,6 +174,13 @@ app.use('/api/me', require('./routes/api/me'));
 app.use('/api/orders', require('./routes/api/orders'));
 app.use('/api/integrations', require('./routes/api/integrations'));
 app.use('/api/admin', require('./routes/api/admin'));
+// 👇 AGREGAR ESTA LÍNEA
+app.use('/api/reports', require('./backend/routes/reports'));
+
+// ============================================================
+// NOTIFICACIONES - RUTAS
+// ============================================================
+app.use('/api/notifications', require('./routes/api/notifications'));
 
 // ============================================================
 // NOTIFICACIONES - RUTAS

@@ -533,8 +533,15 @@ function mostrarVista(v) {
         if (typeof mostrarOnboardingPlan === 'function') mostrarOnboardingPlan();
       });
     }
-  } else if (v === 'reporte') {
-    if (typeof cargarReporte === 'function') cargarReporte();
+  }else if (v === 'reporte') {
+    // 👇 NUEVO: Inicializar contador y cargar reporte
+    if (typeof initContadorInputs === 'function') {
+      initContadorInputs();
+      console.log('✅ Contador inicializado en vista reporte');
+    }
+    if (typeof cargarReporte === 'function') {
+      cargarReporte();
+    }
   }
 }
 /* ── SUSCRIPCIÓN KOI / MERCADO PAGO ─────────────────── */

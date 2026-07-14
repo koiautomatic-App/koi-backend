@@ -6900,11 +6900,33 @@ function initReporteCompleto() {
     
     const btn = document.getElementById('rptBtnEnviar');
     if (btn) {
-        btn.onclick = async function(e) {
+        // Remover onclick del HTML si existe
+        btn.removeAttribute('onclick');
+        
+        // Remover event listeners anteriores
+        const newBtn = btn.cloneNode(true);
+        btn.parentNode.replaceChild(newBtn, btn);
+        
+        newBtn.addEventListener('click', async function(e) {
             e.preventDefault();
+            e.stopPropagation();
             
+            console.log('🖱️ Click en ENVIAR REPORTE');
+            
+            // 👇 LEER CHECKBOXES
             const emailInput = document.getElementById('rptContadorEmailInput');
             const email = emailInput?.value?.trim() || '';
+            const nombreContador = document.getElementById('rptContadorNombreInput')?.value?.trim() || '';
+            const nota = document.getElementById('rptNotaContador')?.value?.trim() || '';
+            
+            const incluirComprobantes = document.getElementById('rptChkComprobantes')?.checked ?? true;
+            const incluirCategoria = document.getElementById('rptChkCategoria')?.checked ?? true;
+            const incluirNC = document.getElementById('rptChkNC')?.checked ?? false;
+            
+            console.log('📋 CHECKBOXES:');
+            console.log('  incluirComprobantes:', incluirComprobantes);
+            console.log('  incluirCategoria:', incluirCategoria);
+            console.log('  incluirNC:', incluirNC);
             
             if (!email || !email.includes('@')) {
                 if (typeof toast === 'function') toast('⚠️ Configurá el email del contador', 'error');
@@ -6918,20 +6940,28 @@ function initReporteCompleto() {
             this.style.opacity = '0.7';
             
             try {
-                const nota = document.getElementById('rptNotaContador')?.value || '';
+                const payload = {
+                    contadorEmail: email,
+                    contadorNombre: nombreContador,
+                    nota: nota,
+                    mes: window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth(),
+                    anio: window._reporteAnio !== undefined ? window._reporteAnio : new Date().getFullYear(),
+                    incluirComprobantes: incluirComprobantes,
+                    incluirCategoria: incluirCategoria,
+                    incluirNC: incluirNC
+                };
+                
+                console.log('📤 Enviando payload:', payload);
+                
                 const res = await fetch('/api/reports/send', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     credentials: 'include',
-                    body: JSON.stringify({
-                        contadorEmail: email,
-                        nota: nota,
-                        mes: window._reporteMes || new Date().getMonth(),
-                        anio: window._reporteAnio || new Date().getFullYear()
-                    })
+                    body: JSON.stringify(payload)
                 });
                 
                 const data = await res.json();
+                console.log('📥 Respuesta:', data);
                 
                 if (data.ok) {
                     if (typeof toast === 'function') toast(`✅ Reporte enviado a ${email}`, 'success');
@@ -6973,12 +7003,15 @@ function initReporteCompleto() {
                     this.style.opacity = '1';
                 }, 3000);
             }
-        };
+        });
+        
+        console.log('✅ Botón Enviar reporte conectado con checkboxes');
+    } else {
+        console.warn('⚠️ Botón rptBtnEnviar no encontrado');
     }
     
     console.log('✅ Reporte completo inicializado');
 }
-
 // ── FILTROS ──
 let filtrosActivos = {
   plataforma: [],

@@ -16,13 +16,26 @@ const resend = new Resend(config.RESEND_API_KEY);
 // POST /api/reports/send
 router.post('/send', requireAuthAPI, async (req, res) => {
     try {
-        const { contadorEmail, contadorNombre, nota, mes, anio } = req.body;
+        // 👇 AGREGAR PREFERENCIAS DE CHECKBOXES
+        const { 
+            contadorEmail, 
+            contadorNombre, 
+            nota, 
+            mes, 
+            anio,
+            incluirComprobantes = true,
+            incluirCategoria = true,
+            incluirNC = false
+        } = req.body;
         const userId = req.userId;
         const userIdObj = new mongoose.Types.ObjectId(userId);
 
         console.log('📤 Enviando reporte a:', contadorEmail);
         console.log('📊 Mes:', mes, 'Año:', anio);
         console.log('📝 Nota:', nota);
+        console.log('📋 Incluir comprobantes:', incluirComprobantes);
+        console.log('📋 Incluir categoría:', incluirCategoria);
+        console.log('📋 Incluir NC:', incluirNC);
 
         if (!contadorEmail) {
             return res.status(400).json({ error: 'Email del contador requerido' });
@@ -40,13 +53,19 @@ router.post('/send', requireAuthAPI, async (req, res) => {
 
         console.log('📅 Fechas:', fechaInicio, 'a', fechaFin);
 
-        const orders = await Order.find({
+        let orders = await Order.find({
             userId: userId,
             status: 'invoiced',
             createdAt: { $gte: fechaInicio, $lte: fechaFin }
         }).sort({ createdAt: -1 });
 
         console.log('📄 Comprobantes encontrados:', orders.length);
+
+        // 👇 FILTRAR NOTAS DE CRÉDITO SI ESTÁN DESHABILITADAS
+        if (!incluirNC) {
+            orders = orders.filter(o => !o.nroFormatted?.startsWith('NC'));
+            console.log('📄 Después de filtrar NC:', orders.length);
+        }
 
         // Calcular totales del período (mes seleccionado)
         const totalFacturado = orders.reduce((sum, o) => sum + (o.amount || 0), 0);
@@ -69,8 +88,7 @@ router.post('/send', requireAuthAPI, async (req, res) => {
         const limiteAnual = limites[categoria] || 21113696.52;
 
         // ============================================================
-        // FACTURACIÓN ACUMULADA - ÚLTIMOS 12 MESES (hasta el fin del período del reporte)
-        // Misma lógica que statsController.obtenerDashboardStats
+        // FACTURACIÓN ACUMULADA - ÚLTIMOS 12 MESES
         // ============================================================
         const hace12Meses = new Date(fechaFin);
         hace12Meses.setMonth(hace12Meses.getMonth() - 12);
@@ -94,7 +112,6 @@ router.post('/send', requireAuthAPI, async (req, res) => {
 
         // ============================================================
         // PENDIENTES CAE del período seleccionado
-        // Misma lógica que statsController.obtenerDashboardStats
         // ============================================================
         const pendientesCAE = await Order.countDocuments({
             userId: userIdObj,
@@ -106,7 +123,7 @@ router.post('/send', requireAuthAPI, async (req, res) => {
             createdAt: { $gte: fechaInicio, $lte: fechaFin }
         });
 
-        // 👇 GENERAR HTML USANDO LA PLANTILLA EJS
+        // 👇 GENERAR HTML USANDO LA PLANTILLA EJS CON PREFERENCIAS
         const nombreMes = fechaInicio.toLocaleString('es-AR', { month: 'long', year: 'numeric' });
         const mesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
 
@@ -123,11 +140,14 @@ router.post('/send', requireAuthAPI, async (req, res) => {
                 orders,
                 nota: nota || '',
                 contadorNombre: contadorNombre || '',
-                // Compatibilidad con nombres viejos (fallback dentro del EJS)
+                // 👇 PASAR PREFERENCIAS A LA PLANTILLA
+                incluirComprobantes,
+                incluirCategoria,
+                incluirNC,
+                // Datos de categoría
                 limiteCategoria: limiteAnual,
                 porcentaje: porcentajeAnual,
                 margen: margenAnual,
-                // Nombres reales usados por el dashboard
                 facturacionAcumulada,
                 limiteAnual,
                 porcentajeAnual,

@@ -1120,14 +1120,77 @@ function cargarIntegraciones() {
     .catch(err => console.error('Error cargando integraciones:', err));
 }
 
+// ============================================================
+//  SINCRONIZAR ÓRDENES - Desde Mi Negocio
+// ============================================================
+
+async function sincronizarOrdenes(integrationId) {
+    console.log('🔄 Sincronizando órdenes pendientes...');
+    
+    // Mostrar toast de inicio
+    if (typeof toast === 'function') {
+        toast('🔄 Buscando órdenes nuevas...', 'info');
+    }
+    
+    try {
+        // Obtener la integración para saber qué plataforma es
+        const res = await fetch('/api/integrations', { credentials: 'include' });
+        const data = await res.json();
+        const integration = data.integrations.find(i => i._id === integrationId);
+        
+        if (!integration) {
+            throw new Error('Integración no encontrada');
+        }
+        
+        let syncRes;
+        let syncData;
+        
+        // Sincronizar según la plataforma
+        if (integration.platform === 'woocommerce') {
+            syncRes = await fetch('/api/integrations/woocommerce/sync-missing-completed', {
+                method: 'POST',
+                credentials: 'include'
+            });
+            syncData = await syncRes.json();
+        } else if (integration.platform === 'mercadolibre') {
+            syncRes = await fetch('/api/integrations/mercadolibre/sync-all', {
+                method: 'POST',
+                credentials: 'include'
+            });
+            syncData = await syncRes.json();
+        } else {
+            throw new Error(`Plataforma ${integration.platform} no soportada para sincronización automática`);
+        }
+        
+        console.log('📥 Respuesta sincronización:', syncData);
+        
+        if (syncData.ok) {
+            if (typeof toast === 'function') {
+                toast('✅ Órdenes sincronizadas correctamente', 'success');
+            }
+            
+            // Recargar la lista de comprobantes
+            setTimeout(() => {
+                if (typeof cargarTodosComprobantes === 'function') {
+                    cargarTodosComprobantes(1, '');
+                }
+            }, 1500);
+        } else {
+            throw new Error(syncData.error || 'Error al sincronizar');
+        }
+        
+    } catch (error) {
+        console.error('❌ Error sincronizando:', error);
+        if (typeof toast === 'function') {
+            toast('❌ Error: ' + error.message, 'error');
+        }
+    }
+}
+
+// Mantener la función antigua por compatibilidad (pero redirigir)
 async function backfillConcepto(integrationId) {
-  toast('Actualizando productos en órdenes históricas…', 'info');
-  try {
-    const res = await api.post(`/api/integrations/${integrationId}/backfill-concepto`, {});
-    toast(`✅ ${res.message || 'Actualización iniciada'}`, 'success');
-  } catch(e) {
-    toast('Error: ' + e.message, 'error');
-  }
+    console.log('⚠️ backfillConcepto está obsoleta. Usando sincronizarOrdenes...');
+    return sincronizarOrdenes(integrationId);
 }
 
 function desconectar(id) {

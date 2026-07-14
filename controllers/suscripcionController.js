@@ -1,3 +1,4 @@
+// controllers/suscripcionController.js
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
 
@@ -63,45 +64,106 @@ const verificarEstado = async (req, res) => {
   }
 };
 
+// ============================================================
+//  WEBHOOK MEJORADO - VERSIÓN DEFINITIVA
+// ============================================================
 const webhookSuscripcion = async (req, res) => {
   try {
-    const { type, data } = req.body;
-    console.log('Webhook recibido:', { type, data });
+    console.log('📥 Webhook recibido');
+    console.log('📥 Body:', JSON.stringify(req.body, null, 2));
     
+    const { type, data } = req.body;
+    
+    // Verificar que es un evento de pago
     if (type === 'payment') {
       const paymentId = data.id;
-      const mercadopago = require('mercadopago');
-      const payment = await mercadopago.payment.findById(paymentId);
+      console.log('💰 ID de pago:', paymentId);
       
+      // Importar y verificar mercadopago
+      const mercadopago = require('mercadopago');
+      
+      // Verificar que está configurado
+      if (!mercadopago.config) {
+        console.error('❌ mercadopago no está configurado');
+        return res.status(500).json({ error: 'mercadopago no configurado' });
+      }
+      
+      // Obtener el pago
+      const payment = await mercadopago.payment.findById(paymentId);
+      console.log('📊 Estado del pago:', payment.body.status);
+      console.log('📊 Preapproval ID:', payment.body.preapproval_id);
+      console.log('📊 Email del pagador:', payment.body.payer?.email);
+      
+      // Si el pago está aprobado
       if (payment.body.status === 'approved') {
         const preapprovalId = payment.body.preapproval_id;
         const amount = payment.body.transaction_amount;
+        const email = payment.body.payer?.email;
         
-        const user = await User.findOne({ 'settings.preapprovalId': preapprovalId });
+        // Buscar usuario por preapprovalId o email
+        let user = await User.findOne({ 
+          $or: [
+            { 'settings.preapprovalId': preapprovalId },
+            { email: email }
+          ]
+        });
         
-        if (user) {
-          const nuevoProximoPago = new Date();
-          nuevoProximoPago.setDate(nuevoProximoPago.getDate() + 30);
-          
-          await User.findByIdAndUpdate(user._id, {
-            'settings.suscripcionActiva': true,
-            'settings.estadoCicloVida': 'suscripto',
-            'settings.fechaUltimoPago': new Date(),
-            'settings.proximoPago': nuevoProximoPago,
-            'settings.ultimoMontoPago': amount,
-            'plan': 'pro'
+        if (!user) {
+          console.warn('⚠️ Usuario no encontrado');
+          return res.status(200).json({ 
+            status: 'ok', 
+            message: 'Usuario no encontrado' 
           });
-          
-          console.log('✅ Suscripción activada para usuario ' + user.email);
         }
+        
+        console.log('👤 Usuario encontrado:', user.email);
+        
+        // Actualizar suscripción
+        const nuevoProximoPago = new Date();
+        nuevoProximoPago.setDate(nuevoProximoPago.getDate() + 30);
+        
+        await User.findByIdAndUpdate(user._id, {
+          'settings.suscripcionActiva': true,
+          'settings.estadoCicloVida': 'suscripto',
+          'settings.fechaUltimoPago': new Date(),
+          'settings.proximoPago': nuevoProximoPago,
+          'settings.ultimoMontoPago': amount,
+          'settings.preapprovalId': preapprovalId,
+          'plan': 'pro'
+        });
+        
+        console.log('✅ Suscripción activada para:', user.email);
+        
+        return res.status(200).json({ 
+          status: 'ok', 
+          message: 'Suscripción activada correctamente' 
+        });
+      } else {
+        console.log('ℹ️ Pago no aprobado:', payment.body.status);
+        return res.status(200).json({ 
+          status: 'ok', 
+          message: 'Pago no aprobado' 
+        });
       }
     }
     
-    res.status(200).send('OK');
+    // Otros eventos
+    console.log('ℹ️ Evento ignorado:', type);
+    res.status(200).json({ status: 'ignored' });
+    
   } catch (error) {
-    console.error('Webhook error:', error);
-    res.status(500).send('Error');
+    console.error('❌ Webhook error DETALLADO:', error);
+    console.error('❌ Stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+    });
   }
 };
 
-module.exports = { crearSuscripcion, cancelarSuscripcion, verificarEstado, webhookSuscripcion };
+module.exports = { 
+  crearSuscripcion, 
+  cancelarSuscripcion, 
+  verificarEstado, 
+  webhookSuscripcion 
+};

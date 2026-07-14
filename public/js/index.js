@@ -533,12 +533,18 @@ function mostrarVista(v) {
         if (typeof mostrarOnboardingPlan === 'function') mostrarOnboardingPlan();
       });
     }
-  }else if (v === 'reporte') {
-    // 👇 NUEVO: Inicializar contador y cargar reporte
+  } else if (v === 'reporte') {
+    // 👇 INICIALIZAR CONTADOR
     if (typeof initContadorInputs === 'function') {
       initContadorInputs();
       console.log('✅ Contador inicializado en vista reporte');
     }
+    // 👇 INICIALIZAR BOTÓN ENVIAR REPORTE
+    if (typeof initReporteCompleto === 'function') {
+      initReporteCompleto();
+      console.log('✅ Reporte completo inicializado');
+    }
+    // 👇 CARGAR DATOS DEL REPORTE
     if (typeof cargarReporte === 'function') {
       cargarReporte();
     }

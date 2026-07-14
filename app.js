@@ -1,4 +1,4 @@
-// app.js
+// app.js (sección modificada)
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,6 +9,9 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 
+// 👇 IMPORTAR MERCADO PAGO
+const mercadopago = require('mercadopago');
+
 const app = express();
 
 // ============================================================
@@ -17,6 +20,18 @@ const app = express();
 app.use(express.json({ limit: '2mb' }));
 app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: config.BASE_URL, credentials: true }));
+
+// ============================================================
+// MERCADO PAGO - CONFIGURACIÓN
+// ============================================================
+try {
+  mercadopago.configure({
+    access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
+  });
+  console.log('✅ Mercado Pago configurado correctamente');
+} catch (error) {
+  console.error('❌ Error configurando Mercado Pago:', error.message);
+}
 
 // ============================================================
 // HELMET - SEGURIDAD HTTP (CONFIGURACIÓN COMPLETA)

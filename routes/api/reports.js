@@ -156,14 +156,13 @@ router.post('/send', requireAuthAPI, async (req, res) => {
         );
 
         // ============================================================
-        // ENVIAR EMAIL CON RESEND - ASUNTO EJECUTIVO
+        // ENVIAR EMAIL CON RESEND - ASUNTO DEFINITIVO
         // ============================================================
-        const nombreFantasia = user?.settings?.razonSocial || user?.nombre || 'KOI Factura';
         const replyToEmail = user?.email || 'hola@koi-factura.lat';
 
-        // 👇 ASUNTO EJECUTIVO CON BRANDING KOI
-        // 📈 Sono · Reporte Financiero Julio 2026 · KOI
-        const subject = `📈 ${nombreNegocio} · Reporte Financiero ${mesCapitalizado} · KOI`;
+        // 👇 ASUNTO DEFINITIVO
+        // 📈 Sono · Reporte de Facturación Julio de 2026 · KOI-Factura
+        const subject = `📈 ${nombreNegocio} · Reporte de Facturación ${mesCapitalizado} · KOI-Factura`;
 
         console.log('📧 Asunto:', subject);
 

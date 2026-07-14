@@ -7437,6 +7437,7 @@ window.filtrarComprobantes = function() {
 
 console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================
+// ============================================================
 //  EXPORTS GLOBALES
 // ============================================================
 window.obtenerNotificaciones = obtenerNotificaciones;
@@ -7452,3 +7453,5 @@ window.initReporteCompleto = initReporteCompleto;
 window.cargarContadorGuardado = cargarContadorGuardado;
 window.initContadorEditable = initContadorEditable;
 window.initReporte = initReporte;
+// 👇 AGREGAR ESTA LÍNEA
+window.enviarReporteContador = enviarReporteContador;

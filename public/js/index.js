@@ -6672,16 +6672,39 @@ async function enviarReporteContador() {
   btn.innerHTML = '<span class="material-icons" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Enviando...';
   
   try {
-    const nota = document.getElementById('rptNotaContador')?.value.trim() || '';
-    const emailContador = document.getElementById('rptContadorEmail')?.textContent || '';
+    // 👇 OBTENER VALORES DE LOS INPUTS
+    const nota = document.getElementById('rptNotaContador')?.value?.trim() || '';
+    const emailContador = document.getElementById('rptContadorEmailInput')?.value?.trim() || '';
+    const nombreContador = document.getElementById('rptContadorNombreInput')?.value?.trim() || '';
+    
+    // 👇 OBTENER PREFERENCIAS DE SECCIONES
+    const incluirComprobantes = document.getElementById('rptChkComprobantes')?.checked ?? true;
+    const incluirCategoria = document.getElementById('rptChkCategoria')?.checked ?? true;
+    const incluirNC = document.getElementById('rptChkNC')?.checked ?? false;
+    
     const nombreNegocio = window._reporteUsuario?.nombreNegocio || 'KOI';
     
+    // Validar email
+    if (!emailContador || !emailContador.includes('@')) {
+      if (typeof toast === 'function') toast('⚠️ Configurá el email del contador', 'error');
+      btn.disabled = false;
+      btn.innerHTML = originalText;
+      return;
+    }
+    
     const reporteData = {
-      mes: _reporteMes,
-      anio: _reporteAnio,
+      mes: window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth(),
+      anio: window._reporteAnio !== undefined ? window._reporteAnio : new Date().getFullYear(),
       nota: nota,
       contadorEmail: emailContador,
+      contadorNombre: nombreContador,
+      // 👇 AGREGAR PREFERENCIAS
+      incluirComprobantes: incluirComprobantes,
+      incluirCategoria: incluirCategoria,
+      incluirNC: incluirNC
     };
+    
+    console.log('📤 Enviando reporte con preferencias:', reporteData);
     
     const res = await fetch('/api/reports/send', {
       method: 'POST',
@@ -6693,13 +6716,15 @@ async function enviarReporteContador() {
     const data = await res.json();
     
     if (data.ok) {
+      if (typeof toast === 'function') toast(`✅ Reporte enviado a ${emailContador}`, 'success');
+      
       btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Reporte enviado';
       btn.style.background = 'rgba(61,184,122,0.2)';
       btn.style.border = '1px solid rgba(61,184,122,0.3)';
       btn.style.color = '#3db87a';
       
       const ultimoEnvio = document.getElementById('rptUltimoEnvio');
-      if (ultimoEnvio) ultimoEnvio.textContent = new Date().toLocaleDateString('es-AR');
+      if (ultimoEnvio) ultimoEnvio.textContent = new Date().toLocaleString('es-AR');
       
       setTimeout(() => {
         btn.style.background = '';
@@ -6713,6 +6738,8 @@ async function enviarReporteContador() {
     }
   } catch (error) {
     console.error('Error enviando reporte:', error);
+    if (typeof toast === 'function') toast('❌ Error al enviar: ' + error.message, 'error');
+    
     btn.innerHTML = '<span class="material-icons" style="font-size:16px;">error</span> Error al enviar';
     btn.style.background = 'rgba(239,68,68,0.2)';
     btn.style.border = '1px solid rgba(239,68,68,0.3)';

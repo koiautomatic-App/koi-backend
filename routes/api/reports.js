@@ -155,15 +155,23 @@ router.post('/send', requireAuthAPI, async (req, res) => {
             }
         );
 
-        // Enviar email con Resend
+        // ============================================================
+        // ENVIAR EMAIL CON RESEND - ASUNTO EJECUTIVO
+        // ============================================================
         const nombreFantasia = user?.settings?.razonSocial || user?.nombre || 'KOI Factura';
         const replyToEmail = user?.email || 'hola@koi-factura.lat';
+
+        // 👇 ASUNTO EJECUTIVO CON BRANDING KOI
+        // 📈 Sono · Reporte Financiero Julio 2026 · KOI
+        const subject = `📈 ${nombreNegocio} · Reporte Financiero ${mesCapitalizado} · KOI`;
+
+        console.log('📧 Asunto:', subject);
 
         const { data, error } = await resend.emails.send({
             from: '"KOI-FACTURA" <hola@koi-factura.lat>',
             reply_to: replyToEmail,
             to: contadorEmail,
-            subject: `📊 Reporte mensual - ${mesCapitalizado}`,
+            subject: subject,
             html: html
         });
 

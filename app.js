@@ -24,6 +24,10 @@ app.use(cors({ origin: config.BASE_URL, credentials: true }));
 // ============================================================
 // MERCADO PAGO - CONFIGURACIÓN
 // ============================================================
+console.log('🔍 Iniciando configuración de Mercado Pago...');
+console.log('🔍 process.env.MERCADOPAGO_ACCESS_TOKEN existe:', !!process.env.MERCADOPAGO_ACCESS_TOKEN);
+console.log('🔍 process.env.MERCADOPAGO_ACCESS_TOKEN length:', process.env.MERCADOPAGO_ACCESS_TOKEN?.length || 0);
+
 try {
   mercadopago.configure({
     access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
@@ -32,7 +36,19 @@ try {
 } catch (error) {
   console.error('❌ Error configurando Mercado Pago:', error.message);
 }
-
+// ============================================================
+// DEBUG - VERIFICAR TOKEN DE MERCADO PAGO
+// ============================================================
+app.get('/debug/mercadopago', (req, res) => {
+  const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  res.json({
+    token_configurado: !!token,
+    token_length: token?.length || 0,
+    token_preview: token ? token.substring(0, 10) + '...' : 'no token',
+    node_env: process.env.NODE_ENV,
+    timestamp: new Date().toISOString()
+  });
+});
 // ============================================================
 // HELMET - SEGURIDAD HTTP (CONFIGURACIÓN COMPLETA)
 // ============================================================

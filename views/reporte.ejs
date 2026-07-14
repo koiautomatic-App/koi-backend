@@ -105,7 +105,8 @@
   </tr>
   <% } %>
 
-  <!-- ================= TABLA DE COMPROBANTES ================= -->
+  <!-- ================= TABLA DE COMPROBANTES (condicional) ================= -->
+  <% if (incluirComprobantes !== false) { %>
   <tr>
     <td class="koi-px" style="padding:8px 16px;border-bottom:1px solid #f0ede8;">
       <div style="font-size:11px;font-weight:600;color:#333333;font-family:Arial, sans-serif;">Comprobantes emitidos &middot; <%= nombreMes %></div>
@@ -154,8 +155,10 @@
       </table>
     </td>
   </tr>
+  <% } %>
 
-  <!-- ================= POSICIÓN EN CATEGORÍA ================= -->
+  <!-- ================= POSICIÓN EN CATEGORÍA (condicional) ================= -->
+  <% if (incluirCategoria !== false) { %>
   <tr>
     <td class="koi-px" style="padding:10px 16px;border-top:1px solid #f0ede8;">
       <div style="font-size:11px;font-weight:600;color:#333333;font-family:Arial, sans-serif;margin-bottom:8px;">Posici&oacute;n en categor&iacute;a</div>
@@ -194,6 +197,7 @@
       </div>
     </td>
   </tr>
+  <% } %>
 
   <!-- ================= FOOTER ================= -->
   <tr>

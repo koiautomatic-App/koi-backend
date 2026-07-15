@@ -2,20 +2,6 @@
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
 
-// 👇 IMPORTAR DIRECTAMENTE DESDE config/mercadopago.js
-const mercadopago = require('../config/mercadopago');
-
-// Verificar configuración
-if (!mercadopago.config) {
-  console.log('⚠️ mercadopago no configurado, configurando...');
-  mercadopago.configure({
-    access_token: process.env.MP_ACCESS_TOKEN
-  });
-  console.log('✅ mercadopago configurado');
-}
-
-console.log('🔍 mercadopago.config:', !!mercadopago.config);
-
 const crearSuscripcion = async (req, res) => {
   try {
     const user = await User.findById(req.userId);
@@ -79,7 +65,7 @@ const verificarEstado = async (req, res) => {
 };
 
 // ============================================================
-//  WEBHOOK MEJORADO - VERSIÓN DEFINITIVA
+//  WEBHOOK - CONFIGURACIÓN DIRECTA DENTRO DEL WEBHOOK
 // ============================================================
 const webhookSuscripcion = async (req, res) => {
   try {
@@ -92,7 +78,29 @@ const webhookSuscripcion = async (req, res) => {
       const paymentId = data.id;
       console.log('💰 ID de pago:', paymentId);
       
-      // 👇 VERIFICAR CONFIGURACIÓN
+      // 👇 CONFIGURAR MERCADOPAGO DIRECTAMENTE DENTRO DEL WEBHOOK
+      const mercadopago = require('mercadopago');
+      const token = process.env.MP_ACCESS_TOKEN;
+      
+      if (!mercadopago.config) {
+        console.log('🔧 Configurando mercadopago desde el webhook...');
+        console.log('🔍 Token disponible:', !!token);
+        console.log('🔍 Token length:', token?.length || 0);
+        
+        if (!token) {
+          console.error('❌ No hay token disponible');
+          return res.status(500).json({ 
+            error: 'Token de Mercado Pago no disponible' 
+          });
+        }
+        
+        mercadopago.configure({
+          access_token: token
+        });
+        console.log('✅ mercadopago configurado desde el webhook');
+        console.log('🔍 mercadopago.config:', !!mercadopago.config);
+      }
+      
       if (!mercadopago.config) {
         console.error('❌ mercadopago no está configurado');
         return res.status(500).json({ error: 'mercadopago no configurado' });

@@ -1,4 +1,4 @@
-// app.js (sección modificada)
+// app.js
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
@@ -9,8 +9,8 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 
-// 👇 IMPORTAR MERCADO PAGO
-const mercadopago = require('mercadopago');
+// 👇 CONFIGURAR MERCADO PAGO (importa y configura automáticamente)
+require('./config/mercadopago');
 
 const app = express();
 
@@ -22,25 +22,10 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cors({ origin: config.BASE_URL, credentials: true }));
 
 // ============================================================
-// MERCADO PAGO - CONFIGURACIÓN
-// ============================================================
-console.log('🔍 Iniciando configuración de Mercado Pago...');
-console.log('🔍 MP_ACCESS_TOKEN existe:', !!process.env.MP_ACCESS_TOKEN);
-console.log('🔍 MP_ACCESS_TOKEN length:', process.env.MP_ACCESS_TOKEN?.length || 0);
-
-try {
-  mercadopago.configure({
-    access_token: process.env.MP_ACCESS_TOKEN
-  });
-  console.log('✅ Mercado Pago configurado correctamente');
-} catch (error) {
-  console.error('❌ Error configurando Mercado Pago:', error.message);
-}
-// ============================================================
 // DEBUG - VERIFICAR TOKEN DE MERCADO PAGO
 // ============================================================
 app.get('/debug/mercadopago', (req, res) => {
-  const token = process.env.MP_ACCESS_TOKEN;  // 👈 CAMBIAR AQUÍ
+  const token = process.env.MP_ACCESS_TOKEN;
   res.json({
     token_configurado: !!token,
     token_length: token?.length || 0,
@@ -49,6 +34,7 @@ app.get('/debug/mercadopago', (req, res) => {
     timestamp: new Date().toISOString()
   });
 });
+
 // ============================================================
 // HELMET - SEGURIDAD HTTP (CONFIGURACIÓN COMPLETA)
 // ============================================================
@@ -205,13 +191,7 @@ app.use('/api/me', require('./routes/api/me'));
 app.use('/api/orders', require('./routes/api/orders'));
 app.use('/api/integrations', require('./routes/api/integrations'));
 app.use('/api/admin', require('./routes/api/admin'));
-// ✅ Línea corregida
 app.use('/api/reports', require('./routes/api/reports'));
-
-// ============================================================
-// NOTIFICACIONES - RUTAS
-// ============================================================
-app.use('/api/notifications', require('./routes/api/notifications'));
 
 // ============================================================
 // NOTIFICACIONES - RUTAS
@@ -221,7 +201,6 @@ app.use('/api/notifications', require('./routes/api/notifications'));
 // ============================================================
 // PAIS
 // ============================================================
-
 app.use('/api/pais', require('./routes/api/pais'));
 
 // ============================================================
@@ -252,14 +231,6 @@ app.get('/admin', (req, res) => {
 logger.info('✅ App configurada correctamente');
 
 // ============================================================
-// EXPORTAR MERCADO PAGO PARA USAR EN OTROS ARCHIVOS
+// EXPORTAR APP
 // ============================================================
-const mercadopagoInstance = mercadopago;
-
-logger.info('✅ App configurada correctamente');
-
-// 👇 EXPORTAR TODO EN UN SOLO OBJETO
-module.exports = {
-  app,
-  mercadopago: mercadopagoInstance
-};
+module.exports = app;

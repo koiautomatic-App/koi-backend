@@ -1,8 +1,8 @@
 // controllers/suscripcionController.js
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
-// 👇 IMPORTAR LA INSTANCIA DE MERCADO PAGO DESDE APP.JS
-const { mercadopago } = require('../app');
+// 👇 IMPORTAR MERCADOPAGO DIRECTAMENTE (configurado en app.js)
+const mercadopago = require('mercadopago');
 
 const crearSuscripcion = async (req, res) => {
   try {
@@ -76,31 +76,26 @@ const webhookSuscripcion = async (req, res) => {
     
     const { type, data } = req.body;
     
-    // Verificar que es un evento de pago
     if (type === 'payment') {
       const paymentId = data.id;
       console.log('💰 ID de pago:', paymentId);
       
-      // 👇 USAR LA INSTANCIA IMPORTADA (YA CONFIGURADA)
-      // Verificar que está configurado
+      // 👇 USAR MERCADOPAGO DIRECTAMENTE
       if (!mercadopago.config) {
         console.error('❌ mercadopago no está configurado');
         return res.status(500).json({ error: 'mercadopago no configurado' });
       }
       
-      // Obtener el pago
       const payment = await mercadopago.payment.findById(paymentId);
       console.log('📊 Estado del pago:', payment.body.status);
       console.log('📊 Preapproval ID:', payment.body.preapproval_id);
       console.log('📊 Email del pagador:', payment.body.payer?.email);
       
-      // Si el pago está aprobado
       if (payment.body.status === 'approved') {
         const preapprovalId = payment.body.preapproval_id;
         const amount = payment.body.transaction_amount;
         const email = payment.body.payer?.email;
         
-        // Buscar usuario por preapprovalId o email
         let user = await User.findOne({ 
           $or: [
             { 'settings.preapprovalId': preapprovalId },
@@ -118,7 +113,6 @@ const webhookSuscripcion = async (req, res) => {
         
         console.log('👤 Usuario encontrado:', user.email);
         
-        // Actualizar suscripción
         const nuevoProximoPago = new Date();
         nuevoProximoPago.setDate(nuevoProximoPago.getDate() + 30);
         
@@ -147,12 +141,11 @@ const webhookSuscripcion = async (req, res) => {
       }
     }
     
-    // Otros eventos
     console.log('ℹ️ Evento ignorado:', type);
     res.status(200).json({ status: 'ignored' });
     
   } catch (error) {
-    console.error('❌ Webhook error DETALLADO:', error);
+    console.error('❌ Webhook error:', error);
     console.error('❌ Stack:', error.stack);
     res.status(500).json({ 
       error: error.message,

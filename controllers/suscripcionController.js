@@ -1,8 +1,32 @@
 // controllers/suscripcionController.js
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
-// 👇 IMPORTAR MERCADOPAGO DIRECTAMENTE (configurado en app.js)
-const mercadopago = require('mercadopago');
+
+// 👇 IMPORTAR MERCADOPAGO CON FALLBACK
+let mercadopago;
+try {
+  const appModule = require('../app');
+  mercadopago = appModule.mercadopago;
+  console.log('✅ mercadopago importado desde app.js');
+} catch (e) {
+  mercadopago = require('mercadopago');
+  console.log('🔧 Configurando mercadopago directamente...');
+  mercadopago.configure({
+    access_token: process.env.MP_ACCESS_TOKEN
+  });
+  console.log('✅ mercadopago configurado directamente');
+}
+
+// Verificar configuración
+if (!mercadopago.config) {
+  console.log('⚠️ mercadopago no configurado, configurando...');
+  mercadopago.configure({
+    access_token: process.env.MP_ACCESS_TOKEN
+  });
+  console.log('✅ mercadopago configurado');
+}
+
+console.log('🔍 mercadopago.config:', !!mercadopago.config);
 
 const crearSuscripcion = async (req, res) => {
   try {
@@ -80,7 +104,7 @@ const webhookSuscripcion = async (req, res) => {
       const paymentId = data.id;
       console.log('💰 ID de pago:', paymentId);
       
-      // 👇 USAR MERCADOPAGO DIRECTAMENTE
+      // 👇 VERIFICAR CONFIGURACIÓN
       if (!mercadopago.config) {
         console.error('❌ mercadopago no está configurado');
         return res.status(500).json({ error: 'mercadopago no configurado' });

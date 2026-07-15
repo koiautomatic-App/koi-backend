@@ -2,20 +2,8 @@
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
 
-// 👇 IMPORTAR MERCADOPAGO CON FALLBACK
-let mercadopago;
-try {
-  const appModule = require('../app');
-  mercadopago = appModule.mercadopago;
-  console.log('✅ mercadopago importado desde app.js');
-} catch (e) {
-  mercadopago = require('mercadopago');
-  console.log('🔧 Configurando mercadopago directamente...');
-  mercadopago.configure({
-    access_token: process.env.MP_ACCESS_TOKEN
-  });
-  console.log('✅ mercadopago configurado directamente');
-}
+// 👇 IMPORTAR DIRECTAMENTE DESDE config/mercadopago.js
+const mercadopago = require('../config/mercadopago');
 
 // Verificar configuración
 if (!mercadopago.config) {

@@ -6467,3 +6467,120 @@ table.comp-table-report tr.total td:last-child {
         padding: 6px 14px !important;
     }
 }
+/* ============================================================
+   UNIFICAR FONDOS A #0d0d16 - TODAS LAS SECCIONES
+   ============================================================ */
+
+.mono-card,
+.metric-card,
+.chart-card,
+.comp-card,
+.comp-tabla-wrap,
+.cfg-vista-card,
+.arca-card,
+.neg-integration,
+.neg-card,
+.suscripcion-card,
+.historial-card,
+#onboardingArca .arca-card,
+.report-panel-left,
+.report-panel-right,
+.preview-scroll-report,
+.doc-stats-report,
+.doc-cat-report {
+    background: #0d0d16 !important;
+}
+
+/* También para elementos dentro de reportes */
+.doc-report {
+    background: #0d0d16 !important;
+    border: 1px solid rgba(255,255,255,0.055) !important;
+}
+
+/* Textos en reportes */
+.doc-title-report,
+.doc-subtitle-report,
+.doc-stat-value-report,
+.doc-table-title-report,
+.doc-cat-title-report,
+.doc-cat-row-report span:last-child {
+    color: #f0f0fa !important;
+}
+
+.doc-stat-label-report,
+.doc-stat-sub-report,
+.doc-cat-row-report .label,
+.doc-footer-report {
+    color: #8888aa !important;
+}
+
+/* Tabla en reportes */
+table.comp-table-report td {
+    color: #f0f0fa !important;
+    border-top: 1px solid rgba(255,255,255,0.055) !important;
+}
+
+table.comp-table-report tr.alt {
+    background: rgba(255,255,255,0.02) !important;
+}
+
+table.comp-table-report thead tr {
+    background: rgba(232,98,42,0.04) !important;
+}
+
+table.comp-table-report th {
+    color: rgba(232,98,42,0.5) !important;
+}
+
+table.comp-table-report tr.total td {
+    background: rgba(0,230,118,0.08) !important;
+    border-top: 2px solid #00e676 !important;
+    color: #f0f0fa !important;
+}
+
+table.comp-table-report tr.total td:last-child {
+    color: #00e676 !important;
+}
+
+/* Barra de progreso en reportes */
+.doc-progress-track-report {
+    background: rgba(255,255,255,0.05) !important;
+}
+
+.doc-progress-fill-report {
+    background: linear-gradient(90deg, #e8622a, #f5a623, #00e676) !important;
+}
+
+.doc-cat-pct-report {
+    color: #00e676 !important;
+}
+
+/* Stats en reportes */
+.doc-stats-report {
+    border-bottom: 1px solid rgba(255,255,255,0.055) !important;
+}
+
+.doc-stat-report {
+    border-right: 1px solid rgba(255,255,255,0.055) !important;
+}
+
+.doc-header-sub-report {
+    color: #8888aa !important;
+}
+
+/* Preview scroll */
+.preview-scroll-report {
+    background: #0d0d16 !important;
+}
+
+/* Contador en reportes */
+.contador-card-report {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+}
+
+.contador-input-report {
+    background: rgba(255,255,255,0.03) !important;
+    border: 1px solid rgba(255,255,255,0.06) !important;
+    color: #f0f0fa !important;
+}

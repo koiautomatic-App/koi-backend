@@ -25,12 +25,12 @@ app.use(cors({ origin: config.BASE_URL, credentials: true }));
 // MERCADO PAGO - CONFIGURACIÓN
 // ============================================================
 console.log('🔍 Iniciando configuración de Mercado Pago...');
-console.log('🔍 process.env.MERCADOPAGO_ACCESS_TOKEN existe:', !!process.env.MERCADOPAGO_ACCESS_TOKEN);
-console.log('🔍 process.env.MERCADOPAGO_ACCESS_TOKEN length:', process.env.MERCADOPAGO_ACCESS_TOKEN?.length || 0);
+console.log('🔍 MP_ACCESS_TOKEN existe:', !!process.env.MP_ACCESS_TOKEN);
+console.log('🔍 MP_ACCESS_TOKEN length:', process.env.MP_ACCESS_TOKEN?.length || 0);
 
 try {
   mercadopago.configure({
-    access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
+    access_token: process.env.MP_ACCESS_TOKEN
   });
   console.log('✅ Mercado Pago configurado correctamente');
 } catch (error) {
@@ -40,7 +40,7 @@ try {
 // DEBUG - VERIFICAR TOKEN DE MERCADO PAGO
 // ============================================================
 app.get('/debug/mercadopago', (req, res) => {
-  const token = process.env.MERCADOPAGO_ACCESS_TOKEN;
+  const token = process.env.MP_ACCESS_TOKEN;  // 👈 CAMBIAR AQUÍ
   res.json({
     token_configurado: !!token,
     token_length: token?.length || 0,

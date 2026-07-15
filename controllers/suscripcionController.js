@@ -1,6 +1,8 @@
 // controllers/suscripcionController.js
 const User = require('../models/User');
 const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
+// 👇 IMPORTAR LA INSTANCIA DE MERCADO PAGO DESDE APP.JS
+const { mercadopago } = require('../app');
 
 const crearSuscripcion = async (req, res) => {
   try {
@@ -79,9 +81,7 @@ const webhookSuscripcion = async (req, res) => {
       const paymentId = data.id;
       console.log('💰 ID de pago:', paymentId);
       
-      // Importar y verificar mercadopago
-      const mercadopago = require('mercadopago');
-      
+      // 👇 USAR LA INSTANCIA IMPORTADA (YA CONFIGURADA)
       // Verificar que está configurado
       if (!mercadopago.config) {
         console.error('❌ mercadopago no está configurado');

@@ -1,6 +1,6 @@
 // server.js
 require('dotenv').config();
-const app = require('./app');
+const { app } = require('./app');  // 👈 DESESTRUCTURAR app
 const config = require('./config');
 const connectDB = require('./config/database');
 const { initPassport } = require('./config/passport');

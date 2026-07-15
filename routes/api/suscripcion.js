@@ -1,13 +1,20 @@
+// routes/api/suscripcion.js
 const express = require('express');
 const router = express.Router();
 const { requireAuthAPI } = require('../../middleware/auth');
+
+// 👇 IMPORTAR TODAS LAS FUNCIONES DEL CONTROLADOR
+const suscripcionController = require('../../controllers/suscripcionController');
+
+// Destructurar las funciones
 const {
   crearSuscripcion,
   cancelarSuscripcion,
   verificarEstado,
   webhookSuscripcion
-} = require('../../controllers/suscripcionController');
+} = suscripcionController;
 
+// Rutas
 router.post('/crear', requireAuthAPI, crearSuscripcion);
 router.post('/cancelar', requireAuthAPI, cancelarSuscripcion);
 router.get('/estado', requireAuthAPI, verificarEstado);

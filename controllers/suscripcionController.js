@@ -1,3 +1,81 @@
+// controllers/suscripcionController.js
+const User = require('../models/User');
+const { crearSuscripcionMP, cancelarSuscripcionMP } = require('../services/suscripcion/mercadopago');
+
+// ============================================================
+//  CREAR SUSCRIPCIÓN
+// ============================================================
+const crearSuscripcion = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (!user.email) {
+      return res.status(400).json({ error: 'Usuario sin email' });
+    }
+    
+    const subscription = await crearSuscripcionMP(user.email, user._id);
+    
+    await User.findByIdAndUpdate(req.userId, {
+      'settings.preapprovalId': subscription.id,
+      'settings.suscripcionActiva': false,
+      'settings.estadoCicloVida': 'cortesia_activa'
+    });
+    
+    res.json({
+      init_point: subscription.init_point,
+      preapproval_id: subscription.id
+    });
+  } catch (error) {
+    console.error('Error creando suscripción:', error);
+    res.status(500).json({ 
+      error: error.message,
+      mp_status: error.response?.status,
+      mp_data: error.response?.data
+    });
+  }
+};
+
+// ============================================================
+//  CANCELAR SUSCRIPCIÓN
+// ============================================================
+const cancelarSuscripcion = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    
+    if (user.settings?.preapprovalId) {
+      await cancelarSuscripcionMP(user.settings.preapprovalId);
+    }
+    
+    await User.findByIdAndUpdate(req.userId, {
+      'settings.suscripcionActiva': false,
+      'settings.estadoCicloVida': 'cortesia_activa',
+      'settings.preapprovalId': null,
+      'plan': 'free'
+    });
+    
+    res.json({ ok: true, message: 'Suscripción cancelada' });
+  } catch (error) {
+    console.error('Error cancelando suscripción:', error);
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================================
+//  VERIFICAR ESTADO
+// ============================================================
+const verificarEstado = async (req, res) => {
+  try {
+    const user = await User.findById(req.userId);
+    const activa = user?.settings?.suscripcionActiva === true || user?.plan === 'pro';
+    res.json({ activa });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+};
+
+// ============================================================
+//  WEBHOOK - CONFIGURACIÓN DIRECTA DENTRO DEL WEBHOOK
+// ============================================================
 const webhookSuscripcion = async (req, res) => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📥 WEBHOOK RECIBIDO');
@@ -155,4 +233,14 @@ const webhookSuscripcion = async (req, res) => {
       stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
     });
   }
+};
+
+// ============================================================
+//  EXPORTAR TODAS LAS FUNCIONES
+// ============================================================
+module.exports = { 
+  crearSuscripcion, 
+  cancelarSuscripcion, 
+  verificarEstado, 
+  webhookSuscripcion 
 };

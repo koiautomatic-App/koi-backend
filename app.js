@@ -250,4 +250,16 @@ app.get('/admin', (req, res) => {
 });
 
 logger.info('✅ App configurada correctamente');
-module.exports = app;
+
+// ============================================================
+// EXPORTAR MERCADO PAGO PARA USAR EN OTROS ARCHIVOS
+// ============================================================
+const mercadopagoInstance = mercadopago;
+
+logger.info('✅ App configurada correctamente');
+
+// 👇 EXPORTAR TODO EN UN SOLO OBJETO
+module.exports = {
+  app,
+  mercadopago: mercadopagoInstance
+};

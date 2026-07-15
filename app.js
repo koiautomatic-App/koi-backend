@@ -9,8 +9,7 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 
-// 👇 CONFIGURAR MERCADO PAGO (importa y configura automáticamente)
-require('./config/mercadopago');
+
 
 const app = express();
 
@@ -233,4 +232,45 @@ logger.info('✅ App configurada correctamente');
 // ============================================================
 // EXPORTAR APP
 // ============================================================
+// ============================================================
+// PRUEBA DEFINITIVA - WEBHOOK CON TOKEN HARCODEADO
+// ============================================================
+app.post('/test-webhook', async (req, res) => {
+  console.log('🧪 TEST WEBHOOK - TOKEN HARCODEADO');
+  
+  try {
+    // 👇 TOKEN HARCODEADO (REEMPLAZÁ CON TU TOKEN REAL)
+    const token = 'APP_USR-5364373661842224-071513-737ba9db7b2533b5140f1ea45fbacf09-5346892568601999';
+    console.log('🔍 Token:', token.substring(0, 10) + '...');
+    
+    const mercadopago = require('mercadopago');
+    console.log('🔧 mercadopago cargado');
+    console.log('🔧 mercadopago.config ANTES:', !!mercadopago.config);
+    
+    mercadopago.configure({
+      access_token: token
+    });
+    console.log('✅ mercadopago configurado');
+    console.log('🔧 mercadopago.config DESPUÉS:', !!mercadopago.config);
+    
+    const payment = await mercadopago.payment.findById('168833683866');
+    console.log('📊 Payment status:', payment.body.status);
+    console.log('📊 Payment ID:', payment.body.id);
+    
+    res.json({
+      ok: true,
+      tokenConfigurado: true,
+      hasConfig: !!mercadopago.config,
+      paymentStatus: payment.body.status,
+      paymentId: payment.body.id
+    });
+  } catch (error) {
+    console.error('❌ Error en test-webhook:', error.message);
+    console.error('❌ Stack:', error.stack);
+    res.status(500).json({ 
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
 module.exports = app;

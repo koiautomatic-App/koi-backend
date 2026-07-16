@@ -156,6 +156,11 @@ const webhookSuscripcion = async (req, res) => {
           console.log('🔍 Buscando usuario con preapprovalId:', preapprovalId);
           console.log('🔍 O con email:', email);
           
+          // 👇 LOGS PARA DEPURAR LA BÚSQUEDA
+          console.log('📋 Buscando usuario con:');
+          console.log('  preapprovalId:', preapprovalId);
+          console.log('  email:', email);
+          
           let user = await User.findOne({ 
             $or: [
               { 'settings.preapprovalId': preapprovalId },
@@ -164,7 +169,19 @@ const webhookSuscripcion = async (req, res) => {
           });
           
           if (!user) {
-            console.warn('⚠️ Usuario NO encontrado');
+            console.warn('⚠️ Usuario NO encontrado!');
+            console.log('📋 Todos los usuarios con preapprovalId:');
+            try {
+              const allUsers = await User.find({ 'settings.preapprovalId': { $exists: true } })
+                .select('email settings.preapprovalId');
+              console.log('  Usuarios encontrados:', allUsers.length);
+              allUsers.forEach(u => {
+                console.log(`  - ${u.email}: ${u.settings?.preapprovalId}`);
+              });
+            } catch (e) {
+              console.error('Error consultando usuarios:', e.message);
+            }
+            
             return res.status(200).json({ 
               status: 'ok', 
               message: 'Usuario no encontrado',

@@ -74,16 +74,22 @@ const verificarEstado = async (req, res) => {
 };
 
 // ============================================================
-//  WEBHOOK - CONFIGURACIÓN FORZADA EN CADA PETICIÓN
+//  WEBHOOK - CONFIGURACIÓN FORZADA EN CADA PETICIÓN (v2.0)
 // ============================================================
 const webhookSuscripcion = async (req, res) => {
+  // 👇 MARCADOR DE VERSIÓN - BUSCAR ESTO EN LOGS DE RENDER
+  console.log('🔴🔴🔴 VERSION-WEBHOOK-v2.0 - 2026-07-16 🔴🔴🔴');
+  console.log('📅 Timestamp:', new Date().toISOString());
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
   console.log('📥 WEBHOOK RECIBIDO');
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('📥 Headers:', JSON.stringify(req.headers, null, 2));
   console.log('📥 Body:', JSON.stringify(req.body, null, 2));
   
   try {
     const { type, data } = req.body;
+    console.log('📥 Type:', type);
+    console.log('📥 Data:', data);
     
     if (type === 'payment') {
       const paymentId = data.id;
@@ -142,6 +148,18 @@ const webhookSuscripcion = async (req, res) => {
         
         if (!user) {
           console.warn('⚠️ Usuario NO encontrado');
+          console.log('📋 Todos los usuarios con preapprovalId:');
+          try {
+            const allUsers = await User.find({ 'settings.preapprovalId': { $exists: true } })
+              .select('email settings.preapprovalId');
+            console.log('  Usuarios encontrados:', allUsers.length);
+            allUsers.forEach(u => {
+              console.log(`  - ${u.email}: ${u.settings?.preapprovalId}`);
+            });
+          } catch (e) {
+            console.error('Error consultando usuarios:', e.message);
+          }
+          
           return res.status(200).json({ 
             status: 'ok', 
             message: 'Usuario no encontrado',

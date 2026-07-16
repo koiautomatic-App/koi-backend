@@ -74,10 +74,10 @@ const verificarEstado = async (req, res) => {
 };
 
 // ============================================================
-//  WEBHOOK - CONFIGURACIÓN ROBUSTA PARA MERCADO PAGO
+//  WEBHOOK - CONFIGURACIÓN ROBUSTA CON BÚSQUEDA PRIORITARIA
 // ============================================================
 const webhookSuscripcion = async (req, res) => {
-  console.log('🔴🔴🔴 VERSION-WEBHOOK-v2.1 🔴🔴🔴');
+  console.log('🔴🔴🔴 VERSION-WEBHOOK-v2.2 - BÚSQUEDA PRIORITARIA 🔴🔴🔴');
   console.log('📥 WEBHOOK RECIBIDO');
   console.log('📥 Body:', JSON.stringify(req.body, null, 2));
   
@@ -90,127 +90,115 @@ const webhookSuscripcion = async (req, res) => {
       
       // 👇 CONFIGURACIÓN ROBUSTA
       console.log('🔧 Configurando mercadopago...');
-      
-      // Método 1: Usar el SDK directamente
       const mercadopago = require('mercadopago');
       const token = process.env.MP_ACCESS_TOKEN;
       
-      console.log('🔍 Token disponible:', !!token);
-      console.log('🔍 Token length:', token?.length || 0);
-      
       if (!token) {
         console.error('❌ Token no disponible');
-        return res.status(500).json({ 
-          error: 'Token de Mercado Pago no disponible' 
-        });
+        return res.status(500).json({ error: 'Token de Mercado Pago no disponible' });
       }
       
-      // ✅ FORZAR CONFIGURACIÓN - MÉTODO ROBUSTO
-      try {
-        // Configurar usando el método correcto
-        mercadopago.configure({
-          access_token: token
+      // ✅ CONFIGURAR
+      mercadopago.configure({ access_token: token });
+      console.log('✅ mercadopago.configure() ejecutado');
+      
+      // Obtener el pago
+      const payment = await mercadopago.payment.findById(paymentId);
+      console.log('📊 Estado del pago:', payment.body.status);
+      
+      if (payment.body.status === 'approved') {
+        console.log('✅ Pago APROBADO! Procesando...');
+        
+        const preapprovalId = payment.body.preapproval_id;
+        const email = payment.body.payer?.email;
+        const amount = payment.body.transaction_amount;
+        
+        console.log('🔍 Buscando usuario con email:', email);
+        console.log('🔍 Buscando usuario con preapprovalId:', preapprovalId);
+        
+        // 👇 PRIORIZAR BÚSQUEDA POR EMAIL (más específico)
+        let user = null;
+        
+        // 1. Buscar por email (el pagador)
+        if (email) {
+          user = await User.findOne({ email: email });
+          if (user) {
+            console.log('👤 Usuario encontrado por email:', user.email);
+          }
+        }
+        
+        // 2. Si no se encuentra por email, buscar por preapprovalId
+        if (!user && preapprovalId) {
+          user = await User.findOne({ 'settings.preapprovalId': preapprovalId });
+          if (user) {
+            console.log('👤 Usuario encontrado por preapprovalId:', user.email);
+          }
+        }
+        
+        // 3. Si no se encuentra, buscar en todos los usuarios con preapprovalId
+        if (!user) {
+          console.warn('⚠️ Usuario NO encontrado por email ni preapprovalId');
+          console.log('📋 Buscando en todos los usuarios con preapprovalId...');
+          const allUsers = await User.find({ 
+            'settings.preapprovalId': { $exists: true } 
+          }).select('email settings.preapprovalId');
+          
+          console.log('  Usuarios encontrados:', allUsers.length);
+          allUsers.forEach(u => {
+            console.log(`  - ${u.email}: ${u.settings?.preapprovalId}`);
+          });
+          
+          return res.status(200).json({ 
+            status: 'ok', 
+            message: 'Usuario no encontrado',
+            debug: { preapprovalId, email }
+          });
+        }
+        
+        console.log('👤 Usuario encontrado:', user.email);
+        console.log('👤 ID:', user._id);
+        
+        // ✅ Guardar TODOS los datos del pago
+        const fechaActual = new Date();
+        const nuevoProximoPago = new Date();
+        nuevoProximoPago.setDate(nuevoProximoPago.getDate() + 30);
+        
+        console.log('📅 Fecha actual:', fechaActual.toISOString());
+        console.log('📅 Próximo pago:', nuevoProximoPago.toISOString());
+        console.log('💰 Monto:', amount);
+        
+        await User.findByIdAndUpdate(user._id, {
+          'settings.suscripcionActiva': true,
+          'settings.estadoCicloVida': 'suscripto',
+          'settings.fechaUltimoPago': fechaActual,
+          'settings.proximoPago': nuevoProximoPago,
+          'settings.ultimoMontoPago': amount,
+          'settings.preapprovalId': preapprovalId,
+          'plan': 'pro'
         });
-        console.log('✅ mercadopago.configure() ejecutado');
         
-        // Verificar configuración (usando el método de verificación correcto)
-        // En la versión legacy, no hay propiedad 'config', se usa directamente
-        console.log('🔍 Verificando configuración...');
+        console.log('✅ Suscripción ACTIVADA para:', user.email);
+        console.log('📅 Fecha del pago:', fechaActual.toISOString());
+        console.log('📅 Próximo pago:', nuevoProximoPago.toISOString());
+        console.log('💰 Monto:', amount);
+        console.log('💳 Plan actualizado a: pro');
+        console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         
-        // Intentar hacer una llamada de prueba para verificar que funciona
-        console.log('🔧 Haciendo llamada de prueba a la API...');
-        const testPayment = await mercadopago.payment.findById(paymentId);
-        console.log('✅ Llamada de prueba exitosa!');
-        console.log('📊 Estado del pago:', testPayment.body.status);
-        
-        // Si llegamos aquí, la configuración funcionó
-        console.log('✅ mercadopago configurado correctamente');
-        
-        // Procesar el pago
-        if (testPayment.body.status === 'approved') {
-          console.log('✅ Pago APROBADO! Procesando...');
-          const preapprovalId = testPayment.body.preapproval_id;
-          const email = testPayment.body.payer?.email;
-          const amount = testPayment.body.transaction_amount;
-          
-          console.log('🔍 Buscando usuario con preapprovalId:', preapprovalId);
-          console.log('🔍 O con email:', email);
-          
-          let user = await User.findOne({ 
-            $or: [
-              { 'settings.preapprovalId': preapprovalId },
-              { email: email }
-            ]
-          });
-          
-          if (!user) {
-            console.warn('⚠️ Usuario NO encontrado');
-            return res.status(200).json({ 
-              status: 'ok', 
-              message: 'Usuario no encontrado',
-              debug: { preapprovalId, email }
-            });
-          }
-          
-          console.log('👤 Usuario encontrado:', user.email);
-          
-          const nuevoProximoPago = new Date();
-          nuevoProximoPago.setDate(nuevoProximoPago.getDate() + 30);
-          
-          await User.findByIdAndUpdate(user._id, {
-            'settings.suscripcionActiva': true,
-            'settings.estadoCicloVida': 'suscripto',
-            'settings.fechaUltimoPago': new Date(),
-            'settings.proximoPago': nuevoProximoPago,
-            'settings.ultimoMontoPago': amount,
-            'settings.preapprovalId': preapprovalId,
-            'plan': 'pro'
-          });
-          
-          console.log('✅ Suscripción ACTIVADA para:', user.email);
-          
-          return res.status(200).json({ 
-            status: 'ok', 
-            message: 'Suscripción activada correctamente',
-            usuario: user.email
-          });
-        } else {
-          console.log('ℹ️ Pago NO aprobado:', testPayment.body.status);
-          return res.status(200).json({ 
-            status: 'ok', 
-            message: 'Pago no aprobado',
-            estadoPago: testPayment.body.status
-          });
-        }
-      } catch (configError) {
-        console.error('❌ Error en configuración o llamada a API:', configError.message);
-        console.error('❌ Stack:', configError.stack);
-        
-        // Intentar un método alternativo de configuración
-        console.log('🔧 Intentando método alternativo...');
-        try {
-          // Método alternativo: configurar usando la instancia directamente
-          const mp = require('mercadopago');
-          mp.configure({
-            access_token: token
-          });
-          
-          // Intentar la llamada nuevamente
-          const payment = await mp.payment.findById(paymentId);
-          console.log('✅ Método alternativo exitoso!');
-          console.log('📊 Estado del pago:', payment.body.status);
-          
-          // Procesar el pago (similar al código de arriba)
-          if (payment.body.status === 'approved') {
-            // ... mismo código de procesamiento
-          }
-        } catch (fallbackError) {
-          console.error('❌ Error en método alternativo:', fallbackError.message);
-          return res.status(500).json({
-            error: 'Error configurando Mercado Pago',
-            details: fallbackError.message
-          });
-        }
+        return res.status(200).json({ 
+          status: 'ok', 
+          message: 'Suscripción activada correctamente',
+          usuario: user.email,
+          fechaPago: fechaActual.toISOString(),
+          proximoPago: nuevoProximoPago.toISOString(),
+          monto: amount
+        });
+      } else {
+        console.log('ℹ️ Pago NO aprobado:', payment.body.status);
+        return res.status(200).json({ 
+          status: 'ok', 
+          message: 'Pago no aprobado',
+          estadoPago: payment.body.status
+        });
       }
     }
     

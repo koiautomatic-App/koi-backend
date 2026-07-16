@@ -9,7 +9,8 @@ const path = require('path');
 const config = require('./config');
 const logger = require('./utils/logger');
 
-
+// 👇 CONFIGURAR MERCADO PAGO AL INICIO
+require('./config/mercadopago');
 
 const app = express();
 

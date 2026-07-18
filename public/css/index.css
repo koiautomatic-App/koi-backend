@@ -6584,3 +6584,452 @@ table.comp-table-report tr.total td:last-child {
     border: 1px solid rgba(255,255,255,0.06) !important;
     color: #f0f0fa !important;
 }
+/* ============================================================
+   MI PLAN - ESTILOS DEFINITIVOS KOI
+   ============================================================ */
+
+/* Contenedor principal */
+.suscripcion-container {
+    max-width: 100%;
+    width: 100%;
+    margin: 0 auto;
+    padding: 16px 24px 24px;
+    background: #080810;
+    color: #f0f0fa;
+}
+
+/* Header */
+.suscripcion-header {
+    margin-bottom: 24px;
+    position: relative;
+    padding-bottom: 12px;
+    border-bottom: 2px solid rgba(232, 98, 42, 0.15);
+}
+
+.suscripcion-header h1 {
+    font-size: 20px;
+    font-weight: 700;
+    color: #f0f0fa;
+    margin-bottom: 4px;
+}
+
+.suscripcion-header p {
+    color: #8888aa;
+    font-size: 13px;
+    margin: 0;
+}
+
+/* Cards base */
+.suscripcion-card {
+    background: #0d0d16;
+    border: 1px solid rgba(255, 255, 255, 0.055);
+    border-radius: 16px;
+    padding: 20px 24px;
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    margin-bottom: 16px;
+    transition: all 0.2s ease;
+    position: relative;
+    overflow: hidden;
+}
+
+.suscripcion-card:hover {
+    border-color: rgba(232, 98, 42, 0.2);
+    transform: translateY(-2px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+}
+
+/* Línea superior de cards (como el dashboard) */
+.suscripcion-card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, #e8622a, #f5a623, #00e676);
+    opacity: 0.6;
+}
+
+/* Status card */
+.status-card {
+    border-top: 3px solid #00e676;
+}
+
+/* Badge "Suscripción activa" */
+.badge-active {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(0, 230, 118, 0.08);
+    border: 1px solid rgba(0, 230, 118, 0.15);
+    color: #00e676;
+    border-radius: 40px;
+    padding: 4px 14px;
+    font-size: 11px;
+    font-weight: 700;
+}
+
+/* Badge "PRO" - NARANJA */
+.plan-badge {
+    background: rgba(232, 98, 42, 0.1);
+    color: #f5a623;
+    border-radius: 20px;
+    padding: 3px 14px;
+    font-size: 10px;
+    font-weight: 700;
+    border: 1px solid rgba(232, 98, 42, 0.15);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Precio */
+.plan-price-sub {
+    color: #8888aa;
+    font-size: 13px;
+}
+
+.plan-price-sub strong {
+    color: #f5a623;
+    font-weight: 700;
+}
+
+/* Detail box */
+.detail-box {
+    background: rgba(255, 255, 255, 0.02);
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin: 12px 0;
+    border: 1px solid rgba(232, 98, 42, 0.06);
+}
+
+.detail-row {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.detail-row:last-child {
+    border-bottom: none;
+}
+
+.detail-row span:first-child {
+    color: #8888aa;
+    font-size: 12px;
+}
+
+.detail-row span:last-child {
+    color: #f0f0fa;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* Valores importantes en naranja */
+.detail-row span:last-child[data-highlight="true"] {
+    color: #f5a623;
+}
+
+/* Botones */
+.suscripcion-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin-top: 20px;
+}
+
+/* Botón Descargar - VERDE */
+.btn-suscripcion.download {
+    background: linear-gradient(135deg, #00e676, #00c853);
+    border: none;
+    color: #080810;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    box-shadow: 0 4px 16px rgba(0, 230, 118, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-suscripcion.download:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 24px rgba(0, 230, 118, 0.4);
+}
+
+/* Botón Cancelar - NARANJA */
+.btn-suscripcion.cancel {
+    background: rgba(232, 98, 42, 0.08);
+    border: 1px solid rgba(232, 98, 42, 0.2);
+    color: #f5a623;
+    border-radius: 10px;
+    padding: 12px 20px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-suscripcion.cancel:hover {
+    background: rgba(232, 98, 42, 0.15);
+    border: 1px solid rgba(232, 98, 42, 0.4);
+    transform: translateY(-2px);
+}
+
+/* Botón Cambiar método - GHOST NARANJA */
+.btn-suscripcion.ghost {
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(232, 98, 42, 0.15);
+    color: #8888aa;
+    border-radius: 10px;
+    padding: 10px 18px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin-top: 16px;
+}
+
+.btn-suscripcion.ghost:hover {
+    border: 1px solid rgba(232, 98, 42, 0.4);
+    color: #f5a623;
+    background: rgba(232, 98, 42, 0.05);
+}
+
+/* Historial de pagos - Tabla */
+.history-table-wrapper {
+    overflow-y: auto;
+    max-height: 300px;
+    scrollbar-width: thin;
+    scrollbar-color: #e8622a transparent;
+}
+
+.history-table-wrapper::-webkit-scrollbar {
+    width: 4px;
+}
+
+.history-table-wrapper::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.history-table-wrapper::-webkit-scrollbar-thumb {
+    background: linear-gradient(180deg, #e8622a, #f5a623);
+    border-radius: 4px;
+}
+
+.history-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+}
+
+.history-table th {
+    color: #44445a;
+    font-size: 9px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    padding: 8px 12px;
+    text-align: left;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.055);
+}
+
+.history-table td {
+    color: #f0f0fa;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+    font-size: 12px;
+}
+
+/* Chip "Pagado" - VERDE */
+.chip-paid {
+    background: rgba(0, 230, 118, 0.08);
+    color: #00e676;
+    border-radius: 20px;
+    padding: 3px 12px;
+    font-size: 10px;
+    font-weight: 600;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    border: 1px solid rgba(0, 230, 118, 0.1);
+}
+
+.chip-dot {
+    width: 5px;
+    height: 5px;
+    background: #00e676;
+    border-radius: 50%;
+}
+
+/* Footer de tabla */
+.table-footer {
+    color: #8888aa;
+    font-size: 11px;
+    padding: 10px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.055);
+    margin-top: 8px;
+    text-align: right;
+}
+
+.table-footer strong {
+    color: #f5a623;
+}
+
+/* Tarjeta de método de pago */
+.card-face-wrap {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 16px;
+}
+
+.card-face {
+    width: 56px;
+    height: 36px;
+    background: linear-gradient(135deg, #1a1a30, #252545);
+    border-radius: 8px;
+    position: relative;
+    flex-shrink: 0;
+    border: 1px solid rgba(232, 98, 42, 0.15);
+}
+
+.card-chip {
+    position: absolute;
+    bottom: 5px;
+    left: 5px;
+    width: 11px;
+    height: 9px;
+    background: #f5a623;
+    border-radius: 2px;
+    opacity: 0.5;
+}
+
+.card-mc {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    display: flex;
+}
+
+.card-mc span {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+}
+
+.card-mc span:first-child {
+    background: #eb001b;
+}
+
+.card-mc span:last-child {
+    background: #f79e1b;
+    margin-left: -4px;
+}
+
+.card-number {
+    font-weight: 700;
+    font-size: 14px;
+    color: #f0f0fa;
+}
+
+.card-meta {
+    font-size: 11px;
+    color: #8888aa;
+    margin-top: 4px;
+}
+
+/* Soporte */
+.support-card {
+    margin-top: auto;
+}
+
+.support-links {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.support-link {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 14px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 10px;
+    text-decoration: none;
+    color: #8888aa;
+    font-size: 13px;
+    transition: all 0.2s ease;
+}
+
+.support-link:hover {
+    border: 1px solid rgba(232, 98, 42, 0.2);
+    color: #f5a623;
+    background: rgba(232, 98, 42, 0.05);
+    transform: translateX(4px);
+}
+
+/* Sec labels - NARANJA */
+.sec-label {
+    color: #44445a;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .suscripcion-actions {
+        grid-template-columns: 1fr;
+    }
+
+    .suscripcion-card {
+        padding: 16px 18px;
+    }
+
+    .suscripcion-container {
+        padding: 12px 16px;
+    }
+
+    .suscripcion-header h1 {
+        font-size: 18px;
+    }
+}
+
+@media (max-width: 480px) {
+    .suscripcion-card {
+        padding: 14px 16px;
+        border-radius: 12px;
+    }
+
+    .card-face {
+        width: 44px;
+        height: 28px;
+    }
+
+    .card-number {
+        font-size: 12px;
+    }
+
+    .detail-row {
+        flex-direction: column;
+        gap: 2px;
+        padding: 6px 0;
+    }
+}

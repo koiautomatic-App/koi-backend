@@ -1590,22 +1590,42 @@ async function guardarSwitch(key, value) {
     
     if (!res.ok) throw new Error('Error al guardar');
     
-    // ✅ Usar IDs correctos
-    const swId = key === 'factAuto' ? 'switchFactAuto' : 'switchEnvioAuto';
-    const sw = document.getElementById(swId);
-    if (sw) sw.checked = value;
+    // ✅ Mapeo de IDs y nombres
+    const mapping = {
+      'factAuto': { id: 'switchFacturacionAuto', nombre: 'Facturación automática' },
+      'envioAuto': { id: 'switchEnvioAuto', nombre: 'Envío automático de factura' },
+      'envioReporteAuto': { id: 'switchEnvioReporte', nombre: 'Envío automático de reporte' }
+    };
     
-    const nombre = key === 'factAuto' ? 'Facturación automática' : 'Envío automático';
-    toast(`${nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
+    const config = mapping[key];
+    if (config) {
+      const sw = document.getElementById(config.id);
+      if (sw) sw.checked = value;
+      
+      if (typeof toast === 'function') {
+        toast(`${config.nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
+      }
+    }
     
     const statusDiv = document.getElementById('cfgAutoStatus');
     if (statusDiv) {
       statusDiv.classList.add('visible');
       setTimeout(() => statusDiv.classList.remove('visible'), 2000);
     }
+    
   } catch(e) {
-    toast('Error al guardar: ' + e.message, 'error');
-    const swId = key === 'factAuto' ? 'switchFactAuto' : 'switchEnvioAuto';
+    console.error('Error:', e.message);
+    if (typeof toast === 'function') {
+      toast('Error al guardar: ' + e.message, 'error');
+    }
+    
+    // Revertir el switch si falló
+    const mapping = {
+      'factAuto': 'switchFacturacionAuto',
+      'envioAuto': 'switchEnvioAuto',
+      'envioReporteAuto': 'switchEnvioReporte'
+    };
+    const swId = mapping[key];
     const sw = document.getElementById(swId);
     if (sw) sw.checked = !value;
   }

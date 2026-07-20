@@ -1660,46 +1660,55 @@
       </div>
     </div>
 
-    <!-- AUTOMATIZACIÓN -->
-    <div class="cfg-section sec-perfil">
-      <div class="cfg-sec-title">
-        <span class="material-icons">bolt</span>
-        Automatización
-      </div>
-      <div class="cfg-sec-desc">Controlá cómo KOI emite y envía facturas.</div>
+  <!-- AUTOMATIZACIÓN -->
+<div class="cfg-section sec-perfil">
+  <div class="cfg-sec-title">
+    <span class="material-icons">bolt</span>
+    Automatización
+  </div>
+  <div class="cfg-sec-desc">Controlá cómo KOI emite, envía facturas y reportes.</div>
 
-      <div class="cfg-switch-row" style="margin-top:16px">
-        <div>
-          <div class="cfg-switch-title">Facturación Automática</div>
-          <div class="cfg-switch-sub">Emite el comprobante automáticamente al recibir una venta</div>
-        </div>
-        <label class="cfg-switch">
-          <input type="checkbox" id="switchFacturacionAuto" checked onchange="guardarSwitch('factAuto',this.checked)"/>
-          <span class="cfg-track"></span>
-        </label>
-      </div>
-
-      <div class="cfg-switch-row" style="margin-top:14px">
-        <div>
-          <div class="cfg-switch-title">Envío Automático de Factura</div>
-          <div class="cfg-switch-sub">Envía la factura por mail al cliente al momento de emitirla</div>
-        </div>
-        <label class="cfg-switch">
-          <input type="checkbox" id="switchEnvioAuto" checked onchange="guardarSwitch('envioAuto',this.checked)"/>
-          <span class="cfg-track"></span>
-        </label>
-      </div>
-
-      <div id="cfgAutoStatus" style="display:none;margin-top:12px">
-        <span class="cfg-badge-ok">
-          <span class="material-icons">check_circle</span>
-          Guardado
-        </span>
-      </div>
+  <div class="cfg-switch-row" style="margin-top:16px">
+    <div>
+      <div class="cfg-switch-title">Facturación Automática</div>
+      <div class="cfg-switch-sub">Emite el comprobante automáticamente al recibir una venta</div>
     </div>
+    <label class="cfg-switch">
+      <input type="checkbox" id="switchFacturacionAuto" checked onchange="guardarSwitch('factAuto',this.checked)"/>
+      <span class="cfg-track"></span>
+    </label>
+  </div>
 
-  </div><!-- /cfg-body -->
-</div><!-- /cfg-panel -->
+  <div class="cfg-switch-row" style="margin-top:14px">
+    <div>
+      <div class="cfg-switch-title">Envío Automático de Factura</div>
+      <div class="cfg-switch-sub">Envía la factura por mail al cliente al momento de emitirla</div>
+    </div>
+    <label class="cfg-switch">
+      <input type="checkbox" id="switchEnvioAuto" checked onchange="guardarSwitch('envioAuto',this.checked)"/>
+      <span class="cfg-track"></span>
+    </label>
+  </div>
+
+  <!-- 👇 NUEVO SWITCH - ENVÍO AUTOMÁTICO DE REPORTE -->
+  <div class="cfg-switch-row" style="margin-top:14px">
+    <div>
+      <div class="cfg-switch-title">Envío Automático de Reporte</div>
+      <div class="cfg-switch-sub">Envía el reporte mensual automáticamente al contador</div>
+    </div>
+    <label class="cfg-switch">
+      <input type="checkbox" id="switchEnvioReporte" onchange="guardarSwitch('envioReporteAuto',this.checked)"/>
+      <span class="cfg-track"></span>
+    </label>
+  </div>
+
+  <div id="cfgAutoStatus" style="display:none;margin-top:12px">
+    <span class="cfg-badge-ok">
+      <span class="material-icons">check_circle</span>
+      Guardado
+    </span>
+  </div>
+</div>
 
 <div class="mob-overlay" id="mobOverlay" onclick="cerrarSidebar()"></div>
 <div id="toasts"></div>

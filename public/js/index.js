@@ -1582,11 +1582,34 @@ function guardarPerfilVista() {
   });
 }
 
+// Variable para controlar ejecuciones duplicadas
+let _ultimoCambio = {};
+let _timeout = {};
+
 async function guardarSwitch(key, value) {
+    // 🔒 PREVENIR EJECUCIONES DUPLICADAS (debounce)
+    const now = Date.now();
+    
+    // Si la misma key se llama en menos de 300ms, ignorar
+    if (_ultimoCambio[key] && (now - _ultimoCambio[key] < 300)) {
+        console.log(`⏳ Ignorando ejecución duplicada de ${key} (${now - _ultimoCambio[key]}ms)`);
+        return;
+    }
+    _ultimoCambio[key] = now;
+    
+    // Limpiar timeout anterior
+    if (_timeout[key]) {
+        clearTimeout(_timeout[key]);
+    }
+    
+    // Después de 500ms, permitir nuevas ejecuciones
+    _timeout[key] = setTimeout(() => {
+        _ultimoCambio[key] = 0;
+    }, 500);
+    
     console.log(`📤 guardarSwitch: ${key} = ${value}`);
     
     try {
-        // 👇 CONSTRUIR PAYLOAD CORRECTAMENTE
         const payload = {};
         payload[key] = value;
         
@@ -1632,7 +1655,7 @@ async function guardarSwitch(key, value) {
             setTimeout(() => statusDiv.classList.remove('visible'), 2000);
         }
         
-        // 👇 VERIFICAR QUE SE GUARDÓ
+        // Verificar que se guardó
         const verifyRes = await fetch('/api/me', { credentials: 'include' });
         const verifyData = await verifyRes.json();
         console.log(`📊 Verificación: ${key} = ${verifyData.user?.settings?.[key]}`);

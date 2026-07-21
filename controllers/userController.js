@@ -20,15 +20,15 @@ const updateSettings = async (req, res) => {
 
       // Campos permitidos para actualización
     const allowed = [
-      'factAuto', 'envioAuto', 'categoria', 'condicionFiscal', 'cuit', 'razonSocial',
-      'puntoVenta', 'tipoComprobante', 'nombre', 'apellido', 'logoUrl',
-      'fechaInicioVinculacion', 'inicioCortesia', 'finCortesia', 'inicioExtension',
-      'finExtension', 'fechaSuscripcion', 'ultimoPago', 'proximoPago',
-      'fechaCancelacion', 'fechaExpiracion', 'estadoCicloVida', 'planId',
-      'planNombre', 'precioSuscripcion', 'arcaStatus', 'suscripcionActiva',
-      // 👇 AGREGAR ESTOS 👇
-      'contadorEmail', 'contadorNombre'
-    ];
+  'factAuto', 'envioAuto', 'envioReporteAuto', // 👈 AGREGAR ESTA LÍNEA
+  'categoria', 'condicionFiscal', 'cuit', 'razonSocial',
+  'puntoVenta', 'tipoComprobante', 'nombre', 'apellido', 'logoUrl',
+  'fechaInicioVinculacion', 'inicioCortesia', 'finCortesia', 'inicioExtension',
+  'finExtension', 'fechaSuscripcion', 'ultimoPago', 'proximoPago',
+  'fechaCancelacion', 'fechaExpiracion', 'estadoCicloVida', 'planId',
+  'planNombre', 'precioSuscripcion', 'arcaStatus', 'suscripcionActiva',
+  'contadorEmail', 'contadorNombre'
+];
 
     // 🔒 SOLO ADMIN puede modificar fechaVinculacionARCA
     if (req.body.fechaVinculacionARCA) {

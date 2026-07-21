@@ -7710,7 +7710,29 @@ function initEnvioAutomaticoReporte() {
         verificarYEnviarReporteAutomatico(false);
     }, 3600000); // 1 hora
 }
+// ============================================================
+//  MANEJADOR ESPECÍFICO PARA EL SWITCH DE REPORTE
+//  - Previene interferencia con otros switches
+// ============================================================
 
+let _reporteTimeout = null;
+
+function handleSwitchReporte(checked) {
+    console.log(`📊 handleSwitchReporte: ${checked}`);
+    
+    // Debounce para evitar ejecuciones múltiples
+    if (_reporteTimeout) {
+        clearTimeout(_reporteTimeout);
+    }
+    
+    _reporteTimeout = setTimeout(() => {
+        guardarSwitch('envioReporteAuto', checked);
+        _reporteTimeout = null;
+    }, 50);
+}
+
+// Exponer la función globalmente
+window.handleSwitchReporte = handleSwitchReporte;
 // Exponer funciones globalmente
 window.verificarYEnviarReporteAutomatico = verificarYEnviarReporteAutomatico;
 window.handleSwitchReporte = handleSwitchReporte;

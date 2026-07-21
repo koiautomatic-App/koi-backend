@@ -793,21 +793,21 @@
     </div>
   </div>
 
-  <!-- 👇 SWITCH 3: Envío Automático de Reporte (NUEVO) -->
-  <div class="cfg-switch-row">
-    <div class="cfg-switch-left">
-      <div class="cfg-switch-title" style="display:flex;align-items:center;gap:8px;">
-        <span style="font-size:16px;"></span> Envío Automático de Reporte
-      </div>
-      <div class="cfg-switch-sub">Envía el reporte mensual automáticamente al contador</div>
+<!-- 👇 SWITCH 3: Envío Automático de Reporte (NUEVO) -->
+<div class="cfg-switch-row">
+  <div class="cfg-switch-left">
+    <div class="cfg-switch-title" style="display:flex;align-items:center;gap:8px;">
+      <span style="font-size:16px;">📊</span> Envío Automático de Reporte
     </div>
-    <div class="cfg-switch-right">
-      <label class="koi-toggle">
-        <input type="checkbox" id="switchEnvioReporte" onchange="guardarSwitch('envioReporteAuto', this.checked)">
-        <span class="koi-toggle-track"></span>
-      </label>
-    </div>
+    <div class="cfg-switch-sub">Envía el reporte mensual automáticamente al contador</div>
   </div>
+  <div class="cfg-switch-right">
+    <label class="koi-toggle">
+      <input type="checkbox" id="switchEnvioReporte" onclick="handleSwitchReporte(this.checked)">
+      <span class="koi-toggle-track"></span>
+    </label>
+  </div>
+</div>
 
   <div id="cfgAutoStatus" class="cfg-save-ok">
     <span class="material-icons">check_circle</span> Guardado

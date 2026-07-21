@@ -6638,27 +6638,25 @@ function renderizarTablaReporte(comprobantes) {
 }
 
 function cambiarMesReporte(mes, btn) {
-    // Actualizar variables globales
-    _reporteMes = mes;
-    window._reporteMes = mes;
+    console.log(`📅 Cambiando a: ${mes + 1} (${btn.textContent.trim()})`);
     
-    // Actualizar año (usar el año actual o el que tenga el botón)
+    // Actualizar variables globales
     const anio = new Date().getFullYear();
-    _reporteAnio = anio;
+    window._reporteMes = mes;
     window._reporteAnio = anio;
+    _reporteMes = mes;
+    _reporteAnio = anio;
     
     // Actualizar UI de botones
     document.querySelectorAll('.month-btn-report').forEach(b => b.classList.remove('active'));
     if (btn) {
         btn.classList.add('active');
-        // Asegurar que el botón tenga data-mes
-        if (!btn.hasAttribute('data-mes')) {
-            btn.setAttribute('data-mes', mes);
-        }
-        if (!btn.hasAttribute('data-anio')) {
-            btn.setAttribute('data-anio', anio);
-        }
+        // 👇 FORZAR la actualización de data-mes y data-anio
+        btn.setAttribute('data-mes', mes);
+        btn.setAttribute('data-anio', anio);
     }
+    
+    console.log(`✅ window._reporteMes = ${window._reporteMes}, window._reporteAnio = ${window._reporteAnio}`);
     
     const ahora = new Date();
     if (mes > ahora.getMonth() && anio === ahora.getFullYear()) {
@@ -7013,37 +7011,61 @@ function initReporteCompleto() {
             
             console.log('🖱️ Click en ENVIAR REPORTE');
             
-            // 👇 1. OBTENER MES DESDE EL BOTÓN ACTIVO (FUENTE DE VERDAD)
-            const btnActivo = document.querySelector('.month-btn-report.active');
-            
-            // SI NO HAY BOTÓN ACTIVO, USAR EL QUE DICE "Abr" (mes 3)
-            let mesSeleccionado = 3; // Valor por defecto: Abril
+            // 👇 1. OBTENER MES (PRIORIDAD: window._reporteMes)
+            let mesSeleccionado = null;
             let anioSeleccionado = new Date().getFullYear();
             
-            if (btnActivo) {
-                const mesAttr = btnActivo.getAttribute('data-mes');
-                if (mesAttr !== null) {
-                    mesSeleccionado = parseInt(mesAttr);
-                } else {
-                    // Si no tiene data-mes, intentar extraer del texto
-                    const texto = btnActivo.textContent.trim();
-                    const mesesMap = {
-                        'Ene': 0, 'Feb': 1, 'Mar': 2, 'Abr': 3,
-                        'May': 4, 'Jun': 5, 'Jul': 6, 'Ago': 7,
-                        'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dic': 11
-                    };
-                    if (mesesMap[texto] !== undefined) {
-                        mesSeleccionado = mesesMap[texto];
+            // 🔥 PRIORIDAD 1: window._reporteMes (actualizado por cambiarMesReporte)
+            if (window._reporteMes !== undefined && window._reporteMes !== null) {
+                mesSeleccionado = window._reporteMes;
+                console.log(`📊 Usando window._reporteMes: ${mesSeleccionado + 1}`);
+            }
+            
+            // 🔥 PRIORIDAD 2: data-mes del botón activo
+            if (mesSeleccionado === null) {
+                const btnActivo = document.querySelector('.month-btn-report.active');
+                if (btnActivo) {
+                    const mesAttr = btnActivo.getAttribute('data-mes');
+                    if (mesAttr !== null) {
+                        mesSeleccionado = parseInt(mesAttr);
+                        console.log(`📊 Usando data-mes del botón: ${mesSeleccionado + 1}`);
+                    } else {
+                        // Si no tiene data-mes, extraer del texto
+                        const texto = btnActivo.textContent.trim();
+                        const mesesMap = {
+                            'Ene': 0, 'Feb': 1, 'Mar': 2, 'Abr': 3,
+                            'May': 4, 'Jun': 5, 'Jul': 6, 'Ago': 7,
+                            'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dic': 11
+                        };
+                        if (mesesMap[texto] !== undefined) {
+                            mesSeleccionado = mesesMap[texto];
+                            console.log(`📊 Mes extraído del texto: ${texto} → ${mesSeleccionado + 1}`);
+                        }
                     }
-                }
-                
-                const anioAttr = btnActivo.getAttribute('data-anio');
-                if (anioAttr !== null) {
-                    anioSeleccionado = parseInt(anioAttr);
                 }
             }
             
-            console.log(`📊 Mes seleccionado desde UI: ${mesSeleccionado + 1} (${new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' })})`);
+            // 🔥 PRIORIDAD 3: fallback - mes actual
+            if (mesSeleccionado === null) {
+                mesSeleccionado = new Date().getMonth();
+                console.log(`📊 Usando mes actual (fallback): ${mesSeleccionado + 1}`);
+            }
+            
+            // Año
+            if (window._reporteAnio !== undefined && window._reporteAnio !== null) {
+                anioSeleccionado = window._reporteAnio;
+            } else {
+                const btnActivo = document.querySelector('.month-btn-report.active');
+                if (btnActivo) {
+                    const anioAttr = btnActivo.getAttribute('data-anio');
+                    if (anioAttr !== null) {
+                        anioSeleccionado = parseInt(anioAttr);
+                    }
+                }
+            }
+            
+            const nombreMes = new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' });
+            console.log(`✅ MES FINAL SELECCIONADO: ${mesSeleccionado + 1} (${nombreMes}) ${anioSeleccionado}`);
             
             // 👇 2. LEER EL RESTO DE LOS DATOS
             const emailInput = document.getElementById('rptContadorEmailInput');
@@ -7067,22 +7089,19 @@ function initReporteCompleto() {
             this.style.opacity = '0.7';
             
             try {
-                // 👇 3. CONSTRUIR PAYLOAD CON EL MES CORRECTO
+                // 👇 3. CONSTRUIR PAYLOAD
                 const payload = {
                     contadorEmail: email,
                     contadorNombre: nombreContador,
                     nota: nota,
-                    mes: mesSeleccionado,   // 👈 USAR EL MES DE LA UI
-                    anio: anioSeleccionado, // 👈 USAR EL AÑO DE LA UI
+                    mes: mesSeleccionado,
+                    anio: anioSeleccionado,
                     incluirComprobantes: incluirComprobantes,
                     incluirCategoria: incluirCategoria,
                     incluirNC: incluirNC
                 };
                 
-                console.log('📤 Enviando payload con mes correcto:', {
-                    ...payload,
-                    mesNombre: new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' })
-                });
+                console.log('📤 Enviando payload:', payload);
                 
                 const res = await fetch('/api/reports/send', {
                     method: 'POST',
@@ -7095,7 +7114,6 @@ function initReporteCompleto() {
                 console.log('📥 Respuesta:', data);
                 
                 if (data.ok) {
-                    const nombreMes = new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' });
                     const nombreMesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
                     
                     if (typeof toast === 'function') {
@@ -7142,7 +7160,7 @@ function initReporteCompleto() {
             }
         });
         
-        console.log('✅ Botón Enviar reporte conectado con lectura directa de UI');
+        console.log('✅ Botón Enviar reporte conectado');
     } else {
         console.warn('⚠️ Botón rptBtnEnviar no encontrado');
     }

@@ -6504,6 +6504,29 @@ async function cargarDatosReporte() {
   window._reporteAnio = anio;
   console.log(`📊 Reporte cargado para: ${mes + 1}/${anio}`);
   
+  // 🔥 SINCRONIZAR EL BOTÓN ACTIVO CON window._reporteMes
+  const btnActivo = document.querySelector('.month-btn-report.active');
+  if (btnActivo) {
+    const mesActual = btnActivo.getAttribute('data-mes');
+    if (mesActual !== null && parseInt(mesActual) !== mes) {
+      console.log(`🔧 Sincronizando botón: data-mes ${mesActual} → ${mes}`);
+      btnActivo.setAttribute('data-mes', mes);
+      btnActivo.setAttribute('data-anio', anio);
+    }
+  } else {
+    // Si no hay botón activo, buscar el que corresponde al mes
+    document.querySelectorAll('.month-btn-report').forEach(btn => {
+      const btnMes = btn.getAttribute('data-mes');
+      if (btnMes !== null && parseInt(btnMes) === mes) {
+        btn.classList.add('active');
+        btn.setAttribute('data-anio', anio);
+        console.log(`🔧 Activando botón para mes ${mes + 1}`);
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+  
   const fechaInicio = new Date(anio, mes, 1);
   const fechaFin = new Date(anio, mes + 1, 0);
   

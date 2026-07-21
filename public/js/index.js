@@ -6637,21 +6637,39 @@ function renderizarTablaReporte(comprobantes) {
   if (tbody) tbody.innerHTML = html;
 }
 
-// Cambiar mes
 function cambiarMesReporte(mes, btn) {
+    // Actualizar variables globales
     _reporteMes = mes;
-    window._reporteMes = mes; // 👈 SINCRONIZAR CON window
-    window._reporteAnio = _reporteAnio; // 👈 SINCRONIZAR AÑO TAMBIÉN
+    window._reporteMes = mes;
     
+    // Actualizar año (usar el año actual o el que tenga el botón)
+    const anio = new Date().getFullYear();
+    _reporteAnio = anio;
+    window._reporteAnio = anio;
+    
+    // Actualizar UI de botones
     document.querySelectorAll('.month-btn-report').forEach(b => b.classList.remove('active'));
-    if (btn) btn.classList.add('active');
+    if (btn) {
+        btn.classList.add('active');
+        // Asegurar que el botón tenga data-mes
+        if (!btn.hasAttribute('data-mes')) {
+            btn.setAttribute('data-mes', mes);
+        }
+        if (!btn.hasAttribute('data-anio')) {
+            btn.setAttribute('data-anio', anio);
+        }
+    }
     
     const ahora = new Date();
-    if (mes > ahora.getMonth() && _reporteAnio === ahora.getFullYear()) {
+    if (mes > ahora.getMonth() && anio === ahora.getFullYear()) {
         console.log('⚠️ Mes futuro, no hay datos');
+        if (typeof toast === 'function') {
+            toast('📅 No hay datos para meses futuros', 'warn');
+        }
         return;
     }
     
+    // Recargar datos del reporte
     cargarDatosReporte();
 }
 
@@ -6995,32 +7013,37 @@ function initReporteCompleto() {
             
             console.log('🖱️ Click en ENVIAR REPORTE');
             
-            // 👇 1. OBTENER EL MES DESDE EL BOTÓN ACTIVO (FUENTE DE VERDAD)
-            let mesSeleccionado = null;
+            // 👇 1. OBTENER MES DESDE EL BOTÓN ACTIVO (FUENTE DE VERDAD)
+            const btnActivo = document.querySelector('.month-btn-report.active');
+            
+            // SI NO HAY BOTÓN ACTIVO, USAR EL QUE DICE "Abr" (mes 3)
+            let mesSeleccionado = 3; // Valor por defecto: Abril
             let anioSeleccionado = new Date().getFullYear();
             
-            // Buscar el botón de mes activo en la UI
-            const btnActivo = document.querySelector('.month-btn-report.active');
             if (btnActivo) {
                 const mesAttr = btnActivo.getAttribute('data-mes');
                 if (mesAttr !== null) {
                     mesSeleccionado = parseInt(mesAttr);
+                } else {
+                    // Si no tiene data-mes, intentar extraer del texto
+                    const texto = btnActivo.textContent.trim();
+                    const mesesMap = {
+                        'Ene': 0, 'Feb': 1, 'Mar': 2, 'Abr': 3,
+                        'May': 4, 'Jun': 5, 'Jul': 6, 'Ago': 7,
+                        'Sep': 8, 'Oct': 9, 'Nov': 10, 'Dic': 11
+                    };
+                    if (mesesMap[texto] !== undefined) {
+                        mesSeleccionado = mesesMap[texto];
+                    }
                 }
+                
                 const anioAttr = btnActivo.getAttribute('data-anio');
-                if (anioAttr) {
+                if (anioAttr !== null) {
                     anioSeleccionado = parseInt(anioAttr);
                 }
-                console.log(`📊 Mes desde UI: ${mesSeleccionado + 1}/${anioSeleccionado}`);
             }
             
-            // Fallback: si no hay botón activo, usar window._reporteMes
-            if (mesSeleccionado === null) {
-                mesSeleccionado = window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth();
-                console.log(`📊 Mes desde window: ${mesSeleccionado + 1}`);
-            }
-            if (window._reporteAnio !== undefined) {
-                anioSeleccionado = window._reporteAnio;
-            }
+            console.log(`📊 Mes seleccionado desde UI: ${mesSeleccionado + 1} (${new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' })})`);
             
             // 👇 2. LEER EL RESTO DE LOS DATOS
             const emailInput = document.getElementById('rptContadorEmailInput');
@@ -7049,14 +7072,17 @@ function initReporteCompleto() {
                     contadorEmail: email,
                     contadorNombre: nombreContador,
                     nota: nota,
-                    mes: mesSeleccionado,   // 👈 USAR EL MES CORRECTO
-                    anio: anioSeleccionado, // 👈 USAR EL AÑO CORRECTO
+                    mes: mesSeleccionado,   // 👈 USAR EL MES DE LA UI
+                    anio: anioSeleccionado, // 👈 USAR EL AÑO DE LA UI
                     incluirComprobantes: incluirComprobantes,
                     incluirCategoria: incluirCategoria,
                     incluirNC: incluirNC
                 };
                 
-                console.log('📤 Enviando payload con mes correcto:', payload);
+                console.log('📤 Enviando payload con mes correcto:', {
+                    ...payload,
+                    mesNombre: new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' })
+                });
                 
                 const res = await fetch('/api/reports/send', {
                     method: 'POST',
@@ -7116,7 +7142,7 @@ function initReporteCompleto() {
             }
         });
         
-        console.log('✅ Botón Enviar reporte conectado con checkboxes');
+        console.log('✅ Botón Enviar reporte conectado con lectura directa de UI');
     } else {
         console.warn('⚠️ Botón rptBtnEnviar no encontrado');
     }

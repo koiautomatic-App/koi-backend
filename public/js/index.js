@@ -1488,6 +1488,12 @@ function initLogoHandlers() {
 
 /* ── CONFIGURACIÓN VISTA ────────────────────────────── */
 function cargarConfigVista() {
+  // 🔒 SI ESTÁ BLOQUEADO, NO HACER NADA
+  if (window._bloquearRecargaConfig) {
+    console.log('⏳ cargarConfigVista bloqueada temporalmente');
+    return;
+  }
+  
   // Cargar valores desde la API REST
   fetch('/api/me', { credentials: 'include' })
     .then(r => r.json())
@@ -7685,14 +7691,58 @@ async function verificarYEnviarReporteAutomatico(force = false) {
 async function handleSwitchReporte(checked) {
     console.log(`📊 Switch de reporte: ${checked ? 'ACTIVADO' : 'DESACTIVADO'}`);
     
-    // Guardar el estado
-    await guardarSwitch('envioReporteAuto', checked);
+    // 🔒 GUARDAR EL ESTADO ACTUAL DE envioAuto
+    const swEnvioAuto = document.getElementById('switchEnvioAuto');
+    const estadoOriginalEnvioAuto = swEnvioAuto?.checked;
+    console.log(`🔒 Estado original de envioAuto: ${estadoOriginalEnvioAuto}`);
     
-    if (checked) {
-        console.log('📊 Switch activado, verificando envío pendiente...');
+    // 📌 BLOQUEAR recargas de configuración
+    window._bloquearRecargaConfig = true;
+    console.log('🔒 Recarga de configuración bloqueada');
+    
+    try {
+        // Guardar el estado del reporte
+        await guardarSwitch('envioReporteAuto', checked);
+        console.log(`✅ Reporte guardado: ${checked}`);
+        
+        // ⏳ Esperar a que el backend procese
+        await new Promise(resolve => setTimeout(resolve, 300));
+        
+        // 🔍 VERIFICAR que envioAuto no se perdió
+        const verifyRes = await fetch('/api/me', { credentials: 'include' });
+        const verifyData = await verifyRes.json();
+        const envioAutoBackend = verifyData.user?.settings?.envioAuto;
+        
+        console.log(`📊 Verificación: envioAuto en backend = ${envioAutoBackend}`);
+        console.log(`📊 Verificación: envioAuto en UI = ${swEnvioAuto?.checked}`);
+        
+        // 🔧 RESTAURAR envioAuto si se perdió (en UI o backend)
+        if (swEnvioAuto && swEnvioAuto.checked !== estadoOriginalEnvioAuto) {
+            console.log(`🔧 Restaurando envioAuto UI a: ${estadoOriginalEnvioAuto}`);
+            swEnvioAuto.checked = estadoOriginalEnvioAuto;
+        }
+        
+        if (envioAutoBackend !== estadoOriginalEnvioAuto) {
+            console.log(`🔧 Restaurando envioAuto backend a: ${estadoOriginalEnvioAuto}`);
+            await guardarSwitch('envioAuto', estadoOriginalEnvioAuto);
+        }
+        
+        // Si se activó, verificar envío pendiente
+        if (checked) {
+            console.log('📊 Switch activado, verificando envío pendiente...');
+            setTimeout(() => {
+                verificarYEnviarReporteAutomatico(true);
+            }, 1500);
+        }
+        
+    } catch (error) {
+        console.error('❌ Error en handleSwitchReporte:', error);
+    } finally {
+        // 🔓 DESBLOQUEAR recargas de configuración
         setTimeout(() => {
-            verificarYEnviarReporteAutomatico(true); // force = true
-        }, 1500);
+            window._bloquearRecargaConfig = false;
+            console.log('🔓 Recarga de configuración desbloqueada');
+        }, 500);
     }
 }
 
@@ -7758,3 +7808,4 @@ window.initContadorEditable = initContadorEditable;
 window.initReporte = initReporte;
 // 👇 AGREGAR ESTA LÍNEA
 window.enviarReporteContador = enviarReporteContador;
+window._bloquearRecargaConfig = false;

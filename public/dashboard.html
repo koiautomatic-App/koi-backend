@@ -765,6 +765,7 @@
     <span>Automatización</span>
   </div>
 
+  <!-- Switch 1: Facturación Automática -->
   <div class="cfg-switch-row">
     <div class="cfg-switch-left">
       <div class="cfg-switch-title">Facturación Automática</div>
@@ -778,6 +779,7 @@
     </div>
   </div>
 
+  <!-- Switch 2: Envío Automático de Factura -->
   <div class="cfg-switch-row">
     <div class="cfg-switch-left">
       <div class="cfg-switch-title">Envío Automático de Factura</div>
@@ -786,6 +788,22 @@
     <div class="cfg-switch-right">
       <label class="koi-toggle">
         <input type="checkbox" id="switchEnvioAuto" checked onchange="guardarSwitch('envioAuto', this.checked)">
+        <span class="koi-toggle-track"></span>
+      </label>
+    </div>
+  </div>
+
+  <!-- 👇 SWITCH 3: Envío Automático de Reporte (NUEVO) -->
+  <div class="cfg-switch-row">
+    <div class="cfg-switch-left">
+      <div class="cfg-switch-title" style="display:flex;align-items:center;gap:8px;">
+        <span style="font-size:16px;">📊</span> Envío Automático de Reporte
+      </div>
+      <div class="cfg-switch-sub">Envía el reporte mensual automáticamente al contador</div>
+    </div>
+    <div class="cfg-switch-right">
+      <label class="koi-toggle">
+        <input type="checkbox" id="switchEnvioReporte" onchange="guardarSwitch('envioReporteAuto', this.checked)">
         <span class="koi-toggle-track"></span>
       </label>
     </div>
@@ -1660,7 +1678,7 @@
       </div>
     </div>
 
-  <!-- AUTOMATIZACIÓN -->
+<!-- AUTOMATIZACIÓN -->
 <div class="cfg-section sec-perfil">
   <div class="cfg-sec-title">
     <span class="material-icons">bolt</span>
@@ -1668,6 +1686,7 @@
   </div>
   <div class="cfg-sec-desc">Controlá cómo KOI emite, envía facturas y reportes.</div>
 
+  <!-- Switch 1 -->
   <div class="cfg-switch-row" style="margin-top:16px">
     <div>
       <div class="cfg-switch-title">Facturación Automática</div>
@@ -1679,6 +1698,7 @@
     </label>
   </div>
 
+  <!-- Switch 2 -->
   <div class="cfg-switch-row" style="margin-top:14px">
     <div>
       <div class="cfg-switch-title">Envío Automático de Factura</div>
@@ -1690,10 +1710,10 @@
     </label>
   </div>
 
-  <!-- 👇 NUEVO SWITCH - ENVÍO AUTOMÁTICO DE REPORTE -->
+  <!-- 👇 SWITCH 3 - DEBE ESTAR AQUÍ, DENTRO DE AUTOMATIZACIÓN -->
   <div class="cfg-switch-row" style="margin-top:14px">
     <div>
-      <div class="cfg-switch-title">Envío Automático de Reporte</div>
+      <div class="cfg-switch-title">📊 Envío Automático de Reporte</div>
       <div class="cfg-switch-sub">Envía el reporte mensual automáticamente al contador</div>
     </div>
     <label class="cfg-switch">
@@ -1709,6 +1729,7 @@
     </span>
   </div>
 </div>
+
 
 <div class="mob-overlay" id="mobOverlay" onclick="cerrarSidebar()"></div>
 <div id="toasts"></div>

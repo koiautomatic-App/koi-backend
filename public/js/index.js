@@ -6499,6 +6499,11 @@ async function cargarDatosReporte() {
   const mes = _reporteMes;
   const anio = _reporteAnio;
   
+  // 👇 SINCRONIZAR CON window
+  window._reporteMes = mes;
+  window._reporteAnio = anio;
+  console.log(`📊 Reporte cargado para: ${mes + 1}/${anio}`);
+  
   const fechaInicio = new Date(anio, mes, 1);
   const fechaFin = new Date(anio, mes + 1, 0);
   
@@ -6517,16 +6522,13 @@ async function cargarDatosReporte() {
   if (elTableMes) elTableMes.textContent = mesCapitalizado;
   
   try {
-    // Obtener comprobantes del mes
     const ordersRes = await fetch(`/api/orders?desde=${desde}&hasta=${hasta}&limit=200`, { credentials: 'include' });
     const ordersData = await ordersRes.json();
     const orders = ordersData.orders || [];
     
-    // Obtener estadísticas
     const statsRes = await fetch('/api/stats/dashboard', { credentials: 'include' });
     const statsData = await statsRes.json();
     
-    // Filtrar comprobantes emitidos
     const comprobantes = orders.filter(o => o.status === 'invoiced' || o.caeNumber);
     const pendientes = orders.filter(o => o.status === 'pending_invoice' || o.status === 'error_afip');
     
@@ -6539,7 +6541,6 @@ async function cargarDatosReporte() {
     const margen = limiteCategoria - acumulado12;
     const categoria = statsData.categoria || window._reporteUsuario?.categoria || 'C';
     
-    // Actualizar stats
     const elTotalFacturado = document.getElementById('rptTotalFacturado');
     const elTotalComprobantes = document.getElementById('rptTotalComprobantes');
     const elAcumulado = document.getElementById('rptAcumulado');
@@ -6552,7 +6553,6 @@ async function cargarDatosReporte() {
     if (elPorcentajeCategoria) elPorcentajeCategoria.textContent = `${porcentaje.toFixed(1)}% del límite Cat. ${categoria}`;
     if (elPendientesCAE) elPendientesCAE.textContent = totalPendientes;
     
-    // Actualizar categoría
     const elCatFacturado = document.getElementById('rptCatFacturado');
     const elCatLimite = document.getElementById('rptCatLimite');
     const elCatProgress = document.getElementById('rptCatProgress');
@@ -6639,18 +6639,20 @@ function renderizarTablaReporte(comprobantes) {
 
 // Cambiar mes
 function cambiarMesReporte(mes, btn) {
-  _reporteMes = mes;
-  
-  document.querySelectorAll('.month-btn-report').forEach(b => b.classList.remove('active'));
-  if (btn) btn.classList.add('active');
-  
-  const ahora = new Date();
-  if (mes > ahora.getMonth() && _reporteAnio === ahora.getFullYear()) {
-    console.log('⚠️ Mes futuro, no hay datos');
-    return;
-  }
-  
-  cargarDatosReporte();
+    _reporteMes = mes;
+    window._reporteMes = mes; // 👈 SINCRONIZAR CON window
+    window._reporteAnio = _reporteAnio; // 👈 SINCRONIZAR AÑO TAMBIÉN
+    
+    document.querySelectorAll('.month-btn-report').forEach(b => b.classList.remove('active'));
+    if (btn) btn.classList.add('active');
+    
+    const ahora = new Date();
+    if (mes > ahora.getMonth() && _reporteAnio === ahora.getFullYear()) {
+        console.log('⚠️ Mes futuro, no hay datos');
+        return;
+    }
+    
+    cargarDatosReporte();
 }
 
 // Actualizar preview

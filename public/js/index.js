@@ -6702,7 +6702,11 @@ function editarContador() {
   alert('Podés cambiar el email del contador en Configuración > Contador');
 }
 
-// Enviar reporte
+// ============================================================
+//  ENVIAR REPORTE AL CONTADOR - VERSIÓN CORREGIDA
+//  Usa el mes seleccionado en la UI (botón activo)
+// ============================================================
+
 async function enviarReporteContador() {
   const btn = document.getElementById('rptBtnEnviar');
   if (!btn) return;
@@ -6713,17 +6717,49 @@ async function enviarReporteContador() {
   btn.innerHTML = '<span class="material-icons" style="font-size:16px;animation:spin 1s linear infinite;">sync</span> Enviando...';
   
   try {
-    // 👇 OBTENER VALORES DE LOS INPUTS
+    // 👇 1. OBTENER EL MES DESDE EL BOTÓN ACTIVO (FUENTE DE VERDAD)
+    let mesSeleccionado = null;
+    let anioSeleccionado = new Date().getFullYear();
+    
+    // Buscar el botón de mes activo en la UI
+    const btnActivo = document.querySelector('.month-btn-report.active');
+    if (btnActivo) {
+      const mesAttr = btnActivo.getAttribute('data-mes');
+      if (mesAttr !== null) {
+        mesSeleccionado = parseInt(mesAttr);
+        console.log(`📊 Mes seleccionado desde UI: ${mesSeleccionado + 1}`);
+      }
+    }
+    
+    // Si no se encontró en la UI, usar window._reporteMes
+    if (mesSeleccionado === null) {
+      mesSeleccionado = window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth();
+      console.log(`📊 Mes desde window._reporteMes: ${mesSeleccionado + 1}`);
+    }
+    
+    // 👇 2. OBTENER EL AÑO (también desde la UI)
+    if (btnActivo) {
+      const anioAttr = btnActivo.getAttribute('data-anio');
+      if (anioAttr) {
+        anioSeleccionado = parseInt(anioAttr);
+      }
+    }
+    
+    // Si no hay año en la UI, usar window._reporteAnio
+    if (anioSeleccionado === new Date().getFullYear() && window._reporteAnio !== undefined) {
+      anioSeleccionado = window._reporteAnio;
+    }
+    
+    console.log(`📤 Enviando reporte para: ${mesSeleccionado + 1}/${anioSeleccionado}`);
+    
+    // 👇 3. OBTENER EL RESTO DE LOS DATOS
     const nota = document.getElementById('rptNotaContador')?.value?.trim() || '';
     const emailContador = document.getElementById('rptContadorEmailInput')?.value?.trim() || '';
     const nombreContador = document.getElementById('rptContadorNombreInput')?.value?.trim() || '';
     
-    // 👇 OBTENER PREFERENCIAS DE SECCIONES
     const incluirComprobantes = document.getElementById('rptChkComprobantes')?.checked ?? true;
     const incluirCategoria = document.getElementById('rptChkCategoria')?.checked ?? true;
     const incluirNC = document.getElementById('rptChkNC')?.checked ?? false;
-    
-    const nombreNegocio = window._reporteUsuario?.nombreNegocio || 'KOI';
     
     // Validar email
     if (!emailContador || !emailContador.includes('@')) {
@@ -6733,19 +6769,19 @@ async function enviarReporteContador() {
       return;
     }
     
+    // 👇 4. CONSTRUIR PAYLOAD CON EL MES CORRECTO
     const reporteData = {
-      mes: window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth(),
-      anio: window._reporteAnio !== undefined ? window._reporteAnio : new Date().getFullYear(),
+      mes: mesSeleccionado,  // 0 = Enero, 1 = Febrero, etc.
+      anio: anioSeleccionado,
       nota: nota,
       contadorEmail: emailContador,
       contadorNombre: nombreContador,
-      // 👇 AGREGAR PREFERENCIAS
       incluirComprobantes: incluirComprobantes,
       incluirCategoria: incluirCategoria,
       incluirNC: incluirNC
     };
     
-    console.log('📤 Enviando reporte con preferencias:', reporteData);
+    console.log('📤 Payload final:', reporteData);
     
     const res = await fetch('/api/reports/send', {
       method: 'POST',
@@ -6757,7 +6793,10 @@ async function enviarReporteContador() {
     const data = await res.json();
     
     if (data.ok) {
-      if (typeof toast === 'function') toast(`✅ Reporte enviado a ${emailContador}`, 'success');
+      const nombreMes = new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' });
+      if (typeof toast === 'function') {
+        toast(`✅ Reporte de ${nombreMes} ${anioSeleccionado} enviado a ${emailContador}`, 'success');
+      }
       
       btn.innerHTML = '<span class="material-icons" style="font-size:16px;">check</span> Reporte enviado';
       btn.style.background = 'rgba(61,184,122,0.2)';
@@ -6765,7 +6804,10 @@ async function enviarReporteContador() {
       btn.style.color = '#3db87a';
       
       const ultimoEnvio = document.getElementById('rptUltimoEnvio');
-      if (ultimoEnvio) ultimoEnvio.textContent = new Date().toLocaleString('es-AR');
+      if (ultimoEnvio) {
+        const nombreMesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+        ultimoEnvio.textContent = `${nombreMesCapitalizado} ${anioSeleccionado} - ${new Date().toLocaleString('es-AR')}`;
+      }
       
       setTimeout(() => {
         btn.style.background = '';
@@ -6795,7 +6837,6 @@ async function enviarReporteContador() {
     }, 3000);
   }
 }
-
 // Inicializar reporte
 function initReporte() {
   const vistaReporte = document.getElementById('vista-reporte');
@@ -6954,7 +6995,34 @@ function initReporteCompleto() {
             
             console.log('🖱️ Click en ENVIAR REPORTE');
             
-            // 👇 LEER CHECKBOXES
+            // 👇 1. OBTENER EL MES DESDE EL BOTÓN ACTIVO (FUENTE DE VERDAD)
+            let mesSeleccionado = null;
+            let anioSeleccionado = new Date().getFullYear();
+            
+            // Buscar el botón de mes activo en la UI
+            const btnActivo = document.querySelector('.month-btn-report.active');
+            if (btnActivo) {
+                const mesAttr = btnActivo.getAttribute('data-mes');
+                if (mesAttr !== null) {
+                    mesSeleccionado = parseInt(mesAttr);
+                }
+                const anioAttr = btnActivo.getAttribute('data-anio');
+                if (anioAttr) {
+                    anioSeleccionado = parseInt(anioAttr);
+                }
+                console.log(`📊 Mes desde UI: ${mesSeleccionado + 1}/${anioSeleccionado}`);
+            }
+            
+            // Fallback: si no hay botón activo, usar window._reporteMes
+            if (mesSeleccionado === null) {
+                mesSeleccionado = window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth();
+                console.log(`📊 Mes desde window: ${mesSeleccionado + 1}`);
+            }
+            if (window._reporteAnio !== undefined) {
+                anioSeleccionado = window._reporteAnio;
+            }
+            
+            // 👇 2. LEER EL RESTO DE LOS DATOS
             const emailInput = document.getElementById('rptContadorEmailInput');
             const email = emailInput?.value?.trim() || '';
             const nombreContador = document.getElementById('rptContadorNombreInput')?.value?.trim() || '';
@@ -6963,11 +7031,6 @@ function initReporteCompleto() {
             const incluirComprobantes = document.getElementById('rptChkComprobantes')?.checked ?? true;
             const incluirCategoria = document.getElementById('rptChkCategoria')?.checked ?? true;
             const incluirNC = document.getElementById('rptChkNC')?.checked ?? false;
-            
-            console.log('📋 CHECKBOXES:');
-            console.log('  incluirComprobantes:', incluirComprobantes);
-            console.log('  incluirCategoria:', incluirCategoria);
-            console.log('  incluirNC:', incluirNC);
             
             if (!email || !email.includes('@')) {
                 if (typeof toast === 'function') toast('⚠️ Configurá el email del contador', 'error');
@@ -6981,18 +7044,19 @@ function initReporteCompleto() {
             this.style.opacity = '0.7';
             
             try {
+                // 👇 3. CONSTRUIR PAYLOAD CON EL MES CORRECTO
                 const payload = {
                     contadorEmail: email,
                     contadorNombre: nombreContador,
                     nota: nota,
-                    mes: window._reporteMes !== undefined ? window._reporteMes : new Date().getMonth(),
-                    anio: window._reporteAnio !== undefined ? window._reporteAnio : new Date().getFullYear(),
+                    mes: mesSeleccionado,   // 👈 USAR EL MES CORRECTO
+                    anio: anioSeleccionado, // 👈 USAR EL AÑO CORRECTO
                     incluirComprobantes: incluirComprobantes,
                     incluirCategoria: incluirCategoria,
                     incluirNC: incluirNC
                 };
                 
-                console.log('📤 Enviando payload:', payload);
+                console.log('📤 Enviando payload con mes correcto:', payload);
                 
                 const res = await fetch('/api/reports/send', {
                     method: 'POST',
@@ -7005,7 +7069,13 @@ function initReporteCompleto() {
                 console.log('📥 Respuesta:', data);
                 
                 if (data.ok) {
-                    if (typeof toast === 'function') toast(`✅ Reporte enviado a ${email}`, 'success');
+                    const nombreMes = new Date(anioSeleccionado, mesSeleccionado, 1).toLocaleString('es-AR', { month: 'long' });
+                    const nombreMesCapitalizado = nombreMes.charAt(0).toUpperCase() + nombreMes.slice(1);
+                    
+                    if (typeof toast === 'function') {
+                        toast(`✅ Reporte de ${nombreMesCapitalizado} ${anioSeleccionado} enviado a ${email}`, 'success');
+                    }
+                    
                     this.innerHTML = '✅ Enviado';
                     this.style.background = 'rgba(0,230,118,0.15)';
                     this.style.border = '1px solid rgba(0,230,118,0.3)';
@@ -7013,7 +7083,7 @@ function initReporteCompleto() {
                     
                     const ultimoEnvio = document.getElementById('rptUltimoEnvio');
                     if (ultimoEnvio) {
-                        ultimoEnvio.textContent = new Date().toLocaleString('es-AR');
+                        ultimoEnvio.textContent = `${nombreMesCapitalizado} ${anioSeleccionado} - ${new Date().toLocaleString('es-AR')}`;
                     }
                     
                     setTimeout(() => {

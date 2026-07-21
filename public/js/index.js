@@ -1583,55 +1583,69 @@ function guardarPerfilVista() {
 }
 
 async function guardarSwitch(key, value) {
-  try {
-    const res = await fetch('/api/me/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify({ [key]: value })
-    });
+    console.log(`📤 guardarSwitch: ${key} = ${value}`);
     
-    if (!res.ok) throw new Error('Error al guardar');
-    
-    // ✅ Mapeo de IDs y nombres
-    const mapping = {
-      'factAuto': { id: 'switchFacturacionAuto', nombre: 'Facturación automática' },
-      'envioAuto': { id: 'switchEnvioAuto', nombre: 'Envío automático de factura' },
-      'envioReporteAuto': { id: 'switchEnvioReporte', nombre: 'Envío automático de reporte' }
-    };
-    
-    const config = mapping[key];
-    if (config) {
-      const sw = document.getElementById(config.id);
-      if (sw) sw.checked = value;
-      
-      if (typeof toast === 'function') {
-        toast(`${config.nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
-      }
+    try {
+        // 👇 CONSTRUIR PAYLOAD CORRECTAMENTE
+        const payload = {};
+        payload[key] = value;
+        
+        console.log('📤 Payload:', payload);
+        
+        const res = await fetch('/api/me/settings', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+            throw new Error(`HTTP ${res.status}`);
+        }
+        
+        const data = await res.json();
+        console.log('📥 Respuesta:', data);
+        
+        // Mapeo de IDs y nombres
+        const mapping = {
+            'factAuto': { id: 'switchFacturacionAuto', nombre: 'Facturación automática' },
+            'envioAuto': { id: 'switchEnvioAuto', nombre: 'Envío automático de factura' },
+            'envioReporteAuto': { id: 'switchEnvioReporte', nombre: 'Envío automático de reporte' }
+        };
+        
+        const config = mapping[key];
+        if (config) {
+            const sw = document.getElementById(config.id);
+            if (sw) {
+                sw.checked = value;
+                console.log(`✅ Switch ${config.nombre} actualizado a: ${value}`);
+            }
+            
+            if (typeof toast === 'function') {
+                toast(`${config.nombre} ${value ? 'activado' : 'desactivado'}`, value ? 'success' : 'warn');
+            }
+        }
+        
+        const statusDiv = document.getElementById('cfgAutoStatus');
+        if (statusDiv) {
+            statusDiv.classList.add('visible');
+            setTimeout(() => statusDiv.classList.remove('visible'), 2000);
+        }
+        
+        // 👇 VERIFICAR QUE SE GUARDÓ
+        const verifyRes = await fetch('/api/me', { credentials: 'include' });
+        const verifyData = await verifyRes.json();
+        console.log(`📊 Verificación: ${key} = ${verifyData.user?.settings?.[key]}`);
+        
+        return true;
+        
+    } catch(e) {
+        console.error('❌ Error en guardarSwitch:', e.message);
+        if (typeof toast === 'function') {
+            toast('Error al guardar: ' + e.message, 'error');
+        }
+        return false;
     }
-    
-    const statusDiv = document.getElementById('cfgAutoStatus');
-    if (statusDiv) {
-      statusDiv.classList.add('visible');
-      setTimeout(() => statusDiv.classList.remove('visible'), 2000);
-    }
-    
-  } catch(e) {
-    console.error('Error:', e.message);
-    if (typeof toast === 'function') {
-      toast('Error al guardar: ' + e.message, 'error');
-    }
-    
-    // Revertir el switch si falló
-    const mapping = {
-      'factAuto': 'switchFacturacionAuto',
-      'envioAuto': 'switchEnvioAuto',
-      'envioReporteAuto': 'switchEnvioReporte'
-    };
-    const swId = mapping[key];
-    const sw = document.getElementById(swId);
-    if (sw) sw.checked = !value;
-  }
 }
 
 /* ── MOBILE SIDEBAR ────────────────────────────────── */

@@ -1519,6 +1519,10 @@ function cargarConfigVista() {
       const swEnvioAuto = document.getElementById('switchEnvioAuto');
       if (swEnvioAuto) swEnvioAuto.checked = s.envioAuto === true;
       
+      // 👇 NUEVO SWITCH - Envío Automático de Reporte
+      const swEnvioReporte = document.getElementById('switchEnvioReporte');
+      if (swEnvioReporte) swEnvioReporte.checked = s.envioReporteAuto === true;
+      
       // Mostrar/ocultar categoría según condición fiscal
       const categoriaGroup = document.getElementById('categoriaGroup');
       if (categoriaGroup) {
@@ -1530,7 +1534,6 @@ function cargarConfigVista() {
     })
     .catch(err => console.warn('cargarConfigVista error:', err.message));
 }
-
 function guardarPerfilVista() {
   // ✅ USAR IDs SIN "2"
   const nombre = document.getElementById('cfgNombre')?.value.trim() || '';
@@ -7487,6 +7490,194 @@ window.filtrarComprobantes = function() {
     actualizarContadorResultados();
   }
 };
+// ============================================================
+//  ENVÍO AUTOMÁTICO DE REPORTE - PRIMER DÍA HÁBIL DE CADA MES
+// ============================================================
+
+// Verificar si un día es hábil (Lunes a Viernes)
+function esDiaHabil(fecha) {
+    const dia = fecha.getDay();
+    return dia >= 1 && dia <= 5;
+}
+
+// Calcular el primer día hábil del mes
+function obtenerPrimerDiaHabil(mes, anio) {
+    const anioActual = anio || new Date().getFullYear();
+    const mesActual = mes !== undefined ? mes : new Date().getMonth();
+    
+    for (let dia = 1; dia <= 7; dia++) {
+        const fecha = new Date(anioActual, mesActual, dia);
+        if (esDiaHabil(fecha)) {
+            return fecha;
+        }
+    }
+    return new Date(anioActual, mesActual, 1);
+}
+
+// Verificar si hoy es el primer día hábil del mes
+function esPrimerDiaHabil() {
+    const hoy = new Date();
+    const primerDiaHabil = obtenerPrimerDiaHabil(hoy.getMonth(), hoy.getFullYear());
+    return hoy.toDateString() === primerDiaHabil.toDateString();
+}
+
+// Enviar reporte del mes anterior (usa la función existente enviarReporteContador)
+async function enviarReporteDelMesAnterior(emailContador, mes, anio) {
+    console.log('📊 Enviando reporte automático del mes anterior...');
+    
+    try {
+        // Obtener nombre del contador
+        const userRes = await fetch('/api/me', { credentials: 'include' });
+        const userData = await userRes.json();
+        const nombreContador = userData.user?.settings?.contadorNombre || 'Contador';
+        
+        // Construir payload
+        const payload = {
+            contadorEmail: emailContador,
+            contadorNombre: nombreContador,
+            mes: mes,
+            anio: anio,
+            nota: `Reporte automático del mes anterior (${new Date(anio, mes, 1).toLocaleString('es-AR', { month: 'long', year: 'numeric' })})`,
+            incluirComprobantes: true,
+            incluirCategoria: true,
+            incluirNC: false,
+            automatico: true
+        };
+        
+        console.log('📤 Enviando payload:', payload);
+        
+        const response = await fetch('/api/reports/send', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+        
+        const result = await response.json();
+        
+        if (result.ok) {
+            const mesKey = `${anio}-${mes.toString().padStart(2, '0')}`;
+            localStorage.setItem('ultimoEnvioReporte', mesKey);
+            console.log(`✅ Reporte del mes ${mesKey} enviado automáticamente a ${emailContador}`);
+            
+            if (typeof toast === 'function') {
+                toast(`📊 Reporte mensual enviado a ${emailContador}`, 'success');
+            }
+            
+            // Actualizar el último envío en la UI
+            const ultimoEnvioEl = document.getElementById('rptUltimoEnvio');
+            if (ultimoEnvioEl) {
+                ultimoEnvioEl.textContent = new Date().toLocaleString('es-AR');
+            }
+            
+            return true;
+        } else {
+            console.error('❌ Error enviando reporte:', result.error);
+            return false;
+        }
+    } catch (error) {
+        console.error('❌ Error en envío automático:', error);
+        return false;
+    }
+}
+
+// Función principal para verificar y enviar
+async function verificarYEnviarReporteAutomatico(force = false) {
+    console.log('🔍 Verificando envío automático de reporte...');
+    
+    // 1. Verificar que el switch esté activo
+    const switchReporte = document.getElementById('switchEnvioReporte');
+    if (!switchReporte || !switchReporte.checked) {
+        console.log('🔇 Envío automático de reporte desactivado');
+        return;
+    }
+    
+    // 2. Verificar ARCA
+    try {
+        const arcaRes = await fetch('/api/me/arca-status', { credentials: 'include' });
+        const arcaData = await arcaRes.json();
+        if (!arcaData.conectada) {
+            console.log('⚠️ ARCA no vinculada, no se envía reporte');
+            return;
+        }
+    } catch(e) {
+        console.warn('⚠️ Error verificando ARCA:', e);
+        return;
+    }
+    
+    // 3. Verificar email del contador
+    let emailContador = '';
+    try {
+        const userRes = await fetch('/api/me', { credentials: 'include' });
+        const userData = await userRes.json();
+        emailContador = userData.user?.settings?.contadorEmail || '';
+        if (!emailContador || !emailContador.includes('@')) {
+            console.warn('⚠️ Email del contador no configurado');
+            return;
+        }
+    } catch(e) {
+        console.warn('⚠️ Error verificando email:', e);
+        return;
+    }
+    
+    // 4. Calcular mes anterior
+    const hoy = new Date();
+    const mesAnterior = hoy.getMonth() - 1;
+    const anioAnterior = hoy.getFullYear();
+    const mes = mesAnterior < 0 ? 11 : mesAnterior;
+    const anio = mesAnterior < 0 ? anioAnterior - 1 : anioAnterior;
+    const mesKey = `${anio}-${mes.toString().padStart(2, '0')}`;
+    
+    // 5. Verificar si ya se envió
+    const ultimoEnvio = localStorage.getItem('ultimoEnvioReporte');
+    if (ultimoEnvio === mesKey && !force) {
+        console.log(`📊 Reporte del mes ${mesKey} ya fue enviado`);
+        return;
+    }
+    
+    // 6. Enviar si es primer día hábil o es forzado
+    if (esPrimerDiaHabil() || force) {
+        console.log(`📊 Enviando reporte del mes ${mesKey}...`);
+        await enviarReporteDelMesAnterior(emailContador, mes, anio);
+    } else {
+        console.log(`⏳ El envío automático se hará el primer día hábil del próximo mes (${obtenerPrimerDiaHabil(hoy.getMonth() + 1, hoy.getFullYear()).toLocaleDateString('es-AR')})`);
+    }
+}
+
+// Manejador del switch de reporte
+async function handleSwitchReporte(checked) {
+    console.log(`📊 Switch de reporte: ${checked ? 'ACTIVADO' : 'DESACTIVADO'}`);
+    
+    // Guardar el estado
+    await guardarSwitch('envioReporteAuto', checked);
+    
+    if (checked) {
+        console.log('📊 Switch activado, verificando envío pendiente...');
+        setTimeout(() => {
+            verificarYEnviarReporteAutomatico(true); // force = true
+        }, 1500);
+    }
+}
+
+// Inicializar el envío automático
+function initEnvioAutomaticoReporte() {
+    console.log('📊 Inicializando envío automático de reporte...');
+    
+    // Verificar al cargar la página
+    setTimeout(() => {
+        verificarYEnviarReporteAutomatico(false);
+    }, 3000);
+    
+    // Verificar cada hora
+    setInterval(() => {
+        verificarYEnviarReporteAutomatico(false);
+    }, 3600000); // 1 hora
+}
+
+// Exponer funciones globalmente
+window.verificarYEnviarReporteAutomatico = verificarYEnviarReporteAutomatico;
+window.handleSwitchReporte = handleSwitchReporte;
+window.initEnvioAutomaticoReporte = initEnvioAutomaticoReporte;
 
 console.log('✅ Función de búsqueda combinada con filtros inicializada');
 // ============================================================

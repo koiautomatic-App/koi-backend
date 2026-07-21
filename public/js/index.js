@@ -5814,33 +5814,6 @@ window.guardarPerfil = async function() {
   }
 };
 
-// Guardar switches (reemplaza la función existente)
-window.guardarSwitch = async function(tipo, valor) {
-  const statusDiv = document.getElementById('cfgAutoStatus');
-  if (statusDiv) {
-    statusDiv.classList.add('visible');
-    setTimeout(() => statusDiv.classList.remove('visible'), 1500);
-  }
-  
-  console.log(`${tipo} guardado: ${valor}`);
-  
-  try {
-    const payload = tipo === 'factAuto' ? { factAuto: valor } : { envioAuto: valor };
-    const res = await fetch('/api/me/settings', {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      credentials: 'include',
-      body: JSON.stringify(payload)
-    });
-    
-    if (res.ok && typeof toast === 'function') {
-      toast(`${tipo === 'factAuto' ? 'Facturación automática' : 'Envío automático'} ${valor ? 'activado' : 'desactivado'}`, valor ? 'success' : 'warn');
-    }
-  } catch(e) {
-    console.warn('Error:', e.message);
-  }
-};
-
 // Toggle límite facturas
 window.toggleLimiteFacturas = function(checked) {
   const input = document.getElementById('cfgMaxFacturas');

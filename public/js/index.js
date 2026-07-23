@@ -2216,7 +2216,7 @@ function registrarEmision() {
   btn.disabled = true;
   btn.innerHTML = '<span class="material-icons" style="font-size:14px!important;animation:spin .7s linear infinite">sync</span> Registrando…';
 
-  // 🔥 USAR FETCH DIRECTO AL ENDPOINT /manual
+  // 🔥 ENVIAR customerDoc (consumidor final por defecto)
   fetch('/api/orders/manual', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -2226,7 +2226,8 @@ function registrarEmision() {
       email: email,
       concepto: concepto,
       monto: monto,
-      tipo: tipo
+      tipo: tipo,
+      customerDoc: '99999999'  // 🔥 Consumidor Final por defecto
     })
   })
   .then(res => res.json())
@@ -2240,7 +2241,6 @@ function registrarEmision() {
       return;
     }
     
-    // 🔥 CORREGIDO: usar externalId o id
     toast(`✅ ${tipo} ${data.externalId || data.id || ''} registrada`, 'success');
     cerrarNuevaEmision();
     cargarTodosComprobantes();

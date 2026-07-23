@@ -7879,6 +7879,33 @@ function initEnvioAutomaticoReporte() {
 
 let _reporteTimeout = null;
 
+// Enviar email automático después de emitir
+async function enviarMailAutomatico(orderId) {
+    try {
+        // Verificar switch en UI
+        const swEnvioAuto = document.getElementById('switchEnvioAuto');
+        const envioAutoActivo = swEnvioAuto ? swEnvioAuto.checked : false;
+        
+        // Verificar switch en backend
+        const userRes = await fetch('/api/me', { credentials: 'include' });
+        const userData = await userRes.json();
+        const envioAutoBackend = userData.user?.settings?.envioAuto === true;
+        
+        const debeEnviar = envioAutoActivo || envioAutoBackend;
+        
+        if (!debeEnviar) {
+            console.log('📧 Envío automático desactivado');
+            return;
+        }
+        
+        console.log(`📧 Enviando comprobante automáticamente...`);
+        await enviarMail(orderId);
+        
+    } catch(e) {
+        console.error('❌ Error en envío automático:', e.message);
+    }
+}
+
 
 
 // Exponer funciones globalmente

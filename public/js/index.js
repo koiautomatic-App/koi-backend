@@ -2191,12 +2191,12 @@ function cerrarNuevaEmision() {
 }
 
 function registrarEmision() {
-  const cliente  = document.getElementById('emCliente').value.trim();
-  const email    = document.getElementById('emEmail').value.trim();
+  const cliente = document.getElementById('emCliente').value.trim();
+  const email = document.getElementById('emEmail').value.trim();
   const concepto = document.getElementById('emConcepto').value.trim();
-  const monto    = parseFloat(document.getElementById('emMonto').value);
-  const tipo     = document.getElementById('emTipo').value;
-  const errEl    = document.getElementById('emError');
+  const monto = parseFloat(document.getElementById('emMonto').value);
+  const tipo = document.getElementById('emTipo').value;
+  const errEl = document.getElementById('emError');
 
   if (!cliente || !email || !concepto || !monto) {
     errEl.textContent = 'Completá todos los campos obligatorios.';
@@ -2216,31 +2216,40 @@ function registrarEmision() {
   btn.disabled = true;
   btn.innerHTML = '<span class="material-icons" style="font-size:14px!important;animation:spin .7s linear infinite">sync</span> Registrando…';
 
-  gasRun('registrarVentaManual', [{cliente, email, concepto, monto, tipo}],
-    res => {
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">save</span> Registrar';
-      if (res && res.error) { errEl.textContent = res.error; errEl.style.display = 'block'; return; }
-      toast(`✅ ${tipo} ${res.nro} registrada`, 'success');
-      cerrarNuevaEmision();
-      cargarTodosComprobantes();
-    },
-    err => {
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">save</span> Registrar';
-      errEl.textContent = 'Error: ' + err.message;
+  // 🔥 USAR FETCH DIRECTO AL ENDPOINT /manual
+  fetch('/api/orders/manual', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    body: JSON.stringify({
+      cliente: cliente,
+      email: email,
+      concepto: concepto,
+      monto: monto,
+      tipo: tipo
+    })
+  })
+  .then(res => res.json())
+  .then(data => {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">save</span> Registrar';
+    
+    if (data.error) {
+      errEl.textContent = data.error;
       errEl.style.display = 'block';
+      return;
     }
-  );
-
-  if (typeof google === 'undefined') {
-    setTimeout(() => {
-      btn.disabled = false;
-      btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">save</span> Registrar';
-      toast('Registrado (demo)', 'success');
-      cerrarNuevaEmision();
-    }, 800);
-  }
+    
+    toast(`✅ ${tipo} ${data.nro || ''} registrada`, 'success');
+    cerrarNuevaEmision();
+    cargarTodosComprobantes();
+  })
+  .catch(err => {
+    btn.disabled = false;
+    btn.innerHTML = '<span class="material-icons" style="font-size:15px!important">save</span> Registrar';
+    errEl.textContent = 'Error: ' + err.message;
+    errEl.style.display = 'block';
+  });
 }
 
 /* ── MOCK DATA COMPROBANTES ─────────────────────────── */

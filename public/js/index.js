@@ -2240,7 +2240,8 @@ function registrarEmision() {
       return;
     }
     
-    toast(`✅ ${tipo} ${data.nro || ''} registrada`, 'success');
+    // 🔥 CORREGIDO: usar externalId o id
+    toast(`✅ ${tipo} ${data.externalId || data.id || ''} registrada`, 'success');
     cerrarNuevaEmision();
     cargarTodosComprobantes();
   })

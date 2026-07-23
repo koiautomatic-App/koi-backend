@@ -132,7 +132,7 @@ router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, 
   }
 });
 // ============================================================
-//  ENDPOINT PARA REGISTRAR VENTA MANUAL
+//  ENDPOINT PARA REGISTRAR VENTA MANUAL (CORREGIDO)
 // ============================================================
 router.post('/manual', requireAuthAPI, async (req, res) => {
   try {
@@ -152,10 +152,13 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
       return res.status(400).json({ error: 'Email inválido' });
     }
     
+    // 🔥 GENERAR externalId ANTES DE USARLO
+    const externalId = `MANUAL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    
     // Crear la orden
     const nuevaOrden = new Order({
       userId: req.userId,
-      externalId: externalId, // 🔥 AGREGADO
+      externalId: externalId, // ✅ AHORA externalId está definido
       customerName: cliente,
       customerEmail: email,
       concepto: concepto,
@@ -179,11 +182,12 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
     
     await nuevaOrden.save();
     
-    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente}`);
+    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente} (${externalId})`);
     
     res.json({
       ok: true,
       id: nuevaOrden._id,
+      externalId: externalId,
       nro: nuevaOrden.nroFormatted || 'Pendiente',
       message: 'Orden registrada correctamente'
     });
@@ -193,5 +197,3 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
-
-module.exports = router;

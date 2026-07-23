@@ -30,6 +30,7 @@ router.post('/:id/emitir', requireAuthAPI, async (req, res) => {
     const Order = require('../../models/Order');
     const User = require('../../models/User');
     const { emitirCAE } = require('../../services/afip/wsfe');
+    const { enviarFacturaEmail, generarHtmlFactura } = require('../../services/emailService');
     
     // Verificar que la orden existe y pertenece al usuario
     const orden = await Order.findOne({ _id: id, userId: req.userId });
@@ -40,6 +41,59 @@ router.post('/:id/emitir', requireAuthAPI, async (req, res) => {
     const user = await User.findById(req.userId).select('settings').lean();
     const result = await emitirCAE(orden._id, user);
     
+    // 🔥 ENVIAR EMAIL AUTOMÁTICAMENTE SI EL SWITCH ESTÁ ACTIVO
+    const envioAuto = user?.settings?.envioAuto === true;
+    let emailEnviado = false;
+    let emailError = null;
+    
+    if (envioAuto && orden.customerEmail) {
+      try {
+        console.log(`📧 Enviando comprobante automáticamente a ${orden.customerEmail}...`);
+        
+        // Generar PDF
+        const pdfBuffer = await generarPDF(orden._id);
+        
+        // Generar HTML del email
+        const htmlContent = generarHtmlFactura(
+          orden,
+          user.nombre || 'Mi Negocio',
+          user.settings?.cuit || '',
+          result.cae,
+          new Date(result.caeExpiry).toLocaleDateString('es-AR')
+        );
+        
+        // Enviar email
+        await enviarFacturaEmail(
+          orden.customerEmail,
+          user.nombre || 'Mi Negocio',
+          user.settings?.email || '',
+          `Factura N° ${result.nroFormatted} - KOI`,
+          htmlContent,
+          pdfBuffer
+        );
+        
+        // Marcar como enviado
+        await Order.findByIdAndUpdate(id, { 
+          $set: { 
+            emailSent: true,
+            emailSentAt: new Date()
+          } 
+        });
+        
+        emailEnviado = true;
+        console.log(`✅ Email enviado automáticamente a ${orden.customerEmail}`);
+        
+      } catch (emailErr) {
+        console.error('❌ Error enviando email automático:', emailErr.message);
+        emailError = emailErr.message;
+        // No fallamos la emisión por error de email
+      }
+    } else if (envioAuto && !orden.customerEmail) {
+      console.warn(`⚠️ Orden ${orden._id} no tiene email del cliente`);
+    } else {
+      console.log(`📧 Envío automático desactivado para orden ${orden._id}`);
+    }
+    
     res.json({
       ok: true,
       cae: result.cae,
@@ -47,6 +101,8 @@ router.post('/:id/emitir', requireAuthAPI, async (req, res) => {
       nroCbte: result.nroCbte,
       nroFormatted: result.nroFormatted,
       message: `CAE emitido: ${result.cae}`,
+      emailEnviado: emailEnviado,
+      emailError: emailError
     });
   } catch (e) {
     console.error('Emitir CAE error:', e.message);

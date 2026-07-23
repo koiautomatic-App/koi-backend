@@ -29,12 +29,12 @@ router.patch('/:id', requireAuthAPI, actualizarOrden);
 router.delete('/:id', requireAuthAPI, eliminarOrden);
 
 // ============================================================
-//  REGISTRAR VENTA MANUAL
+//  REGISTRAR VENTA MANUAL (CON LÓGICA DE INTEGRACIONES)
 // ============================================================
 router.post('/manual', requireAuthAPI, async (req, res) => {
   try {
     const Order = require('../../models/Order');
-    const { cliente, email, concepto, monto, tipo } = req.body;
+    const { cliente, email, concepto, monto, tipo, customerDoc } = req.body;
     
     // Validar datos
     if (!cliente || !email || !concepto || !monto) {
@@ -49,7 +49,12 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
       return res.status(400).json({ error: 'Email inválido' });
     }
     
-    // 🔥 GENERAR externalId
+    // 🔥 USAR LA MISMA LÓGICA QUE LAS INTEGRACIONES
+    // Si no se envía customerDoc, usar '99999999' (consumidor final)
+    const doc = customerDoc || '99999999';
+    const docClean = doc.replace(/\D/g, '');
+    
+    // Generar externalId
     const externalId = `MANUAL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
     
     const nuevaOrden = new Order({
@@ -57,6 +62,7 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
       externalId: externalId,
       customerName: cliente,
       customerEmail: email,
+      customerDoc: docClean,  // 🔥 USAR DOCUMENTO LIMPIO
       concepto: concepto,
       amount: monto,
       currency: 'ARS',
@@ -73,12 +79,12 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
         }
       ],
       emailSent: false,
-      tipoComprobante: 11
+      tipoComprobante: 11 // Factura C
     });
     
     await nuevaOrden.save();
     
-    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente}`);
+    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente} (Doc: ${docClean})`);
     
     res.json({
       ok: true,

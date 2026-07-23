@@ -94,7 +94,6 @@ const emitirOrden = async (req, res) => {
       return res.status(400).json({ error: 'Esta orden ya tiene CAE emitido' });
     }
     
-    // 👇 VALIDACIÓN DE PERÍODO EXPIRADO
     const user = await User.findById(req.userId).select('settings').lean();
     const estadoCicloVida = user?.settings?.estadoCicloVida || 'cortesia_activa';
     const suscripcionActiva = user?.settings?.suscripcionActiva || false;
@@ -106,57 +105,31 @@ const emitirOrden = async (req, res) => {
       });
     }
     
-    // Continuar con la emisión
     const result = await emitirCAE(orden._id, user);
     
-    // 🔥 ENVIAR EMAIL AUTOMÁTICAMENTE SI EL SWITCH ESTÁ ACTIVO
+    // 🔥 ENVIAR EMAIL AUTOMÁTICAMENTE (USANDO LA MISMA FUNCIÓN QUE EL ENVÍO MANUAL)
     const envioAuto = user?.settings?.envioAuto === true;
     let emailEnviado = false;
     let emailError = null;
     
     if (envioAuto && orden.customerEmail) {
       try {
-        const { enviarFacturaEmail, generarHtmlFactura } = require('../../services/emailService');
-        
         console.log(`📧 Enviando comprobante automáticamente a ${orden.customerEmail}...`);
         
-        // Generar PDF
-        const pdfBuffer = await generarPDF(orden._id);
+        // 🔥 USAR LA MISMA FUNCIÓN QUE ENVÍA EL MAIL MANUALMENTE
+        const enviado = await enviarFacturaMail(orden._id);
         
-        // Generar HTML del email
-        const htmlContent = generarHtmlFactura(
-          orden,
-          user.nombre || 'Mi Negocio',
-          user.settings?.cuit || '',
-          result.cae,
-          new Date(result.caeExpiry).toLocaleDateString('es-AR')
-        );
-        
-        // Enviar email
-        await enviarFacturaEmail(
-          orden.customerEmail,
-          user.nombre || 'Mi Negocio',
-          user.settings?.email || '',
-          `Factura N° ${result.nroFormatted} - KOI`,
-          htmlContent,
-          pdfBuffer
-        );
-        
-        // Marcar como enviado
-        await Order.findByIdAndUpdate(req.params.id, { 
-          $set: { 
-            emailSent: true,
-            emailSentAt: new Date()
-          } 
-        });
-        
-        emailEnviado = true;
-        console.log(`✅ Email enviado automáticamente a ${orden.customerEmail}`);
+        if (enviado.ok) {
+          emailEnviado = true;
+          console.log(`✅ Email enviado automáticamente a ${orden.customerEmail}`);
+        } else {
+          emailError = enviado.error || 'Error al enviar email';
+          console.error('❌ Error enviando email automático:', emailError);
+        }
         
       } catch (emailErr) {
         console.error('❌ Error enviando email automático:', emailErr.message);
         emailError = emailErr.message;
-        // No fallamos la emisión por error de email
       }
     } else if (envioAuto && !orden.customerEmail) {
       console.warn(`⚠️ Orden ${orden._id} no tiene email del cliente`);

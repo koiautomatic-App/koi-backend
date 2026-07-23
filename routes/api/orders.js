@@ -155,6 +155,7 @@ router.post('/manual', requireAuthAPI, async (req, res) => {
     // Crear la orden
     const nuevaOrden = new Order({
       userId: req.userId,
+      externalId: externalId, // 🔥 AGREGADO
       customerName: cliente,
       customerEmail: email,
       concepto: concepto,

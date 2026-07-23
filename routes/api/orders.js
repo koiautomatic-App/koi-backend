@@ -13,7 +13,7 @@ const {
 } = require('../../controllers/orderController');
 
 // ============================================================
-// ENDPOINTS PARA USUARIOS NORMALES (solo lectura y email)
+// ENDPOINTS PARA USUARIOS NORMALES
 // ============================================================
 router.get('/', requireAuthAPI, listarOrdenes);
 router.get('/:id', requireAuthAPI, obtenerOrden);
@@ -21,25 +21,82 @@ router.get('/:id/pdf', requireAuthAPI, generarPDF);
 router.post('/:id/mail', requireAuthAPI, enviarMailOrden);
 
 // ============================================================
-// ENDPOINTS QUE PERMITEN AL DUEÑO DE LA ORDEN (usuario normal)
+// ENDPOINTS QUE PERMITEN AL DUEÑO DE LA ORDEN
 // ============================================================
-// Emitir factura - usa el controller (unificado)
 router.post('/:id/emitir', requireAuthAPI, emitirOrden);
-
-// Cancelar factura
 router.post('/:id/cancelar', requireAuthAPI, cancelarFactura);
-
-// Actualizar orden
 router.patch('/:id', requireAuthAPI, actualizarOrden);
-
-// Eliminar orden
 router.delete('/:id', requireAuthAPI, eliminarOrden);
 
 // ============================================================
-// ENDPOINTS QUE REQUIEREN ADMIN (operaciones sobre cualquier orden)
+//  REGISTRAR VENTA MANUAL
 // ============================================================
+router.post('/manual', requireAuthAPI, async (req, res) => {
+  try {
+    const Order = require('../../models/Order');
+    const { cliente, email, concepto, monto, tipo } = req.body;
+    
+    // Validar datos
+    if (!cliente || !email || !concepto || !monto) {
+      return res.status(400).json({ error: 'Faltan datos obligatorios' });
+    }
+    
+    if (monto <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+    }
+    
+    if (!email.includes('@')) {
+      return res.status(400).json({ error: 'Email inválido' });
+    }
+    
+    // 🔥 GENERAR externalId
+    const externalId = `MANUAL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+    
+    const nuevaOrden = new Order({
+      userId: req.userId,
+      externalId: externalId,
+      customerName: cliente,
+      customerEmail: email,
+      concepto: concepto,
+      amount: monto,
+      currency: 'ARS',
+      platform: 'manual',
+      source: 'manual',
+      status: 'pending_invoice',
+      orderDate: new Date(),
+      items: [
+        {
+          nombre: concepto,
+          cantidad: 1,
+          precio: monto,
+          total: monto
+        }
+      ],
+      emailSent: false,
+      tipoComprobante: 11
+    });
+    
+    await nuevaOrden.save();
+    
+    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente}`);
+    
+    res.json({
+      ok: true,
+      id: nuevaOrden._id,
+      externalId: externalId,
+      nro: nuevaOrden.nroFormatted || 'Pendiente',
+      message: 'Orden registrada correctamente'
+    });
+    
+  } catch (error) {
+    console.error('Error registrando venta manual:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
-// Forzar estado de WooCommerce (solo admin)
+// ============================================================
+// ENDPOINTS ADMIN
+// ============================================================
 router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const Order = require('../../models/Order');
@@ -55,7 +112,6 @@ router.post('/fix-woo-status', requireAuthAPI, requireAdmin, async (req, res) =>
   }
 });
 
-// Diagnóstico: Obtener próximo número de AFIP (solo admin)
 router.get('/debug/afip-next-number', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const User = require('../../models/User');
@@ -89,7 +145,6 @@ router.get('/debug/afip-next-number', requireAuthAPI, requireAdmin, async (req, 
   }
 });
 
-// Emitir factura con número forzado (solo admin)
 router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, res) => {
   try {
     const { id } = req.params;
@@ -131,69 +186,8 @@ router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, 
     res.status(500).json({ error: error.message });
   }
 });
+
 // ============================================================
-//  ENDPOINT PARA REGISTRAR VENTA MANUAL (CORREGIDO)
+// EXPORTAR ROUTER
 // ============================================================
-router.post('/manual', requireAuthAPI, async (req, res) => {
-  try {
-    const Order = require('../../models/Order');
-    const { cliente, email, concepto, monto, tipo } = req.body;
-    
-    // Validar datos
-    if (!cliente || !email || !concepto || !monto) {
-      return res.status(400).json({ error: 'Faltan datos obligatorios' });
-    }
-    
-    if (monto <= 0) {
-      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
-    }
-    
-    if (!email.includes('@')) {
-      return res.status(400).json({ error: 'Email inválido' });
-    }
-    
-    // 🔥 GENERAR externalId ANTES DE USARLO
-    const externalId = `MANUAL-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
-    
-    // Crear la orden
-    const nuevaOrden = new Order({
-      userId: req.userId,
-      externalId: externalId, // ✅ AHORA externalId está definido
-      customerName: cliente,
-      customerEmail: email,
-      concepto: concepto,
-      amount: monto,
-      currency: 'ARS',
-      platform: 'manual',
-      source: 'manual',
-      status: 'pending_invoice',
-      orderDate: new Date(),
-      items: [
-        {
-          nombre: concepto,
-          cantidad: 1,
-          precio: monto,
-          total: monto
-        }
-      ],
-      emailSent: false,
-      tipoComprobante: 11 // Factura C
-    });
-    
-    await nuevaOrden.save();
-    
-    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente} (${externalId})`);
-    
-    res.json({
-      ok: true,
-      id: nuevaOrden._id,
-      externalId: externalId,
-      nro: nuevaOrden.nroFormatted || 'Pendiente',
-      message: 'Orden registrada correctamente'
-    });
-    
-  } catch (error) {
-    console.error('Error registrando venta manual:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
+module.exports = router;

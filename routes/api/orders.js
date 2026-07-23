@@ -131,5 +131,66 @@ router.post('/:id/emitir-con-numero', requireAuthAPI, requireAdmin, async (req, 
     res.status(500).json({ error: error.message });
   }
 });
+// ============================================================
+//  ENDPOINT PARA REGISTRAR VENTA MANUAL
+// ============================================================
+router.post('/manual', requireAuthAPI, async (req, res) => {
+  try {
+    const Order = require('../../models/Order');
+    const { cliente, email, concepto, monto, tipo } = req.body;
+    
+    // Validar datos
+    if (!cliente || !email || !concepto || !monto) {
+      return res.status(400).json({ error: 'Faltan datos obligatorios' });
+    }
+    
+    if (monto <= 0) {
+      return res.status(400).json({ error: 'El monto debe ser mayor a 0' });
+    }
+    
+    if (!email.includes('@')) {
+      return res.status(400).json({ error: 'Email inválido' });
+    }
+    
+    // Crear la orden
+    const nuevaOrden = new Order({
+      userId: req.userId,
+      customerName: cliente,
+      customerEmail: email,
+      concepto: concepto,
+      amount: monto,
+      currency: 'ARS',
+      platform: 'manual',
+      source: 'manual',
+      status: 'pending_invoice',
+      orderDate: new Date(),
+      items: [
+        {
+          nombre: concepto,
+          cantidad: 1,
+          precio: monto,
+          total: monto
+        }
+      ],
+      emailSent: false,
+      tipoComprobante: 11 // Factura C
+    });
+    
+    await nuevaOrden.save();
+    
+    console.log(`✅ Orden manual creada: ${nuevaOrden._id} - ${cliente}`);
+    
+    res.json({
+      ok: true,
+      id: nuevaOrden._id,
+      nro: nuevaOrden.nroFormatted || 'Pendiente',
+      message: 'Orden registrada correctamente'
+    });
+    
+  } catch (error) {
+    console.error('Error registrando venta manual:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
 
 module.exports = router;

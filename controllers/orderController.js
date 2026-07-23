@@ -94,12 +94,11 @@ const emitirOrden = async (req, res) => {
       return res.status(400).json({ error: 'Esta orden ya tiene CAE emitido' });
     }
     
-    // 👇 AGREGAR VALIDACIÓN DE PERÍODO EXPIRADO
+    // 👇 VALIDACIÓN DE PERÍODO EXPIRADO
     const user = await User.findById(req.userId).select('settings').lean();
     const estadoCicloVida = user?.settings?.estadoCicloVida || 'cortesia_activa';
     const suscripcionActiva = user?.settings?.suscripcionActiva || false;
     
-    // Si está expirado y no tiene suscripción activa, bloquear
     if (estadoCicloVida === 'expirado' && !suscripcionActiva) {
       return res.status(403).json({ 
         error: 'Tu período de prueba ha expirado. Suscribite para continuar facturando.',
@@ -110,14 +109,70 @@ const emitirOrden = async (req, res) => {
     // Continuar con la emisión
     const result = await emitirCAE(orden._id, user);
     
+    // 🔥 ENVIAR EMAIL AUTOMÁTICAMENTE SI EL SWITCH ESTÁ ACTIVO
+    const envioAuto = user?.settings?.envioAuto === true;
+    let emailEnviado = false;
+    let emailError = null;
+    
+    if (envioAuto && orden.customerEmail) {
+      try {
+        const { enviarFacturaEmail, generarHtmlFactura } = require('../../services/emailService');
+        
+        console.log(`📧 Enviando comprobante automáticamente a ${orden.customerEmail}...`);
+        
+        // Generar PDF
+        const pdfBuffer = await generarPDF(orden._id);
+        
+        // Generar HTML del email
+        const htmlContent = generarHtmlFactura(
+          orden,
+          user.nombre || 'Mi Negocio',
+          user.settings?.cuit || '',
+          result.cae,
+          new Date(result.caeExpiry).toLocaleDateString('es-AR')
+        );
+        
+        // Enviar email
+        await enviarFacturaEmail(
+          orden.customerEmail,
+          user.nombre || 'Mi Negocio',
+          user.settings?.email || '',
+          `Factura N° ${result.nroFormatted} - KOI`,
+          htmlContent,
+          pdfBuffer
+        );
+        
+        // Marcar como enviado
+        await Order.findByIdAndUpdate(req.params.id, { 
+          $set: { 
+            emailSent: true,
+            emailSentAt: new Date()
+          } 
+        });
+        
+        emailEnviado = true;
+        console.log(`✅ Email enviado automáticamente a ${orden.customerEmail}`);
+        
+      } catch (emailErr) {
+        console.error('❌ Error enviando email automático:', emailErr.message);
+        emailError = emailErr.message;
+        // No fallamos la emisión por error de email
+      }
+    } else if (envioAuto && !orden.customerEmail) {
+      console.warn(`⚠️ Orden ${orden._id} no tiene email del cliente`);
+    }
+    
     res.json({
       ok: true,
       cae: result.cae,
       vto: result.caeExpiry,
       nroCbte: result.nroCbte,
       nroFormatted: result.nroFormatted,
-      message: `CAE emitido: ${result.cae}`
+      message: `CAE emitido: ${result.cae}`,
+      emailEnviado: emailEnviado,
+      emailError: emailError
     });
+    
   } catch (error) {
     console.error('emitirOrden error:', error);
     res.status(500).json({ error: error.message });

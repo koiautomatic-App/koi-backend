@@ -7092,3 +7092,416 @@ table.comp-table-report tr.total td:last-child {
 [data-theme="light"] ::-webkit-scrollbar-thumb:hover {
     background: var(--text-4) !important;
 }
+/* ============================================================
+   MODAL DE FILTROS - ESTÉTICA KOI (DEFINITIVO)
+   ============================================================ */
+
+/* ============================================================
+   BASE - MODO OSCURO (default)
+   ============================================================ */
+#modalFiltros {
+    background: var(--card);
+    border: 1px solid rgba(232, 98, 42, 0.15);
+    border-radius: 20px;
+    box-shadow: 0 16px 48px rgba(232, 98, 42, 0.10);
+    overflow: visible;
+    overflow-y: visible;
+    max-height: none;
+    height: auto;
+    max-width: 560px;
+    width: auto;
+    min-width: 320px;
+    padding: 0;
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 100000;
+    pointer-events: auto;
+    opacity: 1;
+    transition: all 0.3s ease;
+}
+
+#modalFiltros.open {
+    display: block;
+}
+
+/* ============================================================
+   MODAL - HEADER
+   ============================================================ */
+#modalFiltros .modal-header {
+    background: var(--card-2);
+    border-bottom: 1px solid rgba(232, 98, 42, 0.10);
+    border-radius: 20px 20px 0 0;
+    padding: 16px 24px;
+    overflow: visible;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+#modalFiltros .modal-title {
+    color: var(--text-1);
+    font-size: 16px;
+    font-weight: 700;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+#modalFiltros .modal-title .material-icons {
+    color: var(--orange);
+    font-size: 20px;
+}
+
+#modalFiltros .cfg-close {
+    color: var(--text-3);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 20px;
+    padding: 4px;
+    transition: color 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#modalFiltros .cfg-close:hover {
+    color: var(--orange);
+}
+
+/* ============================================================
+   MODAL - BODY
+   ============================================================ */
+#modalFiltros .modal-body {
+    background: var(--card);
+    padding: 20px 24px 12px 24px;
+    overflow: visible;
+    overflow-y: visible;
+    max-height: none;
+    height: auto;
+    color: var(--text-1);
+}
+
+/* ============================================================
+   MODAL - FOOTER
+   ============================================================ */
+#modalFiltros .modal-footer {
+    background: var(--card-2);
+    border-top: 1px solid rgba(232, 98, 42, 0.06);
+    border-radius: 0 0 20px 20px;
+    padding: 12px 24px 16px 24px;
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+    overflow: visible;
+    flex-wrap: wrap;
+}
+
+/* ============================================================
+   GRUPOS DE FILTROS
+   ============================================================ */
+#modalFiltros .filtro-grupo {
+    margin-bottom: 12px;
+    overflow: visible;
+}
+
+#modalFiltros .filtro-grupo-titulo {
+    color: var(--text-1);
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+    margin-top: 0;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+#modalFiltros .filtro-opciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    overflow: visible;
+}
+
+/* ============================================================
+   OPCIONES - PLATAFORMA Y CHECK
+   ============================================================ */
+#modalFiltros .filtro-plataforma,
+#modalFiltros .filtro-check {
+    background: var(--card-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 5px 10px;
+    font-size: 12px;
+    min-height: 30px;
+    white-space: nowrap;
+    color: var(--text-1);
+    cursor: pointer;
+    transition: all 0.25s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    overflow: visible;
+    margin: 0;
+}
+
+#modalFiltros .filtro-plataforma:hover,
+#modalFiltros .filtro-check:hover {
+    background: var(--card-3);
+    border-color: var(--orange-glow);
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(232, 98, 42, 0.06);
+}
+
+#modalFiltros .filtro-plataforma.active,
+#modalFiltros .filtro-check.active {
+    background: var(--orange-soft);
+    border-color: var(--orange-glow);
+    box-shadow: 0 2px 8px rgba(232, 98, 42, 0.06);
+}
+
+#modalFiltros .filtro-plataforma .plataforma-info,
+#modalFiltros .filtro-check span {
+    color: var(--text-1);
+    font-size: 12px;
+    font-weight: 500;
+}
+
+#modalFiltros .filtro-plataforma .plataforma-logo {
+    color: var(--orange);
+    background: var(--orange-soft);
+    border-radius: 6px;
+    padding: 2px 6px;
+    font-size: 10px;
+    font-weight: 700;
+}
+
+/* ============================================================
+   CHECK CUSTOM
+   ============================================================ */
+#modalFiltros .filtro-check .check-custom {
+    background: var(--card);
+    border: 2px solid var(--border-2);
+    border-radius: 4px;
+    width: 18px;
+    height: 18px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+}
+
+#modalFiltros .filtro-check .check-custom .material-icons {
+    color: var(--orange);
+    font-size: 14px;
+    opacity: 0;
+    transition: all 0.2s ease;
+}
+
+#modalFiltros .filtro-check.active .check-custom {
+    background: var(--orange);
+    border-color: var(--orange);
+}
+
+#modalFiltros .filtro-check.active .check-custom .material-icons {
+    color: #ffffff;
+    opacity: 1;
+}
+
+/* ============================================================
+   BOTONES DEL FOOTER
+   ============================================================ */
+#modalFiltros .btn-cancel {
+    background: transparent;
+    border: 1px solid rgba(232, 98, 42, 0.15);
+    color: var(--text-2);
+    padding: 8px 18px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 500;
+    font-size: 12px;
+    transition: all 0.25s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+#modalFiltros .btn-cancel:hover {
+    background: var(--orange-soft);
+    border-color: var(--orange-glow);
+    color: var(--text-1);
+}
+
+#modalFiltros .btn-registrar {
+    background: linear-gradient(135deg, var(--orange), #d4521a);
+    color: #ffffff;
+    border: none;
+    padding: 8px 22px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 12px;
+    transition: all 0.3s ease;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    box-shadow: 0 4px 12px rgba(232, 98, 42, 0.20);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+#modalFiltros .btn-registrar:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(232, 98, 42, 0.35);
+}
+
+#modalFiltros .btn-registrar .material-icons {
+    color: #ffffff;
+    font-size: 14px;
+}
+
+/* ============================================================
+   OVERLAY
+   ============================================================ */
+#modalFiltrosOverlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.40);
+    backdrop-filter: blur(4px);
+    z-index: 99999;
+    overflow: hidden;
+}
+
+#modalFiltrosOverlay.open {
+    display: block;
+}
+
+/* ============================================================
+   MODO CLARO
+   ============================================================ */
+[data-theme="light"] #modalFiltros {
+    background: #ffffff;
+    border: 1px solid rgba(232, 98, 42, 0.12);
+    box-shadow: 0 16px 48px rgba(232, 98, 42, 0.08);
+}
+
+[data-theme="light"] #modalFiltros .modal-header {
+    background: #ffffff;
+    border-bottom: 2px solid rgba(232, 98, 42, 0.08);
+}
+
+[data-theme="light"] #modalFiltros .modal-title {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .modal-title .material-icons {
+    color: #e8622a;
+}
+
+[data-theme="light"] #modalFiltros .cfg-close {
+    color: #8a8a9e;
+}
+
+[data-theme="light"] #modalFiltros .cfg-close:hover {
+    color: #e8622a;
+}
+
+[data-theme="light"] #modalFiltros .modal-body {
+    background: #ffffff;
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .modal-footer {
+    background: #faf8f7;
+    border-top: 1px solid rgba(232, 98, 42, 0.06);
+}
+
+[data-theme="light"] #modalFiltros .filtro-grupo-titulo {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .filtro-plataforma,
+[data-theme="light"] #modalFiltros .filtro-check {
+    background: #f7f5f4;
+    border: 1px solid rgba(232, 98, 42, 0.06);
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .filtro-plataforma:hover,
+[data-theme="light"] #modalFiltros .filtro-check:hover {
+    background: rgba(232, 98, 42, 0.04);
+    border-color: rgba(232, 98, 42, 0.15);
+    box-shadow: 0 2px 8px rgba(232, 98, 42, 0.04);
+}
+
+[data-theme="light"] #modalFiltros .filtro-plataforma.active,
+[data-theme="light"] #modalFiltros .filtro-check.active {
+    background: rgba(232, 98, 42, 0.06);
+    border-color: rgba(232, 98, 42, 0.20);
+    box-shadow: 0 2px 8px rgba(232, 98, 42, 0.06);
+}
+
+[data-theme="light"] #modalFiltros .filtro-plataforma .plataforma-info,
+[data-theme="light"] #modalFiltros .filtro-check span {
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .filtro-plataforma .plataforma-logo {
+    color: #e8622a;
+    background: rgba(232, 98, 42, 0.08);
+}
+
+[data-theme="light"] #modalFiltros .filtro-check .check-custom {
+    background: #ffffff;
+    border: 2px solid rgba(232, 98, 42, 0.15);
+}
+
+[data-theme="light"] #modalFiltros .filtro-check.active .check-custom {
+    background: #e8622a;
+    border-color: #e8622a;
+}
+
+[data-theme="light"] #modalFiltros .filtro-check .check-custom .material-icons {
+    color: #e8622a;
+}
+
+[data-theme="light"] #modalFiltros .btn-cancel {
+    color: #4a4a5e;
+    border: 1px solid rgba(232, 98, 42, 0.10);
+}
+
+[data-theme="light"] #modalFiltros .btn-cancel:hover {
+    background: rgba(232, 98, 42, 0.04);
+    border-color: rgba(232, 98, 42, 0.20);
+    color: #1a1a2e;
+}
+
+[data-theme="light"] #modalFiltros .btn-registrar {
+    background: linear-gradient(135deg, #e8622a, #d4521a);
+    box-shadow: 0 4px 12px rgba(232, 98, 42, 0.20);
+}
+
+[data-theme="light"] #modalFiltros .btn-registrar:hover {
+    box-shadow: 0 6px 20px rgba(232, 98, 42, 0.35);
+}
+
+[data-theme="light"] #modalFiltrosOverlay {
+    background: rgba(0, 0, 0, 0.35);
+    backdrop-filter: blur(4px);
+}
+
+/* ============================================================
+   BLOQUEAR SCROLL DEL BODY CUANDO MODAL ESTÁ ABIERTO
+   ============================================================ */
+body.modal-open {
+    overflow: hidden !important;
+    position: relative;
+    height: 100vh;
+}

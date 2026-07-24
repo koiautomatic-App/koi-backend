@@ -6629,10 +6629,9 @@ table.comp-table-report tr.total td:last-child {
     }
 }
 /* ============================================================
-   MODO DÍA - OVERRIDE COMPLETO
+   MODO CLARO - CORRECCIONES COMPLETAS
    ============================================================ */
 
-/* --- 1. Variables globales --- */
 [data-theme="light"] {
     --bg:           #f0f2f6;
     --bg-2:         #ffffff;
@@ -6676,193 +6675,154 @@ table.comp-table-report tr.total td:last-child {
     color: var(--text-1);
 }
 
-/* --- 2. CARDS PRINCIPALES --- */
-[data-theme="light"] .mono-card,
-[data-theme="light"] .metric-card,
-[data-theme="light"] .chart-card,
-[data-theme="light"] .comp-card,
-[data-theme="light"] .comp-tabla-wrap,
-[data-theme="light"] .cfg-vista-card,
-[data-theme="light"] .arca-card,
-[data-theme="light"] .neg-integration,
-[data-theme="light"] .neg-card,
-[data-theme="light"] .historial-card,
-[data-theme="light"] #onboardingArca .arca-card,
-[data-theme="light"] .suscripcion-card,
-[data-theme="light"] .report-panel-left,
-[data-theme="light"] .report-panel-right,
-[data-theme="light"] .preview-scroll-report,
-[data-theme="light"] .doc-stats-report,
-[data-theme="light"] .doc-cat-report {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
-    box-shadow: var(--sh-card) !important;
+/* ============================================================
+   1. BOTONES - UNIFICAR NUEVA EMISIÓN Y EMITIR LOTE
+   ============================================================ */
+[data-theme="light"] .btn-nueva-emision,
+[data-theme="light"] .btn-emitir-lote {
+    background: var(--green) !important;
+    color: #ffffff !important;
+    border: none !important;
 }
 
-[data-theme="light"] .doc-report {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
+[data-theme="light"] .btn-nueva-emision:hover,
+[data-theme="light"] .btn-emitir-lote:hover {
+    background: var(--green-dim) !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 16px var(--green-glow) !important;
 }
 
-/* --- 3. TEXTOS PRINCIPALES --- */
-[data-theme="light"] .mono-amount,
-[data-theme="light"] .mc-value,
-[data-theme="light"] .chart-total-val,
-[data-theme="light"] .comp-cliente,
-[data-theme="light"] .comp-monto,
-[data-theme="light"] .doc-title-report,
-[data-theme="light"] .doc-stat-value-report,
-[data-theme="light"] .doc-subtitle-report,
-[data-theme="light"] .doc-table-title-report,
-[data-theme="light"] .doc-cat-title-report,
-[data-theme="light"] .detail-row span:last-child,
-[data-theme="light"] .card-number,
-[data-theme="light"] .plan-price-sub strong,
-[data-theme="light"] .suscripcion-header h1,
-[data-theme="light"] .historial-bar-label {
-    color: var(--text-1) !important;
+[data-theme="light"] .btn-nueva-emision .material-icons,
+[data-theme="light"] .btn-emitir-lote .material-icons {
+    color: #ffffff !important;
 }
 
-/* --- 4. TEXTOS SECUNDARIOS --- */
-[data-theme="light"] .mc-label,
-[data-theme="light"] .comp-meta,
-[data-theme="light"] .doc-stat-label-report,
-[data-theme="light"] .doc-stat-sub-report,
-[data-theme="light"] .doc-footer-report,
-[data-theme="light"] .doc-header-sub-report,
-[data-theme="light"] .detail-row span:first-child,
-[data-theme="light"] .card-meta,
-[data-theme="light"] .plan-price-sub,
-[data-theme="light"] .mono-limit-lbl,
-[data-theme="light"] .chart-total-lbl,
-[data-theme="light"] .sec-label,
-[data-theme="light"] .suscripcion-header p,
-[data-theme="light"] .mono-left p {
-    color: var(--text-2) !important;
+/* ============================================================
+   2. MODAL DE FILTROS - MODO CLARO
+   ============================================================ */
+[data-theme="light"] .modal-filtros {
+    background: var(--bg-2) !important;
 }
 
-/* --- 5. TEXTOS TERCIARIOS --- */
-[data-theme="light"] .mono-limit-lbl,
-[data-theme="light"] .chart-total-lbl,
-[data-theme="light"] .sec-label,
-[data-theme="light"] .cfg-hint,
-[data-theme="light"] .doc-cat-pct-report,
-[data-theme="light"] .history-table th,
-[data-theme="light"] .table-footer {
-    color: var(--text-3) !important;
-}
-
-/* --- 6. TABLA DE COMPROBANTES --- */
-[data-theme="light"] .comp-tabla thead th {
-    background: var(--card-2) !important;
-    color: var(--text-3) !important;
+[data-theme="light"] .modal-filtros .modal-header {
+    background: var(--bg-2) !important;
     border-bottom: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] .comp-tabla tbody td {
-    color: var(--text-1) !important;
-    border-bottom: 1px solid var(--border-3) !important;
-}
-
-[data-theme="light"] .comp-tabla tbody tr:hover {
-    background: var(--card-2) !important;
-}
-
-[data-theme="light"] table.comp-table-report td {
-    color: var(--text-1) !important;
-    border-top: 1px solid var(--border) !important;
-}
-
-[data-theme="light"] table.comp-table-report tr.alt {
-    background: var(--card-2) !important;
-}
-
-[data-theme="light"] table.comp-table-report thead tr {
-    background: var(--orange-soft) !important;
-}
-
-[data-theme="light"] table.comp-table-report th {
-    color: var(--orange-2) !important;
-}
-
-[data-theme="light"] table.comp-table-report tr.total td {
-    background: var(--green-soft) !important;
-    border-top: 2px solid var(--green) !important;
+[data-theme="light"] .modal-filtros .modal-title {
     color: var(--text-1) !important;
 }
 
-[data-theme="light"] table.comp-table-report tr.total td:last-child {
-    color: var(--green) !important;
+[data-theme="light"] .modal-filtros .modal-body {
+    background: var(--bg-2) !important;
 }
 
-/* --- 7. CHIPS DE ESTADO --- */
-[data-theme="light"] .estado-chip.ok {
-    background: var(--green-soft) !important;
-    color: var(--green) !important;
-}
-
-[data-theme="light"] .estado-chip.pend {
-    background: var(--yellow-soft) !important;
-    color: #f39c12 !important;
-}
-
-[data-theme="light"] .estado-chip.anulado {
-    background: var(--red-soft) !important;
-    color: var(--red) !important;
-}
-
-[data-theme="light"] .cat-chip {
-    background: var(--green-soft) !important;
-    border: 1px solid var(--green-glow) !important;
-}
-
-[data-theme="light"] .cat-chip span {
-    color: var(--green) !important;
-}
-
-/* --- 8. PROGRESS BAR --- */
-[data-theme="light"] .prog-track {
-    background: var(--card-2) !important;
-}
-
-[data-theme="light"] .prog-fill {
-    background: linear-gradient(90deg, var(--green), var(--green-dim)) !important;
-}
-
-[data-theme="light"] .prog-fill.warn {
-    background: linear-gradient(90deg, var(--yellow), #f39c12) !important;
-}
-
-[data-theme="light"] .prog-fill.crit {
-    background: linear-gradient(90deg, var(--red), #e17055) !important;
-}
-
-[data-theme="light"] .prog-pct {
-    color: var(--text-1) !important;
-}
-
-[data-theme="light"] .prog-pct.warn {
-    color: #f39c12 !important;
-}
-
-[data-theme="light"] .prog-pct.crit {
-    color: var(--red) !important;
-}
-
-[data-theme="light"] .prog-mes {
+[data-theme="light"] .filtro-grupo-titulo {
     color: var(--text-2) !important;
 }
 
-/* --- 9. DOCUMENTOS Y REPORTES --- */
-[data-theme="light"] .doc-progress-track-report {
+[data-theme="light"] .filtro-plataforma {
     background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] .doc-progress-fill-report {
-    background: linear-gradient(90deg, var(--orange), var(--orange-2), var(--green)) !important;
+[data-theme="light"] .filtro-plataforma .plataforma-info {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .filtro-plataforma.active {
+    background: var(--green-soft) !important;
+    border-color: var(--green-glow) !important;
+}
+
+[data-theme="light"] .filtro-check {
+    background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .filtro-check span {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .filtro-check.active {
+    background: var(--green-soft) !important;
+    border-color: var(--green-glow) !important;
+}
+
+[data-theme="light"] .filtro-check .check-custom {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border-2) !important;
+}
+
+[data-theme="light"] .filtro-check .check-custom .material-icons {
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .modal-filtros .modal-footer {
+    background: var(--bg-2) !important;
+    border-top: 1px solid var(--border) !important;
+}
+
+/* ============================================================
+   3. REPORTE MENSUAL - MODO CLARO
+   ============================================================ */
+[data-theme="light"] .report-panel-left,
+[data-theme="light"] .report-panel-right {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .report-header {
+    background: var(--bg-2) !important;
+}
+
+[data-theme="light"] .report-header h2 {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .report-header .sec-label {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] .month-btn-report {
+    background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .month-btn-report.active {
+    background: var(--green) !important;
+    color: #ffffff !important;
+    border-color: var(--green) !important;
+}
+
+[data-theme="light"] .month-btn-report:hover:not(.active) {
+    background: var(--card-3) !important;
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .doc-report {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .doc-title-report,
+[data-theme="light"] .doc-subtitle-report,
+[data-theme="light"] .doc-stat-value-report,
+[data-theme="light"] .doc-table-title-report,
+[data-theme="light"] .doc-cat-title-report {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .doc-stat-label-report,
+[data-theme="light"] .doc-stat-sub-report,
+[data-theme="light"] .doc-footer-report,
+[data-theme="light"] .doc-header-sub-report {
+    color: var(--text-2) !important;
 }
 
 [data-theme="light"] .doc-stats-report {
+    background: var(--card-2) !important;
     border-bottom: 1px solid var(--border) !important;
 }
 
@@ -6870,38 +6830,167 @@ table.comp-table-report tr.total td:last-child {
     border-right: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] .contador-card-report {
+[data-theme="light"] .doc-cat-report {
     background: var(--card-2) !important;
     border: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] .contador-input-report {
-    background: var(--bg-2) !important;
-    border: 1px solid var(--border) !important;
+[data-theme="light"] .doc-cat-row-report {
     color: var(--text-1) !important;
 }
 
-/* --- 10. SUSCRIPCIÓN --- */
+[data-theme="light"] .doc-cat-row-report .label {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .doc-progress-track-report {
+    background: var(--card-3) !important;
+}
+
+[data-theme="light"] .doc-progress-fill-report {
+    background: linear-gradient(90deg, var(--green), var(--green-dim)) !important;
+}
+
+[data-theme="light"] .doc-cat-pct-report {
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .doc-nota-report {
+    background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .doc-nota-label-report {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .doc-nota-text-report {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .btn-send-report {
+    background: var(--green) !important;
+    color: #ffffff !important;
+    border: none !important;
+}
+
+[data-theme="light"] .btn-send-report:hover {
+    background: var(--green-dim) !important;
+}
+
+[data-theme="light"] .btn-send-report .material-icons {
+    color: #ffffff !important;
+}
+
+/* ============================================================
+   4. MI PLAN - MODO CLARO
+   ============================================================ */
 [data-theme="light"] .suscripcion-container {
     background: var(--bg) !important;
+}
+
+[data-theme="light"] .suscripcion-header h1 {
     color: var(--text-1) !important;
 }
 
-[data-theme="light"] .plan-price-sub {
+[data-theme="light"] .suscripcion-header p {
     color: var(--text-2) !important;
 }
 
-[data-theme="light"] .plan-price-sub strong {
-    color: var(--orange-2) !important;
+[data-theme="light"] .suscripcion-card {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--sh-card) !important;
 }
 
-[data-theme="light"] .support-link {
+[data-theme="light"] .suscripcion-card .badge-active {
+    background: var(--green-soft) !important;
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .suscripcion-card .badge-active .dot-live {
+    background: var(--green) !important;
+}
+
+[data-theme="light"] .suscripcion-card .plan-badge {
+    background: var(--orange-soft) !important;
+    color: var(--orange) !important;
+}
+
+[data-theme="light"] .suscripcion-card .plan-price-sub {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .suscripcion-card .detail-row span:first-child {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .suscripcion-card .detail-row span:last-child {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .suscripcion-card .detail-row .green {
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .btn-suscripcion.download {
+    background: var(--green) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="light"] .btn-suscripcion.download:hover {
+    background: var(--green-dim) !important;
+}
+
+[data-theme="light"] .btn-suscripcion.cancel {
+    background: var(--red-soft) !important;
+    color: var(--red) !important;
+    border: 1px solid rgba(214,48,49,0.2) !important;
+}
+
+[data-theme="light"] .btn-suscripcion.cancel:hover {
+    background: rgba(214,48,49,0.15) !important;
+}
+
+[data-theme="light"] .suscripcion-card .card-number {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .suscripcion-card .card-meta {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .suscripcion-card .card-face {
+    background: linear-gradient(135deg, #2d3436, #1a1a2e) !important;
+}
+
+[data-theme="light"] .history-table th {
+    color: var(--text-3) !important;
+    border-bottom: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .history-table td {
+    color: var(--text-1) !important;
+    border-bottom: 1px solid var(--border-3) !important;
+}
+
+[data-theme="light"] .history-table .chip-paid {
+    background: var(--green-soft) !important;
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .table-footer {
+    color: var(--text-2) !important;
+    border-top: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .support-links .support-link {
     color: var(--text-2) !important;
     background: var(--card-2) !important;
     border: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] .support-link:hover {
+[data-theme="light"] .support-links .support-link:hover {
     background: var(--card-3) !important;
     color: var(--text-1) !important;
 }
@@ -6909,186 +6998,286 @@ table.comp-table-report tr.total td:last-child {
 [data-theme="light"] .btn-suscripcion.ghost {
     color: var(--text-2) !important;
     background: var(--card-2) !important;
-    border: 1px solid var(--orange-soft) !important;
+    border: 1px solid var(--border) !important;
 }
 
-/* --- 11. ONBOARDING PLAN --- */
-[data-theme="light"] #vista-onboarding-plan .status-expired .status-unified-title,
-[data-theme="light"] #vista-onboarding-plan .breakdown-unified-label,
+[data-theme="light"] .btn-suscripcion.ghost:hover {
+    background: var(--card-3) !important;
+    color: var(--text-1) !important;
+}
+
+/* ============================================================
+   5. NOTIFICACIONES - MODO CLARO
+   ============================================================ */
+[data-theme="light"] .notif-dropdown {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--sh-lg) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-header {
+    border-bottom: 1px solid var(--border) !important;
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-mark-all {
+    color: var(--green) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-item {
+    border-bottom: 1px solid var(--border-3) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-item:hover {
+    background: var(--card-2) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-item .notif-title {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-item .notif-text {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-item .notif-time {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-empty {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-footer {
+    border-top: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-footer a {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .notif-dropdown .notif-footer a:hover {
+    color: var(--text-1) !important;
+}
+
+/* ============================================================
+   NOTIFICACIONES - MODAL CENTRAL
+   ============================================================ */
+[data-theme="light"] .notif-centro {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+    box-shadow: var(--sh-xl) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-header {
+    border-bottom: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-header span {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item {
+    border-bottom: 1px solid var(--border-3) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item:hover {
+    background: var(--card-2) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item.unread {
+    background: var(--green-bg) !important;
+    border-left: 3px solid var(--green) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item .notif-title {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item .notif-text {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-item .notif-time {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-footer {
+    border-top: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] .notif-centro .notif-footer span {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] .notif-overlay-koi {
+    background: rgba(0,0,0,0.4) !important;
+    backdrop-filter: blur(4px) !important;
+}
+
+/* ============================================================
+   6. ONBOARDING PLAN - MODO CLARO
+   ============================================================ */
+[data-theme="light"] #vista-onboarding-plan .status-card-modern {
+    background: var(--bg-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-badge {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-days-number {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-days-label {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-days-sub {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-expiry {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .timer-unified-item {
+    background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .timer-unified-label {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .timer-unified-value {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-box {
+    background: var(--card-2) !important;
+    border: 1px solid var(--border) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-label {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-sub {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-price {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .plus-unified-icon {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .total-unified-row {
+    border-top: 1px solid var(--border) !important;
+}
+
 [data-theme="light"] #vista-onboarding-plan .total-unified-label {
     color: var(--text-1) !important;
 }
 
-[data-theme="light"] #vista-onboarding-plan .status-unified-sub,
-[data-theme="light"] #vista-onboarding-plan .timer-unified-label,
-[data-theme="light"] #vista-onboarding-plan .breakdown-unified-sub,
-[data-theme="light"] #vista-onboarding-plan .plus-unified-icon,
-[data-theme="light"] #vista-onboarding-plan .total-unified-sub,
+[data-theme="light"] #vista-onboarding-plan .total-unified-sub {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .total-unified-price {
+    color: var(--green) !important;
+}
+
 [data-theme="light"] #vista-onboarding-plan .acumulation-unified-note {
     color: var(--text-2) !important;
 }
 
-[data-theme="light"] #vista-onboarding-plan .timer-unified-item,
-[data-theme="light"] #vista-onboarding-plan .breakdown-unified-box {
-    background: var(--card-2) !important;
-}
-
-/* --- 12. BOTONES Y ACCIONES --- */
-[data-theme="light"] .act-btn {
-    background: var(--card-2) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text-3) !important;
-}
-
-[data-theme="light"] .act-btn:hover {
-    background: var(--card-3) !important;
-    color: var(--text-1) !important;
-}
-
-[data-theme="light"] .act-btn.act-warn {
-    background: var(--yellow-soft) !important;
-    border-color: rgba(253,203,110,0.3) !important;
-    color: #f39c12 !important;
-}
-
-[data-theme="light"] .act-btn.act-danger {
-    background: var(--red-soft) !important;
-    border-color: rgba(214,48,49,0.2) !important;
-    color: var(--red) !important;
-}
-
-[data-theme="light"] .act-btn.act-done {
-    background: var(--green-soft) !important;
-    border-color: var(--green-glow) !important;
-    color: var(--green) !important;
-}
-
-[data-theme="light"] .act-btn.act-btn-sent {
-    background: var(--blue-soft) !important;
-    border-color: rgba(9,132,227,0.2) !important;
-    color: var(--blue) !important;
-}
-
-/* --- 13. INPUTS --- */
-[data-theme="light"] .cfg-input {
-    background: var(--card-2) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text-1) !important;
-}
-
-[data-theme="light"] .cfg-input:focus {
-    border-color: var(--green) !important;
+[data-theme="light"] #vista-onboarding-plan .price-unified-card {
     background: var(--bg-2) !important;
-    box-shadow: 0 0 0 3px var(--green-glow) !important;
-}
-
-[data-theme="light"] .cfg-label {
-    color: var(--text-2) !important;
-}
-
-/* --- 14. FILTROS --- */
-[data-theme="light"] .comp-search-input {
-    background: var(--card-2) !important;
     border: 1px solid var(--border) !important;
-    color: var(--text-1) !important;
+    box-shadow: var(--sh-lg) !important;
 }
 
-[data-theme="light"] .comp-search-input:focus {
-    border-color: var(--green) !important;
-    background: var(--bg-2) !important;
+[data-theme="light"] #vista-onboarding-plan .price-unified-top-bar {
+    background: linear-gradient(90deg, var(--green), var(--green-dim)) !important;
 }
 
-[data-theme="light"] .filtro-btn-filtrar {
-    background: var(--card-2) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text-1) !important;
-}
-
-[data-theme="light"] .filtro-btn-filtrar:hover {
-    background: var(--card-3) !important;
-}
-
-[data-theme="light"] .filtro-tag {
-    background: var(--card-2) !important;
-    border: 1px solid var(--border) !important;
-    color: var(--text-2) !important;
-}
-
-/* --- 15. NAV Y BADGES --- */
-[data-theme="light"] .nav-badge {
-    background: var(--orange-soft) !important;
+[data-theme="light"] #vista-onboarding-plan .price-unified-eyebrow {
     color: var(--orange) !important;
 }
 
-[data-theme="light"] .filtro-badge {
-    background: var(--orange) !important;
-    color: white !important;
-}
-
-[data-theme="light"] .total-chip {
-    background: var(--card-2) !important;
-    color: var(--text-2) !important;
-}
-
-[data-theme="light"] .total-chip strong {
+[data-theme="light"] #vista-onboarding-plan .price-unified-amount {
     color: var(--text-1) !important;
 }
 
-/* --- 16. TOGGLE TEMA --- */
-[data-theme="light"] #themeToggle {
+[data-theme="light"] #vista-onboarding-plan .price-unified-cur {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-num {
+    color: var(--text-1) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-period {
+    color: var(--text-3) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-note {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-feature-text {
+    color: var(--text-2) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-btn {
+    background: linear-gradient(135deg, var(--green), var(--green-dim)) !important;
+    color: #ffffff !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-btn:hover {
+    background: linear-gradient(135deg, var(--green-dim), #007a5e) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .price-unified-footnote {
+    color: var(--text-4) !important;
+}
+
+[data-theme="light"] #vista-onboarding-plan .policy-unified-card {
     background: var(--card-2) !important;
     border: 1px solid var(--border) !important;
 }
 
-[data-theme="light"] #themeToggle:hover {
-    border-color: var(--orange) !important;
-    box-shadow: 0 0 12px var(--orange-glow) !important;
+[data-theme="light"] #vista-onboarding-plan .policy-unified-header {
+    color: var(--text-1) !important;
 }
 
-[data-theme="light"] #themeToggle .theme-icon.sun {
-    background: rgba(253,203,110,0.2) !important;
-    color: #f39c12 !important;
+[data-theme="light"] #vista-onboarding-plan .policy-text-unified {
+    color: var(--text-2) !important;
 }
 
-[data-theme="light"] #themeToggle .theme-icon.moon {
-    background: rgba(9,132,227,0.08) !important;
-    color: var(--blue) !important;
+[data-theme="light"] #vista-onboarding-plan .example-unified-box {
+    background: var(--bg) !important;
+    border-left: 3px solid var(--orange) !important;
 }
 
-[data-theme="light"] #themeToggle .sun {
-    opacity: 1 !important;
-    transform: scale(1) !important;
-}
-[data-theme="light"] #themeToggle .moon {
-    opacity: 0.4 !important;
-    transform: scale(0.7) !important;
+[data-theme="light"] #vista-onboarding-plan .example-unified-box p {
+    color: var(--text-2) !important;
 }
 
-/* --- 17. SWITCHES --- */
-[data-theme="light"] .koi-toggle-track {
-    background: var(--card-3) !important;
-    border: 1px solid var(--border) !important;
-}
-
-[data-theme="light"] .koi-toggle input:checked + .koi-toggle-track {
-    background: var(--green) !important;
+[data-theme="light"] #vista-onboarding-plan .status-card-modern.status-active {
     border-color: var(--green) !important;
 }
 
-[data-theme="light"] .koi-toggle-track:after {
-    background: white !important;
+[data-theme="light"] #vista-onboarding-plan .status-card-modern.status-expired {
+    border-color: var(--red) !important;
 }
 
-/* --- 18. SCROLLBAR --- */
-[data-theme="light"] ::-webkit-scrollbar-track {
-    background: var(--card-2) !important;
-}
-
-[data-theme="light"] ::-webkit-scrollbar-thumb {
-    background: var(--border-2) !important;
-    border-radius: 4px !important;
-}
-
-[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
-    background: var(--text-4) !important;
+[data-theme="light"] #vista-onboarding-plan .status-card-modern.status-warning {
+    border-color: var(--yellow) !important;
 }

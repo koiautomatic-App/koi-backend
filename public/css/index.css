@@ -7505,3 +7505,120 @@ body.modal-open {
     position: relative;
     height: 100vh;
 }
+/* ============================================================
+   FIX: TARJETAS DE MI PLAN - IGUALAR ALTURAS
+   ============================================================ */
+
+/* --- Contenedor grid que iguala alturas --- */
+.suscripcion-grid {
+    display: grid !important;
+    grid-template-columns: 1fr 1fr !important;
+    gap: 24px !important;
+    align-items: stretch !important; /* 👈 CLAVE: estira todas las columnas a la misma altura */
+    width: 100% !important;
+}
+
+/* --- Cada columna debe estirarse --- */
+.suscripcion-col-left,
+.suscripcion-col-right {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    width: 100% !important;
+    height: 100% !important; /* 👈 CLAVE: ocupa toda la altura disponible */
+}
+
+/* --- Cada tarjeta debe ocupar todo el espacio disponible --- */
+.suscripcion-card {
+    flex: 1 !important; /* 👈 CLAVE: hace que todas las tarjetas ocupen el mismo espacio */
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+    background: #0d0d16 !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    border-radius: 12px !important;
+    padding: 18px 20px !important;
+    transition: border-color 0.2s ease !important;
+    position: relative !important;
+    overflow: hidden !important;
+    height: auto !important;
+    min-height: 0 !important;
+}
+
+/* --- La tarjeta de la izquierda (status-card) también se estira --- */
+.suscripcion-card.status-card {
+    flex: 1 !important;
+}
+
+/* --- La tarjeta de la derecha (método de pago) también se estira --- */
+.suscripcion-card:not(.status-card) {
+    flex: 1 !important;
+}
+
+/* --- Para que el contenido interno también ocupe todo --- */
+.suscripcion-card .status-top,
+.suscripcion-card .plan-price-sub,
+.suscripcion-card .detail-box,
+.suscripcion-card .suscripcion-actions {
+    flex-shrink: 0 !important;
+}
+
+/* --- Empujar el contenido hacia abajo para que las tarjetas se vean uniformes --- */
+.suscripcion-card .suscripcion-actions {
+    margin-top: auto !important;
+    padding-top: 16px !important;
+}
+
+/* ============================================================
+   MODO CLARO
+   ============================================================ */
+[data-theme="light"] .suscripcion-card {
+    background: #ffffff !important;
+    border: 1px solid rgba(0, 0, 0, 0.06) !important;
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.04) !important;
+}
+
+[data-theme="light"] .suscripcion-card.status-card {
+    border-top: 2px solid #00b894 !important;
+}
+
+/* ============================================================
+   RESPONSIVE - MOBILE
+   ============================================================ */
+@media (max-width: 768px) {
+    .suscripcion-grid {
+        grid-template-columns: 1fr !important; /* 👈 Una sola columna en mobile */
+        gap: 16px !important;
+    }
+    
+    .suscripcion-col-left,
+    .suscripcion-col-right {
+        height: auto !important; /* 👈 Altura automática en mobile */
+        min-height: 0 !important;
+    }
+    
+    .suscripcion-card {
+        flex: none !important; /* 👈 Sin estirar en mobile */
+        height: auto !important;
+        min-height: auto !important;
+        padding: 16px 18px !important;
+    }
+    
+    .suscripcion-card .suscripcion-actions {
+        margin-top: 12px !important;
+        padding-top: 12px !important;
+    }
+}
+
+@media (max-width: 480px) {
+    .suscripcion-card {
+        padding: 14px 16px !important;
+        border-radius: 12px !important;
+    }
+    
+    .suscripcion-card .suscripcion-actions {
+        grid-template-columns: 1fr !important; /* Botones apilados */
+        gap: 8px !important;
+    }
+}

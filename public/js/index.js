@@ -7915,6 +7915,46 @@ async function enviarMailAutomatico(orderId) {
         console.error('❌ Error en envío automático:', e.message);
     }
 }
+// ============================================================
+//  MODO DÍA / NOCHE
+// ============================================================
+
+function toggleTheme() {
+    const html = document.documentElement;
+    const isLight = html.getAttribute('data-theme') === 'light';
+    const next = isLight ? 'dark' : 'light';
+    
+    // Aplicar tema
+    html.setAttribute('data-theme', next === 'light' ? 'light' : '');
+    localStorage.setItem('koi-theme', next);
+    
+    // Actualizar visual del toggle
+    updateThemeToggleUI(next);
+    
+    console.log(`🎨 Tema cambiado a: ${next}`);
+}
+
+function updateThemeToggleUI(theme) {
+    const toggle = document.getElementById('themeToggle');
+    if (!toggle) return;
+    
+    // Limpiar clases
+    toggle.classList.remove('theme-light', 'theme-dark');
+    toggle.classList.add(theme === 'light' ? 'theme-light' : 'theme-dark');
+}
+
+// Inicializar tema al cargar la página
+document.addEventListener('DOMContentLoaded', () => {
+    const saved = localStorage.getItem('koi-theme');
+    if (saved === 'light') {
+        document.documentElement.setAttribute('data-theme', 'light');
+        updateThemeToggleUI('light');
+    } else {
+        // Por defecto oscuro
+        document.documentElement.setAttribute('data-theme', '');
+        updateThemeToggleUI('dark');
+    }
+});
 
 
 

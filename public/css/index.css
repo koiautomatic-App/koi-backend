@@ -6628,3 +6628,320 @@ table.comp-table-report tr.total td:last-child {
         padding: 6px 0;
     }
 }
+/* ============================================================
+   TOGGLE TEMA - TOPBAR
+   ============================================================ */
+
+#themeToggle {
+    display: flex;
+    align-items: center;
+    background: var(--card-2);
+    border-radius: 20px;
+    padding: 4px;
+    gap: 2px;
+    border: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 48px;
+    height: 28px;
+    position: relative;
+    flex-shrink: 0;
+}
+
+#themeToggle .theme-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    transition: all 0.3s ease;
+    color: var(--text-2);
+}
+
+#themeToggle .theme-icon.sun {
+    background: rgba(255, 179, 0, 0.15);
+    color: #f5a623;
+}
+
+#themeToggle .theme-icon.moon {
+    background: rgba(100, 100, 200, 0.15);
+    color: #8888cc;
+}
+
+#themeToggle:hover {
+    border-color: var(--orange);
+    box-shadow: 0 0 12px rgba(232, 98, 42, 0.15);
+}
+
+/* Modo oscuro (default) */
+#themeToggle .sun {
+    opacity: 0.4;
+    transform: scale(0.7);
+}
+#themeToggle .moon {
+    opacity: 1;
+    transform: scale(1);
+}
+
+/* Modo claro */
+[data-theme="light"] #themeToggle {
+    background: rgba(20, 20, 31, 0.06);
+    border-color: rgba(20, 20, 31, 0.12);
+}
+
+[data-theme="light"] #themeToggle .theme-icon.sun {
+    background: rgba(255, 179, 0, 0.2);
+    color: #e8941a;
+}
+
+[data-theme="light"] #themeToggle .theme-icon.moon {
+    background: rgba(100, 100, 200, 0.1);
+    color: #6666aa;
+}
+
+[data-theme="light"] #themeToggle .sun {
+    opacity: 1;
+    transform: scale(1);
+}
+[data-theme="light"] #themeToggle .moon {
+    opacity: 0.4;
+    transform: scale(0.7);
+}
+
+/* ============================================================
+   MODO DÍA - OVERRIDE COMPLETO
+   ============================================================ */
+
+/* --- 1. Variables globales --- */
+[data-theme="light"] {
+    --bg:           #f5f5f9;
+    --bg-2:         #ffffff;
+    --surface:      #ffffff;
+    --card:         #ffffff;
+    --card-2:       #f3f3f8;
+    --border:       rgba(20,20,31,0.08);
+    --border-2:     rgba(20,20,31,0.14);
+    --green:        #00b359;
+    --green-dim:    #009e4d;
+    --green-glow:   rgba(0,179,89,0.15);
+    --green-soft:   rgba(0,179,89,0.08);
+    --orange:       #e8622a;
+    --orange-2:     #c97800;
+    --orange-glow:  rgba(232,98,42,0.15);
+    --orange-soft:  rgba(232,98,42,0.08);
+    --red:          #d92d43;
+    --yellow:       #b8860b;
+    --blue:         #1f5fd1;
+    --text-1:       #14141f;
+    --text-2:       #5c5c72;
+    --text-3:       #9999ac;
+    --sh-card:      0 4px 16px rgba(20,20,31,0.06);
+    --sh-glow:      0 0 20px rgba(0,179,89,0.15);
+}
+
+[data-theme="light"] body {
+    background: var(--bg);
+    color: var(--text-1);
+}
+
+/* --- 2. Sección "Reporte mensual" --- */
+[data-theme="light"] .report-panel-left,
+[data-theme="light"] .report-panel-right,
+[data-theme="light"] .preview-scroll-report,
+[data-theme="light"] .doc-stats-report,
+[data-theme="light"] .doc-cat-report {
+    background: #ffffff !important;
+}
+
+[data-theme="light"] .doc-report {
+    background: #ffffff !important;
+    border: 1px solid rgba(20,20,31,0.08) !important;
+}
+
+[data-theme="light"] .doc-title-report,
+[data-theme="light"] .doc-subtitle-report,
+[data-theme="light"] .doc-stat-value-report,
+[data-theme="light"] .doc-table-title-report,
+[data-theme="light"] .doc-cat-title-report,
+[data-theme="light"] .doc-cat-row-report span:last-child {
+    color: #14141f !important;
+}
+
+[data-theme="light"] .doc-stat-label-report,
+[data-theme="light"] .doc-stat-sub-report,
+[data-theme="light"] .doc-cat-row-report .label,
+[data-theme="light"] .doc-footer-report,
+[data-theme="light"] .doc-header-sub-report {
+    color: #5c5c72 !important;
+}
+
+[data-theme="light"] table.comp-table-report td {
+    color: #14141f !important;
+    border-top: 1px solid rgba(20,20,31,0.08) !important;
+}
+
+[data-theme="light"] table.comp-table-report tr.alt {
+    background: rgba(20,20,31,0.02) !important;
+}
+
+[data-theme="light"] table.comp-table-report thead tr {
+    background: rgba(232,98,42,0.06) !important;
+}
+
+[data-theme="light"] table.comp-table-report th {
+    color: #c97800 !important;
+}
+
+[data-theme="light"] table.comp-table-report tr.total td {
+    background: rgba(0,179,89,0.1) !important;
+    border-top: 2px solid #00b359 !important;
+    color: #14141f !important;
+}
+
+[data-theme="light"] table.comp-table-report tr.total td:last-child {
+    color: #009e4d !important;
+}
+
+[data-theme="light"] .doc-progress-track-report {
+    background: rgba(20,20,31,0.06) !important;
+}
+
+[data-theme="light"] .doc-progress-fill-report {
+    background: linear-gradient(90deg, #e8622a, #f5a623, #00b359) !important;
+}
+
+[data-theme="light"] .doc-cat-pct-report {
+    color: #009e4d !important;
+}
+
+[data-theme="light"] .doc-stats-report {
+    border-bottom: 1px solid rgba(20,20,31,0.08) !important;
+}
+
+[data-theme="light"] .doc-stat-report {
+    border-right: 1px solid rgba(20,20,31,0.08) !important;
+}
+
+[data-theme="light"] .contador-card-report {
+    background: rgba(20,20,31,0.02) !important;
+    border: 1px solid rgba(20,20,31,0.06) !important;
+}
+
+[data-theme="light"] .contador-input-report {
+    background: #ffffff !important;
+    border: 1px solid rgba(20,20,31,0.1) !important;
+    color: #14141f !important;
+}
+
+/* --- 3. Sección "Mi Plan" --- */
+[data-theme="light"] .suscripcion-container {
+    background: #f5f5f9;
+    color: #14141f;
+}
+
+[data-theme="light"] .suscripcion-header h1 {
+    color: #14141f;
+}
+
+[data-theme="light"] .suscripcion-header p {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .suscripcion-card {
+    background: #ffffff;
+    border: 1px solid rgba(20,20,31,0.08);
+}
+
+[data-theme="light"] .plan-price-sub {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .plan-price-sub strong {
+    color: #c97800;
+}
+
+[data-theme="light"] .detail-row span:first-child {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .detail-row span:last-child {
+    color: #14141f;
+}
+
+[data-theme="light"] .sec-label {
+    color: #9999ac;
+}
+
+[data-theme="light"] .historial-bar-label {
+    color: #14141f;
+}
+
+[data-theme="light"] .historial-bar-right {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .history-table th {
+    color: #9999ac;
+}
+
+[data-theme="light"] .history-table td {
+    color: #14141f;
+}
+
+[data-theme="light"] .card-number {
+    color: #14141f;
+}
+
+[data-theme="light"] .card-meta {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .support-link {
+    color: #5c5c72;
+    background: rgba(20,20,31,0.02);
+    border: 1px solid rgba(20,20,31,0.06);
+}
+
+[data-theme="light"] .table-footer {
+    color: #5c5c72;
+}
+
+[data-theme="light"] .btn-suscripcion.ghost {
+    color: #5c5c72;
+    background: rgba(20,20,31,0.02);
+    border: 1px solid rgba(232,98,42,0.2);
+}
+
+/* --- 4. Sección "Onboarding plan" --- */
+[data-theme="light"] #vista-onboarding-plan .status-expired .status-unified-title {
+    color: #14141f;
+}
+
+[data-theme="light"] #vista-onboarding-plan .status-unified-sub {
+    color: #5c5c72;
+}
+
+[data-theme="light"] #vista-onboarding-plan .timer-unified-item {
+    background: rgba(20,20,31,0.04);
+}
+
+[data-theme="light"] #vista-onboarding-plan .timer-unified-label {
+    color: #5c5c72;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-box {
+    background: rgba(20,20,31,0.04);
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-label,
+[data-theme="light"] #vista-onboarding-plan .total-unified-label {
+    color: #14141f;
+}
+
+[data-theme="light"] #vista-onboarding-plan .breakdown-unified-sub,
+[data-theme="light"] #vista-onboarding-plan .plus-unified-icon,
+[data-theme="light"] #vista-onboarding-plan .total-unified-sub,
+[data-theme="light"] #vista-onboarding-plan .acumulation-unified-note {
+    color: #5c5c72;
+}

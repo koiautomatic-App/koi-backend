@@ -2061,7 +2061,7 @@ function renderComprobantes(lista) {
           return '<span style="font-size:9px;font-weight:700;background:#7F54B3;color:white;padding:2px 7px;border-radius:4px;">WOO</span>';
         case 'manual':
         case 'manuales':
-          return '<span style="font-size:9px;font-weight:700;background:#00e676;color:#0a0e1a;padding:2px 7px;border-radius:4px;">📝 MAN</span>';
+          return '<span style="font-size:9px;font-weight:700;background:#00e676;color:#0a0e1a;padding:2px 7px;border-radius:4px;"> MAN</span>';
         default:
           return '<span style="font-size:9px;font-weight:700;background:#444;padding:2px 7px;border-radius:4px;">EXT</span>';
       }

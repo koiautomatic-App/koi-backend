@@ -6629,91 +6629,11 @@ table.comp-table-report tr.total td:last-child {
     }
 }
 /* ============================================================
-   TOGGLE TEMA - TOPBAR
-   ============================================================ */
-
-#themeToggle {
-    display: flex;
-    align-items: center;
-    background: var(--card-2);
-    border-radius: 20px;
-    padding: 4px;
-    gap: 2px;
-    border: 1px solid var(--border);
-    cursor: pointer;
-    transition: all 0.3s ease;
-    width: 48px;
-    height: 28px;
-    position: relative;
-    flex-shrink: 0;
-}
-
-#themeToggle .theme-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 22px;
-    height: 22px;
-    border-radius: 50%;
-    transition: all 0.3s ease;
-    color: var(--text-2);
-}
-
-#themeToggle .theme-icon.sun {
-    background: rgba(255, 179, 0, 0.15);
-    color: #f5a623;
-}
-
-#themeToggle .theme-icon.moon {
-    background: rgba(100, 100, 200, 0.15);
-    color: #8888cc;
-}
-
-#themeToggle:hover {
-    border-color: var(--orange);
-    box-shadow: 0 0 12px rgba(232, 98, 42, 0.15);
-}
-
-/* Modo oscuro (default) */
-#themeToggle .sun {
-    opacity: 0.4;
-    transform: scale(0.7);
-}
-#themeToggle .moon {
-    opacity: 1;
-    transform: scale(1);
-}
-
-/* Modo claro */
-[data-theme="light"] #themeToggle {
-    background: rgba(20, 20, 31, 0.06);
-    border-color: rgba(20, 20, 31, 0.12);
-}
-
-[data-theme="light"] #themeToggle .theme-icon.sun {
-    background: rgba(255, 179, 0, 0.2);
-    color: #e8941a;
-}
-
-[data-theme="light"] #themeToggle .theme-icon.moon {
-    background: rgba(100, 100, 200, 0.1);
-    color: #6666aa;
-}
-
-[data-theme="light"] #themeToggle .sun {
-    opacity: 1;
-    transform: scale(1);
-}
-[data-theme="light"] #themeToggle .moon {
-    opacity: 0.4;
-    transform: scale(0.7);
-}
-
-/* ============================================================
    MODO DÍA - OVERRIDE COMPLETO
    ============================================================ */
 
-/* --- 1. Variables globales --- */
+/* --- 1. Variables globales: cubre automáticamente ~380 reglas
+   que ya usan var(--...) en todo el archivo --- */
 [data-theme="light"] {
     --bg:           #f5f5f9;
     --bg-2:         #ffffff;
@@ -6745,7 +6665,7 @@ table.comp-table-report tr.total td:last-child {
     color: var(--text-1);
 }
 
-/* --- 2. Sección "Reporte mensual" --- */
+/* --- 2. Sección "Reporte mensual" (usa hex fijo, no variables) --- */
 [data-theme="light"] .report-panel-left,
 [data-theme="light"] .report-panel-right,
 [data-theme="light"] .preview-scroll-report,
@@ -6834,7 +6754,7 @@ table.comp-table-report tr.total td:last-child {
     color: #14141f !important;
 }
 
-/* --- 3. Sección "Mi Plan" --- */
+/* --- 3. Sección "Mi Plan" (usa hex fijo, no variables) --- */
 [data-theme="light"] .suscripcion-container {
     background: #f5f5f9;
     color: #14141f;
@@ -6913,7 +6833,7 @@ table.comp-table-report tr.total td:last-child {
     border: 1px solid rgba(232,98,42,0.2);
 }
 
-/* --- 4. Sección "Onboarding plan" --- */
+/* --- 4. Sección "Onboarding plan" (usa hex fijo, no variables) --- */
 [data-theme="light"] #vista-onboarding-plan .status-expired .status-unified-title {
     color: #14141f;
 }

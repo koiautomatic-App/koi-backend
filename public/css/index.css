@@ -6769,10 +6769,9 @@ table.comp-table-report tr.total td:last-child {
 }
 
 [data-theme="light"] .suscripcion-card {
-    background: #ffffff;
-    border: 1px solid rgba(20,20,31,0.08);
+    background: #ffffff !important;
+    border: 1px solid rgba(20,20,31,0.08) !important;
 }
-
 [data-theme="light"] .plan-price-sub {
     color: #5c5c72;
 }
@@ -6864,4 +6863,18 @@ table.comp-table-report tr.total td:last-child {
 [data-theme="light"] #vista-onboarding-plan .total-unified-sub,
 [data-theme="light"] #vista-onboarding-plan .acumulation-unified-note {
     color: #5c5c72;
+}
+[data-theme="light"] .mono-card,
+[data-theme="light"] .metric-card,
+[data-theme="light"] .chart-card,
+[data-theme="light"] .comp-card,
+[data-theme="light"] .comp-tabla-wrap,
+[data-theme="light"] .cfg-vista-card,
+[data-theme="light"] .arca-card,
+[data-theme="light"] .neg-integration,
+[data-theme="light"] .neg-card,
+[data-theme="light"] .historial-card,
+[data-theme="light"] #onboardingArca .arca-card,
+[data-theme="light"] .suscripcion-card {
+    background: #ffffff !important;
 }

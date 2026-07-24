@@ -2052,22 +2052,23 @@ function renderComprobantes(lista) {
       estadoChip = `<span class="estado-chip pend">◌ Pendiente</span>`;
     }
     
+    // 🔥 BADGE MANUAL ACTUALIZADO
     const origenPill = (() => {
       switch (c.platform) {
         case 'mercadolibre':
           return '<span style="font-size:9px;font-weight:700;background:#FFE600;color:#1a1a1a;padding:2px 7px;border-radius:4px;">ML</span>';
         case 'woocommerce':
           return '<span style="font-size:9px;font-weight:700;background:#7F54B3;color:white;padding:2px 7px;border-radius:4px;">WOO</span>';
+        case 'manual':
+        case 'manuales':
+          return '<span style="font-size:9px;font-weight:700;background:#00e676;color:#0a0e1a;padding:2px 7px;border-radius:4px;">📝 MAN</span>';
         default:
           return '<span style="font-size:9px;font-weight:700;background:#444;padding:2px 7px;border-radius:4px;">EXT</span>';
       }
     })();
     
-    const btnAnular = c.origen === 'manual' && !emitido && !esAnulada && !esCancelada
-      ? `<button class="act-btn" title="Anular" onclick="anularManual('${c.id}')">↩️</button>`
-      : '';
-    
-    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && !esAnulada && c.origen !== 'manual')
+    // 🔥 BOTÓN CANCELAR SIN RESTRICCIÓN DE ORIGEN
+    const btnCancelar = (emitido && !esCancelada && !esNotaCredito && !esAnulada)
       ? `<button class="act-btn act-danger" title="Cancelar factura - Emitir Nota de Crédito" onclick="cancelarFactura('${c.orderId || c._id || c.id}')">
           <svg width="13" height="13" viewBox="0 0 14 14" fill="none">
             <path d="M2 2L12 12M12 2L2 12" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
@@ -2138,7 +2139,6 @@ function renderComprobantes(lista) {
             </svg>
           </button>
           ${btnCancelar}
-          ${btnAnular}
         </div>
       </td>
      </tr>`;

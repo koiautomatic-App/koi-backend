@@ -5215,6 +5215,7 @@ table.comp-table-report tr.total td:last-child {
     z-index: 99998 !important;
     padding: 20px !important;
     box-sizing: border-box !important;
+    overflow: hidden !important;
 }
 
 #modalFiltrosOverlay.open {
@@ -5238,6 +5239,7 @@ table.comp-table-report tr.total td:last-child {
     overflow: hidden !important;
     z-index: 99999 !important;
     position: relative !important;
+    flex-shrink: 0 !important;
 }
 
 #modalFiltros.open {
@@ -5488,17 +5490,21 @@ table.comp-table-report tr.total td:last-child {
    ============================================================ */
 
 @media (max-width: 768px) {
+    #modalFiltrosOverlay {
+        padding: 16px !important;
+    }
+
     #modalFiltros {
         width: 94% !important;
         max-height: 82vh !important;
         border-radius: 16px !important;
     }
-    
+
     #modalFiltros .modal-body {
         max-height: calc(82vh - 140px) !important;
         padding: 14px 18px !important;
     }
-    
+
     #modalFiltros .filtro-check,
     #modalFiltros .filtro-plataforma {
         padding: 5px 10px !important;
@@ -5507,15 +5513,15 @@ table.comp-table-report tr.total td:last-child {
 }
 
 @media (max-width: 480px) {
-    /* OVERLAY - centra el modal en el viewport */
+    /* OVERLAY - centra el modal en el viewport, ambos ejes */
     #modalFiltrosOverlay {
         padding: 8px !important;
         align-items: center !important;
         justify-content: center !important;
         display: flex !important;
     }
-    
-    /* MODAL - tamaño justo, centrado */
+
+    /* MODAL - tamaño justo, centrado, cabe completo sin scroll de página */
     #modalFiltros {
         width: 100% !important;
         max-width: 100% !important;
@@ -5529,29 +5535,30 @@ table.comp-table-report tr.total td:last-child {
         transform: none !important;
         display: flex !important;
         flex-direction: column !important;
+        flex-shrink: 0 !important;
     }
-    
+
     /* HEADER - compacto */
     #modalFiltros .modal-header {
         padding: 8px 12px !important;
         flex-shrink: 0 !important;
         min-height: 36px !important;
     }
-    
+
     #modalFiltros .modal-title {
         font-size: 12px !important;
         gap: 6px !important;
     }
-    
+
     #modalFiltros .modal-title .material-icons {
         font-size: 16px !important;
     }
-    
+
     #modalFiltros .cfg-close {
         font-size: 16px !important;
         padding: 2px 6px !important;
     }
-    
+
     /* BODY - scroll interno, ocupa el espacio disponible */
     #modalFiltros .modal-body {
         flex: 1 1 auto !important;
@@ -5562,26 +5569,26 @@ table.comp-table-report tr.total td:last-child {
         min-height: 0 !important;
         -webkit-overflow-scrolling: touch !important;
     }
-    
+
     /* FILTROS - compactos */
     #modalFiltros .filtro-grupo {
         margin-bottom: 6px !important;
     }
-    
+
     #modalFiltros .filtro-grupo:last-child {
         margin-bottom: 0 !important;
     }
-    
+
     #modalFiltros .filtro-grupo-titulo {
         font-size: 8px !important;
         margin-bottom: 3px !important;
         letter-spacing: 0.5px !important;
     }
-    
+
     #modalFiltros .filtro-opciones {
         gap: 3px !important;
     }
-    
+
     #modalFiltros .filtro-check,
     #modalFiltros .filtro-plataforma {
         padding: 2px 6px !important;
@@ -5590,17 +5597,17 @@ table.comp-table-report tr.total td:last-child {
         gap: 3px !important;
         border-radius: 20px !important;
     }
-    
+
     #modalFiltros .filtro-check .check-custom {
         width: 12px !important;
         height: 12px !important;
         min-width: 12px !important;
     }
-    
+
     #modalFiltros .filtro-check .check-custom .material-icons {
         font-size: 8px !important;
     }
-    
+
     #modalFiltros .filtro-plataforma .plataforma-logo {
         width: 14px !important;
         height: 14px !important;
@@ -5608,11 +5615,11 @@ table.comp-table-report tr.total td:last-child {
         font-size: 6px !important;
         border-radius: 4px !important;
     }
-    
+
     #modalFiltros .filtro-plataforma .plataforma-info {
         font-size: 8px !important;
     }
-    
+
     /* FOOTER - fijo abajo, siempre visible */
     #modalFiltros .modal-footer {
         flex-shrink: 0 !important;
@@ -5625,7 +5632,7 @@ table.comp-table-report tr.total td:last-child {
         align-items: center !important;
         flex-wrap: wrap !important;
     }
-    
+
     #modalFiltros .btn-cancel,
     #modalFiltros .btn-registrar {
         padding: 4px 10px !important;
@@ -5635,7 +5642,7 @@ table.comp-table-report tr.total td:last-child {
         flex: 0 1 auto !important;
         min-width: 60px !important;
     }
-    
+
     #modalFiltros .btn-registrar .material-icons {
         font-size: 12px !important;
     }
@@ -5643,30 +5650,34 @@ table.comp-table-report tr.total td:last-child {
 
 /* Pantallas muy pequeñas (menos de 380px) */
 @media (max-width: 380px) {
+    #modalFiltrosOverlay {
+        padding: 6px !important;
+    }
+
     #modalFiltros {
         max-height: 65vh !important;
     }
-    
+
     #modalFiltros .modal-body {
         max-height: calc(65vh - 90px) !important;
         padding: 6px 10px !important;
     }
-    
+
     #modalFiltros .modal-header {
         padding: 6px 10px !important;
         min-height: 30px !important;
     }
-    
+
     #modalFiltros .modal-title {
         font-size: 11px !important;
     }
-    
+
     #modalFiltros .modal-footer {
         padding: 4px 10px 8px 10px !important;
         min-height: 32px !important;
         gap: 4px !important;
     }
-    
+
     #modalFiltros .btn-cancel,
     #modalFiltros .btn-registrar {
         padding: 4px 8px !important;
@@ -5674,20 +5685,20 @@ table.comp-table-report tr.total td:last-child {
         min-height: 24px !important;
         min-width: 50px !important;
     }
-    
+
     #modalFiltros .filtro-check,
     #modalFiltros .filtro-plataforma {
         padding: 1px 4px !important;
         font-size: 7px !important;
         min-height: 16px !important;
     }
-    
+
     #modalFiltros .filtro-check .check-custom {
         width: 10px !important;
         height: 10px !important;
         min-width: 10px !important;
     }
-    
+
     #modalFiltros .filtro-plataforma .plataforma-logo {
         width: 12px !important;
         height: 12px !important;

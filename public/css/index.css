@@ -5228,7 +5228,6 @@ table.comp-table-report tr.total td:last-child {
 #modalFiltros {
     display: none !important;
     flex-direction: column !important;
-    margin: 0 auto !important;
     width: 96% !important;
     max-width: 480px !important;
     max-height: 85vh !important;
@@ -5238,7 +5237,14 @@ table.comp-table-report tr.total td:last-child {
     box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5) !important;
     overflow: hidden !important;
     z-index: 99999 !important;
-    position: relative !important;
+    /* Se centra SOLO, sin depender de ser hijo del overlay */
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
+    transform: translate(-50%, -50%) !important;
     flex-shrink: 0 !important;
 }
 
@@ -5523,16 +5529,16 @@ table.comp-table-report tr.total td:last-child {
 
     /* MODAL - tamaño justo, centrado, cabe completo sin scroll de página */
     #modalFiltros {
-        width: 100% !important;
-        max-width: 100% !important;
+        width: 92% !important;
+        max-width: 92% !important;
         max-height: 70vh !important;
         height: auto !important;
         border-radius: 14px !important;
         margin: 0 !important;
-        position: relative !important;
-        top: auto !important;
-        left: auto !important;
-        transform: none !important;
+        position: fixed !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
         display: flex !important;
         flex-direction: column !important;
         flex-shrink: 0 !important;

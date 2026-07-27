@@ -1716,20 +1716,26 @@ const DASH_PRESETS = {
 };
 
 // ============================================================
-//  INICIALIZAR PERÍODO DEL DASHBOARD - "TODO EL TIEMPO"
+//  INICIALIZAR PERÍODO DEL DASHBOARD - "ESTE MES"
 // ============================================================
 function _initDashPeriod() {
-    // ✅ Cambiar a "Todo" por defecto"
-    _rangoDesde = null;
-    _rangoHasta = null;
-    _dashDesde = null;
-    _dashHasta = null;
+    // ✅ Cambiar a "Este mes" por defecto
+    const hoy = new Date();
+    _rangoDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    _rangoHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    _dashDesde = _rangoDesde;
+    _dashHasta = _rangoHasta;
     
     _syncDashInputs();
-    _updateTopbarBadge('Todo');
+    
+    // Formatear etiqueta: "01 de julio de 2026 → 31 de julio de 2026"
+    const fmt = d => d.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+    const label = `${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`;
+    _updateTopbarBadge(label);
+    
     _recargarDashConPeriodo();
     
-    console.log('📌 Dashboard inicializado con período: TODO');
+    console.log('📌 Dashboard inicializado con período: ESTE MES');
 }
 
 function toggleDashCalendario() {
@@ -1982,6 +1988,21 @@ function setFiltro(tipo, btn) {
   _filtroTipo = tipo;
   document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
+  
+  // 👇 Si el filtro es "todos", quitar filtros de fecha
+  if (tipo === 'todos') {
+    _rangoDesde = null;
+    _rangoHasta = null;
+    _dashDesde = null;
+    _dashHasta = null;
+    // Actualizar etiqueta del período
+    const labelEl = document.getElementById('btnPeriodoLabel');
+    if (labelEl) labelEl.textContent = 'Todo el tiempo';
+    // Actualizar también el badge del topbar
+    const periodLabel = document.getElementById('dashPeriodoLabel');
+    if (periodLabel) periodLabel.textContent = 'Todo el historial';
+    console.log('📌 Filtros de fecha eliminados - Mostrando TODOS los comprobantes');
+  }
   
   // 👇 Recargar desde el backend con el nuevo filtro
   cargarTodosComprobantes(1, busquedaActual);

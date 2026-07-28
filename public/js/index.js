@@ -2027,7 +2027,6 @@ function setFiltro(tipo, btn) {
   btn.classList.add('active');
   
   if (tipo === 'todos') {
-    // 👇 LIMPIAR TODOS LOS FILTROS DE FECHA
     _compDesde = null;
     _compHasta = null;
     _rangoDesde = null;
@@ -2035,7 +2034,7 @@ function setFiltro(tipo, btn) {
     _dashDesde = null;
     _dashHasta = null;
     
-    // Actualizar etiquetas visuales
+    // 👇 ACTUALIZAR TODAS LAS ETIQUETAS
     const labelEl = document.getElementById('btnPeriodoLabel');
     if (labelEl) labelEl.textContent = 'Todo el tiempo';
     
@@ -2048,12 +2047,14 @@ function setFiltro(tipo, btn) {
     const chartSub = document.getElementById('chartSub');
     if (chartSub) chartSub.textContent = 'Todo el historial';
     
+    // 👇 DESACTIVAR VISUALMENTE EL BOTÓN "Este mes"
+    document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
+    
     console.log('📌 Filtro "todos" activado - Todos los filtros de fecha eliminados');
   }
   
   cargarTodosComprobantes(1, busquedaActual);
 }
-
 function filtrarComprobantes() {
   let lista = _todosComp.filter(c => {
     // Filtro por tipo de comprobante

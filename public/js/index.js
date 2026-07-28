@@ -1952,17 +1952,17 @@ function aplicarPreset(preset, btn) {
   document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
 
-  const hoy   = new Date();
-  const y     = hoy.getFullYear();
-  const m     = hoy.getMonth();
+  const hoy = new Date();
+  const y = hoy.getFullYear();
+  const m = hoy.getMonth();
 
   // 👇 USAR _compDesde y _compHasta (independientes)
   if (preset === 'mes') {
     _compDesde = new Date(y, m, 1);
-    _compHasta = new Date(y, m+1, 0);
+    _compHasta = new Date(y, m + 1, 0);
     document.getElementById('btnPeriodoLabel').textContent = 'Este mes';
   } else if (preset === 'ant') {
-    _compDesde = new Date(y, m-1, 1);
+    _compDesde = new Date(y, m - 1, 1);
     _compHasta = new Date(y, m, 0);
     document.getElementById('btnPeriodoLabel').textContent = 'Mes anterior';
   } else if (preset === 'trim') {
@@ -1986,7 +1986,10 @@ function aplicarPreset(preset, btn) {
   _rangoHasta = _compHasta;
 
   _syncDateInputs();
-  cargarTodosComprobantes(1, busquedaActual);
+  
+  // 👇 USAR FALLBACK SEGURO para busquedaActual
+  const search = (typeof busquedaActual !== 'undefined' && busquedaActual !== null) ? busquedaActual : '';
+  cargarTodosComprobantes(1, search);
 }
 function aplicarRangoCustom() {
   const desde = document.getElementById('calDesde').value;
@@ -2018,14 +2021,13 @@ function limpiarBusqueda() {
   document.getElementById('btnClearSearch').style.display = 'none';
   filtrarComprobantes();
 }
-
 function setFiltro(tipo, btn) {
   _filtroTipo = tipo;
   document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   
   if (tipo === 'todos') {
-    // 👇 LIMPIAR FILTROS DE FECHA DE COMPROBANTES
+    // 👇 LIMPIAR TODOS LOS FILTROS DE FECHA
     _compDesde = null;
     _compHasta = null;
     _rangoDesde = null;

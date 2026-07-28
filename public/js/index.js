@@ -2034,23 +2034,25 @@ function setFiltro(tipo, btn) {
     _dashDesde = null;
     _dashHasta = null;
     
-    // 👇 ACTUALIZAR TODAS LAS ETIQUETAS
+    // 👇 ACTUALIZAR TODAS LAS ETIQUETAS VISUALES
     const labelEl = document.getElementById('btnPeriodoLabel');
     if (labelEl) labelEl.textContent = 'Todo el tiempo';
     
     const periodLabel = document.getElementById('dashPeriodoLabel');
     if (periodLabel) periodLabel.textContent = 'Todo el historial';
     
+    // 👇 ESTO ES CLAVE - Actualizar el topbar
     const topbarPeriod = document.getElementById('topbarPeriod');
     if (topbarPeriod) topbarPeriod.textContent = 'Período: Todo el historial';
     
     const chartSub = document.getElementById('chartSub');
     if (chartSub) chartSub.textContent = 'Todo el historial';
     
-    // 👇 DESACTIVAR VISUALMENTE EL BOTÓN "Este mes"
+    // 👇 Desactivar botones de período
     document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tcal-preset').forEach(b => b.classList.remove('active'));
     
-    console.log('📌 Filtro "todos" activado - Todos los filtros de fecha eliminados');
+    console.log('📌 Filtro "todos" activado - TODOS los filtros de fecha eliminados');
   }
   
   cargarTodosComprobantes(1, busquedaActual);

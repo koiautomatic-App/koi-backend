@@ -828,8 +828,19 @@ function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
     page: paginaActual
   });
   if (busquedaActual) params.set('search', busquedaActual);
-  if (_rangoDesde) params.set('desde', _rangoDesde.toISOString().split('T')[0]);
-  if (_rangoHasta) params.set('hasta', _rangoHasta.toISOString().split('T')[0]);
+  
+  // 👇 SOLO aplicar filtros de fecha si NO es "todos"
+  if (_filtroTipo !== 'todos') {
+    if (_rangoDesde) params.set('desde', _rangoDesde.toISOString().split('T')[0]);
+    if (_rangoHasta) params.set('hasta', _rangoHasta.toISOString().split('T')[0]);
+  } else {
+    // Si es "todos", asegurarse de que los filtros de fecha estén null
+    _rangoDesde = null;
+    _rangoHasta = null;
+    _dashDesde = null;
+    _dashHasta = null;
+    console.log('📌 Filtro "todos" activo - Ignorando filtros de fecha');
+  }
   
   api.get(`/api/orders?${params.toString()}`)
     .then(raw => {
@@ -1989,22 +2000,14 @@ function setFiltro(tipo, btn) {
   document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   
-  // 👇 Si el filtro es "todos", quitar filtros de fecha
+  // 👇 Si es "todos", actualizar etiquetas visuales
   if (tipo === 'todos') {
-    _rangoDesde = null;
-    _rangoHasta = null;
-    _dashDesde = null;
-    _dashHasta = null;
-    // Actualizar etiqueta del período
     const labelEl = document.getElementById('btnPeriodoLabel');
     if (labelEl) labelEl.textContent = 'Todo el tiempo';
-    // Actualizar también el badge del topbar
     const periodLabel = document.getElementById('dashPeriodoLabel');
     if (periodLabel) periodLabel.textContent = 'Todo el historial';
-    console.log('📌 Filtros de fecha eliminados - Mostrando TODOS los comprobantes');
   }
   
-  // 👇 Recargar desde el backend con el nuevo filtro
   cargarTodosComprobantes(1, busquedaActual);
 }
 

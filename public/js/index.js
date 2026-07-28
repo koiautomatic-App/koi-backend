@@ -501,8 +501,18 @@ function mostrarVista(v) {
   
   // Ejecutar función específica según la vista
   if (v === 'comprobantes') {
-    if (!_rangoDesde) _iniciarPeriodo();
-    if (typeof cargarTodosComprobantes === 'function') cargarTodosComprobantes();
+    // 👇 ELIMINAR _iniciarPeriodo() - NO FORZAR "Este mes"
+    // if (!_rangoDesde) _iniciarPeriodo();  // ❌ ELIMINAR ESTA LÍNEA
+    
+    // ✅ Si NO hay filtros de fecha, usar "Todo el tiempo" por defecto
+    if (_rangoDesde === null && _rangoHasta === null) {
+        // Ya está en "Todo el tiempo" - no hacer nada
+        console.log('📌 Comprobantes: Sin filtros de fecha (Todo el tiempo)');
+    }
+    
+    if (typeof cargarTodosComprobantes === 'function') {
+        cargarTodosComprobantes(1, '');
+    }
   } else if (v === 'negocio') {
     if (typeof mostrarVistaNormalNegocio === 'function') mostrarVistaNormalNegocio();
   } else if (v === 'arca') {
@@ -806,12 +816,15 @@ let paginaActual = 1;
 let totalPaginas = 1;
 let busquedaActual = '';
 
-// 👇 AGREGAR ESTAS VARIABLES GLOBALES DE PERÍODO 👇
+// 👇 VARIABLES DE PERÍODO
 let _rangoDesde = null;
 let _rangoHasta = null;
 let _dashDesde = null;
 let _dashHasta = null;
 
+// 👇 VARIABLES PARA COMPROBANTES (INDEPENDIENTES DEL DASHBOARD)
+let _compDesde = null;
+let _compHasta = null;
 
 function cargarTodosComprobantes(page = 1, search = '', intento = 1) {
   paginaActual = page;
@@ -1730,25 +1743,29 @@ const DASH_PRESETS = {
 //  INICIALIZAR PERÍODO DEL DASHBOARD - "ESTE MES"
 // ============================================================
 function _initDashPeriod() {
-    // ✅ Cambiar a "Este mes" por defecto
+    // 👇 Si ya hay filtros de fecha configurados, NO sobrescribir
+    if (_dashDesde !== null || _dashHasta !== null) {
+        console.log('📌 Dashboard ya tiene período configurado, no se sobrescribe');
+        // Asegurar que _rangoDesde y _rangoHasta estén sincronizados
+        _rangoDesde = _dashDesde;
+        _rangoHasta = _dashHasta;
+        return;
+    }
+    
     const hoy = new Date();
-    _rangoDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
-    _rangoHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
-    _dashDesde = _rangoDesde;
-    _dashHasta = _rangoHasta;
+    _dashDesde = new Date(hoy.getFullYear(), hoy.getMonth(), 1);
+    _dashHasta = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 0);
+    
+    // Actualizar variables globales para Dashboard
+    _rangoDesde = _dashDesde;
+    _rangoHasta = _dashHasta;
     
     _syncDashInputs();
-    
-    // Formatear etiqueta: "01 de julio de 2026 → 31 de julio de 2026"
     const fmt = d => d.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
-    const label = `${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`;
-    _updateTopbarBadge(label);
-    
+    _updateTopbarBadge(`${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`);
     _recargarDashConPeriodo();
-    
     console.log('📌 Dashboard inicializado con período: ESTE MES');
 }
-
 function toggleDashCalendario() {
   const dd  = document.getElementById('dashCalDropdown');
   const btn = document.getElementById('btnDashPeriodo');
@@ -1939,42 +1956,46 @@ function aplicarPreset(preset, btn) {
   const y     = hoy.getFullYear();
   const m     = hoy.getMonth();
 
+  // 👇 USAR _compDesde y _compHasta (independientes)
   if (preset === 'mes') {
-    _rangoDesde = new Date(y, m, 1);
-    _rangoHasta = new Date(y, m+1, 0);
+    _compDesde = new Date(y, m, 1);
+    _compHasta = new Date(y, m+1, 0);
     document.getElementById('btnPeriodoLabel').textContent = 'Este mes';
   } else if (preset === 'ant') {
-    _rangoDesde = new Date(y, m-1, 1);
-    _rangoHasta = new Date(y, m, 0);
+    _compDesde = new Date(y, m-1, 1);
+    _compHasta = new Date(y, m, 0);
     document.getElementById('btnPeriodoLabel').textContent = 'Mes anterior';
   } else if (preset === 'trim') {
-    // Últimos 90 días desde hoy
-    _rangoDesde = new Date(hoy);
-    _rangoDesde.setDate(hoy.getDate() - 90);
-    _rangoHasta = new Date(hoy);
-    _rangoHasta.setHours(23, 59, 59, 999);
+    _compDesde = new Date(hoy);
+    _compDesde.setDate(hoy.getDate() - 90);
+    _compHasta = new Date(hoy);
+    _compHasta.setHours(23, 59, 59, 999);
     document.getElementById('btnPeriodoLabel').textContent = 'Últimos 90 días';
   } else if (preset === 'anio') {
-    _rangoDesde = new Date(y, 0, 1);
-    _rangoHasta = new Date(y, 11, 31);
+    _compDesde = new Date(y, 0, 1);
+    _compHasta = new Date(y, 11, 31);
     document.getElementById('btnPeriodoLabel').textContent = 'Este año';
   } else if (preset === 'todo') {
-    _rangoDesde = null;
-    _rangoHasta = null;
+    _compDesde = null;
+    _compHasta = null;
     document.getElementById('btnPeriodoLabel').textContent = 'Todo el tiempo';
   }
+
+  // 👇 APLICAR filtros de Comprobantes a las variables globales
+  _rangoDesde = _compDesde;
+  _rangoHasta = _compHasta;
 
   _syncDateInputs();
   cargarTodosComprobantes(1, busquedaActual);
 }
-
 function aplicarRangoCustom() {
   const desde = document.getElementById('calDesde').value;
   const hasta = document.getElementById('calHasta').value;
   if (!desde && !hasta) return;
 
-  _rangoDesde = desde ? new Date(desde) : null;
-  _rangoHasta = hasta ? new Date(hasta+'T23:59:59') : null;
+  // 👇 USAR _compDesde y _compHasta
+  _compDesde = desde ? new Date(desde) : null;
+  _compHasta = hasta ? new Date(hasta+'T23:59:59') : null;
 
   document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
 
@@ -1986,6 +2007,9 @@ function aplicarRangoCustom() {
     document.getElementById('btnPeriodoLabel').textContent = 'Desde ' + new Date(desde).toLocaleDateString('es-AR',{day:'2-digit',month:'2-digit',year:'numeric'});
   }
 
+  // 👇 APLICAR filtros de Comprobantes
+  _rangoDesde = _compDesde;
+  _rangoHasta = _compHasta;
   filtrarComprobantes();
 }
 
@@ -2000,12 +2024,29 @@ function setFiltro(tipo, btn) {
   document.querySelectorAll('.filtro-btn').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
   
-  // 👇 Si es "todos", actualizar etiquetas visuales
   if (tipo === 'todos') {
+    // 👇 LIMPIAR FILTROS DE FECHA DE COMPROBANTES
+    _compDesde = null;
+    _compHasta = null;
+    _rangoDesde = null;
+    _rangoHasta = null;
+    _dashDesde = null;
+    _dashHasta = null;
+    
+    // Actualizar etiquetas visuales
     const labelEl = document.getElementById('btnPeriodoLabel');
     if (labelEl) labelEl.textContent = 'Todo el tiempo';
+    
     const periodLabel = document.getElementById('dashPeriodoLabel');
     if (periodLabel) periodLabel.textContent = 'Todo el historial';
+    
+    const topbarPeriod = document.getElementById('topbarPeriod');
+    if (topbarPeriod) topbarPeriod.textContent = 'Período: Todo el historial';
+    
+    const chartSub = document.getElementById('chartSub');
+    if (chartSub) chartSub.textContent = 'Todo el historial';
+    
+    console.log('📌 Filtro "todos" activado - Todos los filtros de fecha eliminados');
   }
   
   cargarTodosComprobantes(1, busquedaActual);

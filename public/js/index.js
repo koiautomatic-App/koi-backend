@@ -501,17 +501,48 @@ function mostrarVista(v) {
   
   // Ejecutar función específica según la vista
   if (v === 'comprobantes') {
-    // 👇 ELIMINAR _iniciarPeriodo() - NO FORZAR "Este mes"
-    // if (!_rangoDesde) _iniciarPeriodo();  // ❌ ELIMINAR ESTA LÍNEA
+    // 👇 ACTUALIZAR UI SEGÚN FILTROS DE FECHA
+    const topbarPeriod = document.getElementById('topbarPeriod');
+    const labelEl = document.getElementById('btnPeriodoLabel');
+    const periodLabel = document.getElementById('dashPeriodoLabel');
+    const chartSub = document.getElementById('chartSub');
     
-    // ✅ Si NO hay filtros de fecha, usar "Todo el tiempo" por defecto
     if (_rangoDesde === null && _rangoHasta === null) {
-        // Ya está en "Todo el tiempo" - no hacer nada
-        console.log('📌 Comprobantes: Sin filtros de fecha (Todo el tiempo)');
+      // ✅ Sin filtros de fecha - "Todo el historial"
+      if (topbarPeriod) topbarPeriod.textContent = 'Período: Todo el historial';
+      if (labelEl) labelEl.textContent = 'Todo el tiempo';
+      if (periodLabel) periodLabel.textContent = 'Todo el historial';
+      if (chartSub) chartSub.textContent = 'Todo el historial';
+      
+      // Desactivar botones de período visualmente
+      document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
+      document.querySelectorAll('.tcal-preset').forEach(b => b.classList.remove('active'));
+      
+      console.log('📌 Comprobantes: Sin filtros de fecha (Todo el tiempo) - UI actualizada');
+    } else if (_rangoDesde && _rangoHasta) {
+      // ✅ Con filtros de fecha - mostrar el rango
+      const fmt = d => d.toLocaleDateString('es-AR', { day: '2-digit', month: 'long', year: 'numeric' });
+      const periodo = `${fmt(_rangoDesde)} → ${fmt(_rangoHasta)}`;
+      if (topbarPeriod) topbarPeriod.textContent = `Período: ${periodo}`;
+      if (chartSub) chartSub.textContent = periodo;
+      
+      // Activar el botón "Este mes" si corresponde
+      const hoy = new Date();
+      const esEsteMes = _rangoDesde.getMonth() === hoy.getMonth() && 
+                        _rangoDesde.getFullYear() === hoy.getFullYear() &&
+                        _rangoHasta.getMonth() === hoy.getMonth() &&
+                        _rangoHasta.getFullYear() === hoy.getFullYear();
+      if (esEsteMes) {
+        document.querySelectorAll('.cal-preset').forEach(b => b.classList.remove('active'));
+        const btnMes = document.querySelector('.cal-preset[data-preset="mes"]');
+        if (btnMes) btnMes.classList.add('active');
+      }
+      
+      console.log(`📌 Comprobantes: Período ${periodo}`);
     }
     
     if (typeof cargarTodosComprobantes === 'function') {
-        cargarTodosComprobantes(1, '');
+      cargarTodosComprobantes(1, '');
     }
   } else if (v === 'negocio') {
     if (typeof mostrarVistaNormalNegocio === 'function') mostrarVistaNormalNegocio();
